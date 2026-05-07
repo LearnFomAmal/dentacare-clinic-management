@@ -17,7 +17,7 @@ import {
   createSession,
   updateSessionRefreshToken,
   countActiveSessionsByUserId,
-  deleteOldestSessionByUserId
+  revokeOldestSessionByUserId,
 } from "./session.repository.js";
 
 import {
@@ -25,7 +25,8 @@ import {
   findUserByReferralCode,
   createUser,
   findUserByEmailWithPassword,
-  updateUserPasswordByEmail
+  updateUserPasswordByEmail,
+  findUserById,
 } from "../users/user.repository.js";
 import {
   findOtpRecord,
@@ -142,7 +143,8 @@ export const verifyRegisterOtpService = async (email, enteredOtp) => {
   }
 
   const temp = otpRecord.tempUserData;
-
+  otpRecord.isUsed = true;
+  await otpRecord.save();
   await createUser({
     username: temp.username,
     email,
@@ -164,7 +166,7 @@ export const verifyRegisterOtpService = async (email, enteredOtp) => {
       isVerified: true,
     },
   });
-
+ 
   await deleteOldOtps(email, "register");
 };
 export const loginService = async (email, password, userAgent, ipAddress) => {
@@ -177,6 +179,10 @@ export const loginService = async (email, password, userAgent, ipAddress) => {
   if (user.accountStatus.isBlocked) {
     throw new AppError("Your account has been blocked by admin", 403);
   }
+
+  if (user.accountStatus.isDeleted) {
+  throw new AppError("This account has been deleted", 403);
+ }
 
   if (!user.accountStatus.isVerified) {
     throw new AppError("Please verify your account first", 403);
@@ -201,7 +207,7 @@ export const loginService = async (email, password, userAgent, ipAddress) => {
 const activeSessions = await countActiveSessionsByUserId(user._id);
 
 if (activeSessions >= 5) {
-  await deleteOldestSessionByUserId(user._id);
+  await revokeOldestSessionByUserId(user._id);
 }
 
   await createSession({
@@ -230,6 +236,10 @@ export const forgotPasswordRequestService = async (email) => {
   if (!user) {
     throw new AppError("No account found with this email", 404);
   }
+
+  if (user.accountStatus.isDeleted) {
+  throw new AppError("This account has been deleted", 403);
+}
 
   await deleteOldOtps(email, "forgot_password");
 
@@ -267,10 +277,14 @@ export const forgotPasswordVerifyOtpService = async (email, enteredOtp, newPassw
     await otpRecord.save();
     throw new AppError("Invalid OTP", 400);
   }
-
+  otpRecord.isUsed = true;
+ await otpRecord.save();
   const hashedPassword = await hashPassword(newPassword);
 
+
   await updateUserPasswordByEmail(email, hashedPassword);
+  const user = await findUserByEmail(email);
+  await revokeAllSessionsByUserId(user._id);
 
   await deleteOldOtps(email, "forgot_password");
 };
@@ -288,12 +302,28 @@ export const refreshAccessTokenService = async (refreshToken) => {
     throw new AppError("Invalid refresh token", 401);
   }
 
+    const user = await findUserById(decoded.userId);
+
+if (!user || user.accountStatus.isDeleted) {
+  throw new AppError("User account no longer available", 401);
+}
+
+if (user.accountStatus.isBlocked) {
+  throw new AppError("User account blocked", 401);
+}
   const session = await findSessionByRefreshToken(refreshToken);
+
+   if (new Date() > session.expiresAt) {
+  throw new AppError("Session expired. Please login again.", 401);
+}
 
   if (!session) {
     throw new AppError("Session expired. Please login again.", 401);
   }
 
+  if (session.userId.toString() !== decoded.userId) {
+  throw new AppError("Session mismatch", 401);
+}
   const newAccessToken = generateAccessToken({
     userId: decoded.userId,
     role: decoded.role,

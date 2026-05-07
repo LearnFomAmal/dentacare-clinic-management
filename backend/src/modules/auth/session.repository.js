@@ -38,12 +38,11 @@ export const countActiveSessionsByUserId = (userId) => {
   return Session.countDocuments({ userId, isRevoked: false });
 };
 
-export const deleteOldestSessionByUserId = async (userId) => {
-  const oldest = await Session.findOne({ userId, isRevoked: false }).sort({
-    createdAt: 1,
-  });
+export const revokeOldestSessionByUserId = async (userId) => {
+  const oldest = await Session.findOne({ userId, isRevoked: false }).sort({ createdAt: 1 });
 
   if (oldest) {
-    await Session.findByIdAndDelete(oldest._id);
+    oldest.isRevoked = true;
+    await oldest.save();
   }
 };

@@ -27,11 +27,11 @@ const otpSchema = new mongoose.Schema({
     type: Number,
     default: 0,
   },
-
-  expiresAt: {
-    type: Date,
-    required: true,
-  },
+expiresAt: {
+  type: Date,
+  required: true,
+  expires: 0,
+},
 
   resendAvailableAt: {
     type: Date,

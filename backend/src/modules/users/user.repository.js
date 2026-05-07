@@ -16,7 +16,6 @@ export const findUserById = (id) => {
   return User.findById(id);
 };
 
-
 export const findUserByEmailWithPassword = (email) => {
   return User.findOne({ email }).select("+password");
 };
@@ -27,4 +26,25 @@ export const updateUserPasswordByEmail = (email, hashedPassword) => {
     { password: hashedPassword },
     { new: true }
   );
+};
+
+export const updateUserById = (id, payload) => {
+  return User.findByIdAndUpdate(id, payload, { new: true });
+};
+
+export const softDeleteUserById = (id) => {
+  return User.findByIdAndUpdate(
+    id,
+    {
+      "accountStatus.isDeleted": true,
+    },
+    { new: true }
+  );
+};
+
+export const findActiveUserById = (id) => {
+  return User.findOne({
+    _id: id,
+    "accountStatus.isDeleted": false,
+  });
 };

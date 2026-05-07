@@ -31,7 +31,10 @@ const userSchema = new mongoose.Schema(
                 enum:["male","female","other"],
             },
             phoneNumber:String,
-            bloodGroup:String,
+           bloodGroup:{
+  type:String,
+  enum:["A+","A-","B+","B-","AB+","AB-","O+","O-"],
+},
             profileImage:{
                 type:String,
             default:"",
@@ -68,6 +71,10 @@ const userSchema = new mongoose.Schema(
         default: false,
       },
       isBlocked: {
+        type: Boolean,
+        default: false,
+      },
+      isDeleted:{
         type: Boolean,
         default: false,
       },
