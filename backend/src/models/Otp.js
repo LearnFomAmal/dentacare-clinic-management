@@ -14,23 +14,25 @@ const otpSchema = new mongoose.Schema({
 
   purpose: {
     type: String,
-    enum: ["register", "forgot_password"],
+    enum: ["register", "forgot_password", "doctor_verify", "doctor_forgot_password", "admin_forgot_password"],
     required: true,
   },
 
   attempts: {
     type: Number,
     default: 0,
+    max: 5,
   },
 
   resendCount: {
     type: Number,
     default: 0,
+    max: 5,
   },
 expiresAt: {
   type: Date,
   required: true,
-  expires: 0,
+
 },
 
   resendAvailableAt: {
@@ -44,7 +46,7 @@ expiresAt: {
   },
   tempUserData: {
   username: String,
-  password: String,
+  password: String, // Store hashed password for security
   dateOfBirth: Date,
   gender: String,
   phoneNumber: String,
@@ -55,11 +57,30 @@ expiresAt: {
     default: null,
   }
 },
+  doctorId: {
+  type: mongoose.Schema.Types.ObjectId,
+  ref: "Doctor",
+  default: null,
+},
   createdAt: {
     type: Date,
     default: Date.now,
   },
+
 });
+
+otpSchema.index({
+  email: 1,
+  purpose: 1,
+  isUsed: 1,
+});
+
+otpSchema.index({
+  expiresAt: 1,
+}, {
+  expireAfterSeconds: 0,
+});
+
 
 const Otp = mongoose.model("Otp", otpSchema);
 

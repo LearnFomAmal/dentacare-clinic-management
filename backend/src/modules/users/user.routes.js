@@ -1,6 +1,6 @@
 import express from "express";
 import { protect } from "../../middlewares/auth.middleware.js";
-
+import {authorizeRoles} from "../../middlewares/role.middleware.js";
 import {
   getMyProfileController,
   updateMyProfileController,
@@ -8,6 +8,10 @@ import {
   deleteMyAccountController,
   getMySessionsController,
   updateThemeController,
+  getAllPatientsController,
+  getPatientDetailsController,
+  blockUserController,
+  unblockUserController,
 } from "./user.controller.js";
 
 const router = express.Router();
@@ -18,5 +22,34 @@ router.patch("/change-password", protect, changePasswordController);
 router.delete("/me", protect, deleteMyAccountController);
 router.get("/sessions", protect, getMySessionsController);
 router.patch("/theme", protect, updateThemeController);
+router.get(
+  "/patients",
+  protect,
+  authorizeRoles("admin"),
+  getAllPatientsController
+);
+
+
+router.get(
+  "/patients/:id",
+  protect,
+  authorizeRoles("admin"),
+  getPatientDetailsController
+);
+
+router.patch(
+  "/patients/:id/block",
+  protect,
+  authorizeRoles("admin"),
+  blockUserController
+);
+
+router.patch(
+  "/patients/:id/unblock",
+  protect,
+  authorizeRoles("admin"),
+  unblockUserController
+);
+
 
 export default router;

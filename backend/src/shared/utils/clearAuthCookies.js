@@ -5,12 +5,14 @@ const clearAuthCookies = (res) => {
     httpOnly: true,
     secure: env.NODE_ENV === "production",
     sameSite: "lax",
+    path: "/",
   });
 
   res.clearCookie("refreshToken", {
     httpOnly: true,
     secure: env.NODE_ENV === "production",
     sameSite: "lax",
+    path: "/",
   });
 };
 

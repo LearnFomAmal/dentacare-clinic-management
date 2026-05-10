@@ -3,10 +3,9 @@ import mongoose from "mongoose";
 const sessionSchema = new mongoose.Schema(
   {
     userId: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "User",
-      required: true,
-    },
+    type: mongoose.Schema.Types.ObjectId,
+    required: true,
+   },
 
     refreshToken: {
       type: String,
@@ -17,6 +16,12 @@ const sessionSchema = new mongoose.Schema(
       type: String,
       default: "",
     },
+
+    userType: {
+   type: String,
+   enum: ["user", "doctor", "admin"],
+   required: true,
+},
 
     ipAddress: {
       type: String,
@@ -32,6 +37,10 @@ const sessionSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+    lastUsedAt: {
+  type: Date,
+  default: Date.now,
+},
   },
   { timestamps: true }
 );

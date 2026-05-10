@@ -1,13 +1,9 @@
 import jwt from "jsonwebtoken";
 import { env } from "../config/env.js";
 import AppError from "../shared/errors/AppError.js";
-import { findUserById } from "../modules/users/user.repository.js";
+import { findAdminById } from "../modules/admin/admin.repository.js";
 
-export const protect = async (
-  req,
-  res,
-  next
-) => {
+export const protectAdmin = async (req, res, next) => {
   try {
     const token = req.cookies?.accessToken;
 
@@ -22,36 +18,36 @@ export const protect = async (
       env.ACCESS_TOKEN_SECRET
     );
 
-    if (decoded.role !== "user") {
+    if (decoded.role !== "admin") {
       return next(
-        new AppError("User access only", 403)
+        new AppError("Admin access only", 403)
       );
     }
 
-    const user = await findUserById(
-      decoded.userId
+    const admin = await findAdminById(
+      decoded.adminId
     );
 
-    if (!user) {
+    if (!admin) {
       return next(
-        new AppError("User not found", 404)
+        new AppError("Admin not found", 404)
       );
     }
 
-    if (user.accountStatus?.isDeleted) {
+    if (admin.accountStatus?.isDeleted) {
       return next(
-        new AppError("Account deleted", 403)
+        new AppError("Admin account deleted", 403)
       );
     }
 
-    if (user.accountStatus?.isBlocked) {
+    if (admin.accountStatus?.isBlocked) {
       return next(
-        new AppError("Account blocked", 403)
+        new AppError("Admin account blocked", 403)
       );
     }
 
-    req.user = {
-      userId: decoded.userId,
+    req.admin = {
+      adminId: decoded.adminId,
       role: decoded.role,
     };
 

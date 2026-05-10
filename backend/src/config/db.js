@@ -1,17 +1,21 @@
-import mongoose from 'mongoose';
-
+import mongoose from "mongoose";
 import { env } from "./env.js";
 
- const connectDB = async () =>{
-    try{
-        await mongoose.connect(env.MONGO_URI)
-         console.log('MongoDB Atlas Connected Successfully')
+const connectDB = async () => {
+  try {
+    mongoose.set("strictQuery", true);
 
-    }catch(error){
-        console.log("Error Connecting MongoDB Atlas", error.message);
-        process.exit(1);
-    }
-}
+    await mongoose.connect(env.MONGO_URI);
 
+    console.log("MongoDB Atlas Connected Successfully");
+  } catch (error) {
+    console.log(
+      "Error Connecting MongoDB Atlas:",
+      error.message
+    );
+
+    process.exit(1);
+  }
+};
 
 export default connectDB;

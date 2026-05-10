@@ -1,13 +1,28 @@
-import { env } from '../config/env.js' // Import your config
+import { env } from "../config/env.js";
 
-export const errorHandler = (err, req, res, next) => {
-  err.statusCode = err.statusCode || 500
-  err.message = err.message || 'Internal Server Error'
+export const errorHandler = (
+  err,
+  req,
+  res,
+  next
+) => {
+  const statusCode =
+    err.statusCode || 500;
 
-  res.status(err.statusCode).json({
+  const message =
+    err.message ||
+    "Internal Server Error";
+
+  // Optional logging for development
+  if (env.NODE_ENV === "development") {
+    console.error(err);
+  }
+
+  res.status(statusCode).json({
     success: false,
-    message: err.message,
-    // Use the validated env object here
-    stack: env.NODE_ENV === 'development' ? err.stack : undefined
-  })
-}
+    message,
+    ...(env.NODE_ENV === "development" && {
+      stack: err.stack,
+    }),
+  });
+};

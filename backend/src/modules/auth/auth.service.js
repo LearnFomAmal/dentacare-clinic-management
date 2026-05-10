@@ -1,6 +1,7 @@
 import AppError from "../../shared/errors/AppError.js";
 import  generateOtp  from "../../shared/utils/otpGenerator.js";
 import { hashPassword, comparePassword } from "../../shared/utils/passwordHash.js";
+import {compareOtp } from "../../shared/utils/hashOtp.js";
 import { sendOtpMail } from "../../config/mailer.js";
 import {
   generateAccessToken,
@@ -34,7 +35,7 @@ import {
   deleteOldOtps,
   updateOtpRecord,
 } from "./auth.repository.js";
-
+   import { hashOtp } from "../../shared/utils/hashOtp.js";
 
 export const registerRequestService = async (data) => {
   const {
@@ -47,6 +48,7 @@ export const registerRequestService = async (data) => {
     bloodGroup,
     referralCode,
   } = data;
+
 
   const existingUser = await findUserByEmail(email);
   if (existingUser) {
@@ -64,14 +66,16 @@ export const registerRequestService = async (data) => {
   }
 
   await deleteOldOtps(email, "register");
+const otp = generateOtp();
 
-  const otp = generateOtp();
+const hashedOtp = await hashOtp(otp);
+
 
   const hashedPassword = await hashPassword(password);
 
   await createOtpRecord({
     email,
-    otp,
+    otp: hashedOtp,
     purpose: "register",
     expiresAt: new Date(Date.now() + 5 * 60 * 1000),
     resendAvailableAt: new Date(Date.now() + 60 * 1000),
@@ -107,7 +111,9 @@ export const resendRegisterOtpService = async (email) => {
 
   const newOtp = generateOtp();
 
-  otpRecord.otp = newOtp;
+  const hashedOtp = await hashOtp(newOtp);
+
+  otpRecord.otp = hashedOtp;
   otpRecord.resendCount += 1;
   otpRecord.expiresAt = new Date(Date.now() + 5 * 60 * 1000);
   otpRecord.resendAvailableAt = new Date(Date.now() + 60 * 1000);
@@ -135,12 +141,17 @@ export const verifyRegisterOtpService = async (email, enteredOtp) => {
   if (otpRecord.attempts >= 5) {
     throw new AppError("Maximum OTP attempts exceeded. Please request new OTP.", 400);
   }
+  const isOtpMatched = await compareOtp(
+  enteredOtp,
+  otpRecord.otp
+);
 
-  if (otpRecord.otp !== enteredOtp) {
-    otpRecord.attempts += 1;
+if (!isOtpMatched) {
+   otpRecord.attempts += 1;
     await otpRecord.save();
-    throw new AppError("Invalid OTP", 400);
-  }
+   throw new AppError("Invalid OTP", 400);
+}
+
 
   const temp = otpRecord.tempUserData;
   otpRecord.isUsed = true;
@@ -212,6 +223,7 @@ if (activeSessions >= 5) {
 
   await createSession({
     userId: user._id,
+     userType: "user",
     refreshToken,
     userAgent,
     ipAddress,
@@ -243,11 +255,14 @@ export const forgotPasswordRequestService = async (email) => {
 
   await deleteOldOtps(email, "forgot_password");
 
-  const otp = generateOtp();
+ const otp = generateOtp();
+
+const hashedOtp = await hashOtp(otp);
+
 
   await createOtpRecord({
     email,
-    otp,
+    otp: hashedOtp,
     purpose: "forgot_password",
     expiresAt: new Date(Date.now() + 5 * 60 * 1000),
     resendAvailableAt: new Date(Date.now() + 60 * 1000),
@@ -271,19 +286,38 @@ export const forgotPasswordVerifyOtpService = async (email, enteredOtp, newPassw
   if (otpRecord.attempts >= 5) {
     throw new AppError("Maximum OTP attempts exceeded. Please request new OTP.", 400);
   }
+const isOtpMatched = await compareOtp(
+  enteredOtp,
+  otpRecord.otp
+);
 
-  if (otpRecord.otp !== enteredOtp) {
+
+  if (!isOtpMatched) {
     otpRecord.attempts += 1;
     await otpRecord.save();
     throw new AppError("Invalid OTP", 400);
   }
   otpRecord.isUsed = true;
  await otpRecord.save();
-  const hashedPassword = await hashPassword(newPassword);
+   const user = await findUserByEmail(email);
+  const isSamePassword =
+  await comparePassword(
+    newPassword,
+    user.password
+  );
 
+if (isSamePassword) {
+  throw new AppError(
+    "New password cannot be same as old password",
+    400
+  );
+}
+  const hashedPassword = await hashPassword(newPassword);
+  
 
   await updateUserPasswordByEmail(email, hashedPassword);
-  const user = await findUserByEmail(email);
+
+
   await revokeAllSessionsByUserId(user._id);
 
   await deleteOldOtps(email, "forgot_password");
@@ -312,6 +346,12 @@ if (user.accountStatus.isBlocked) {
   throw new AppError("User account blocked", 401);
 }
   const session = await findSessionByRefreshToken(refreshToken);
+  if (!session) {
+  throw new AppError(
+    "Session expired. Please login again.",
+    401
+  );
+}
 
    if (new Date() > session.expiresAt) {
   throw new AppError("Session expired. Please login again.", 401);

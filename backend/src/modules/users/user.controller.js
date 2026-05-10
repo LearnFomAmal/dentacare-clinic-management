@@ -9,6 +9,10 @@ import {
   deleteMyAccountService,
   getMySessionInfoService,
   updateThemeService,
+  getAllPatientsService,
+  getPatientDetailsService,
+  blockUserService,
+  unblockUserService,
 } from "./user.service.js";
 
 import {
@@ -84,4 +88,60 @@ export const updateThemeController = asyncHandler(async (req, res) => {
   const data = await updateThemeService(req.user.userId, theme);
 
   sendResponse(res, 200, true, "Theme updated", data);
+});
+
+
+
+
+
+
+export const getAllPatientsController = asyncHandler(async (req, res) => {
+  const filters = {
+    search: req.query.search,
+    status: req.query.status, // blocked/unblocked
+  };
+
+  const options = {
+    page: Number(req.query.page) || 1,
+    limit: Number(req.query.limit) || 10,
+    sortBy: req.query.sortBy || "createdAt",
+    order: req.query.order || "desc",
+  };
+
+  const result = await getAllPatientsService(filters, options);
+
+  sendResponse(
+    res,
+    200,
+    true,
+    "Patients fetched successfully",
+    result
+  );
+});
+
+export const getPatientDetailsController = asyncHandler(async (req, res) => {
+  const patientId = req.params.id;
+
+  const patient = await getPatientDetailsService(patientId);
+
+  sendResponse(
+    res,
+    200,
+    true,
+    "Patient details fetched successfully",
+    patient
+  );
+});
+
+export const blockUserController = asyncHandler(async (req, res) => {
+  await blockUserService(req.params.id);
+
+  sendResponse(res, 200, true, "User blocked successfully");
+});
+
+// ADMIN: UNBLOCK PATIENT
+export const unblockUserController = asyncHandler(async (req, res) => {
+  await unblockUserService(req.params.id);
+
+  sendResponse(res, 200, true, "User unblocked successfully");
 });

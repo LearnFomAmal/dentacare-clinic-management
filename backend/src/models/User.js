@@ -19,34 +19,34 @@ const userSchema = new mongoose.Schema(
             required: true,
             select: false, // 🔒 Security boost
      },
-        role:{
-            type:String,
-            enum:["patient","admin"],
-            default:"patient",
-        },
+       
         personalInfo:{
             dateOfBirth:Date,
             gender:{
                 type:String,
                 enum:["male","female","other"],
             },
-            phoneNumber:String,
+            phoneNumber:{
+                type:String, 
+                required: true,
+                trim: true,
+            },
            bloodGroup:{
-  type:String,
-  enum:["A+","A-","B+","B-","AB+","AB-","O+","O-"],
-},
+           type:String,
+           enum:["A+","A-","B+","B-","AB+","AB-","O+","O-"],
+           },
             profileImage:{
                 type:String,
             default:"",
             },
         },
             settings: {
-      theme: {
-        type: String,
+         theme: {
+         type: String,
         enum: ["light", "dark"],
-        default: "light",
+         default: "light",
+        },
       },
-    },
 
     referral: {
       referralCode: {

@@ -5,41 +5,89 @@ export const createSession = (payload) => {
 };
 
 export const findSessionByRefreshToken = (refreshToken) => {
-  return Session.findOne({ refreshToken, isRevoked: false });
+  return Session.findOne({
+    refreshToken,
+    isRevoked: false,
+  });
 };
 
 export const revokeSessionByRefreshToken = (refreshToken) => {
   return Session.findOneAndUpdate(
-    { refreshToken },
-    { isRevoked: true },
-    { new: true }
+    {
+      refreshToken,
+      isRevoked: false,
+    },
+    {
+      isRevoked: true,
+    },
+    {
+      new: true,
+    }
   );
 };
 
-export const revokeAllSessionsByUserId = (userId) => {
+export const revokeAllSessionsByUserId = (
+  userId,
+  userType
+) => {
   return Session.updateMany(
-    { userId, isRevoked: false },
-    { isRevoked: true }
+    {
+      userId,
+      userType,
+      isRevoked: false,
+    },
+    {
+      isRevoked: true,
+    }
   );
 };
 
-export const updateSessionRefreshToken = (oldRefreshToken, newRefreshToken) => {
+export const updateSessionRefreshToken = (
+  oldRefreshToken,
+  newRefreshToken
+) => {
   return Session.findOneAndUpdate(
-    { refreshToken: oldRefreshToken, isRevoked: false },
+    {
+      refreshToken: oldRefreshToken,
+      isRevoked: false,
+    },
     {
       refreshToken: newRefreshToken,
-      expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+      expiresAt: new Date(
+        Date.now() +
+        7 * 24 * 60 * 60 * 1000
+      ),
     },
-    { new: true }
+    {
+      new: true,
+    }
   );
 };
 
-export const countActiveSessionsByUserId = (userId) => {
-  return Session.countDocuments({ userId, isRevoked: false });
+export const countActiveSessionsByUserId = (
+  userId,
+  userType
+) => {
+  return Session.countDocuments({
+    userId,
+    userType,
+    isRevoked: false,
+  });
 };
 
-export const revokeOldestSessionByUserId = async (userId) => {
-  const oldest = await Session.findOne({ userId, isRevoked: false }).sort({ createdAt: 1 });
+export const revokeOldestSessionByUserId = async (
+  userId,
+  userType
+) => {
+
+  const oldest =
+    await Session.findOne({
+      userId,
+      userType,
+      isRevoked: false,
+    }).sort({
+      createdAt: 1,
+    });
 
   if (oldest) {
     oldest.isRevoked = true;
