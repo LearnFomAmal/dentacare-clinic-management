@@ -33,7 +33,33 @@ export const registerSchema = z
 
     confirmPassword: z.string().min(1, "Confirm password is required"),
 
-    dateOfBirth: z.string().min(1, "Date of birth is required"),
+   dateOfBirth: z
+  .string()
+  .min(1, "Date of birth is required")
+  .refine((value) => {
+    const dob = new Date(value);
+    const today = new Date();
+
+    if (Number.isNaN(dob.getTime())) {
+      return false;
+    }
+
+    if (dob > today) {
+      return false;
+    }
+
+    let age = today.getFullYear() - dob.getFullYear();
+    const monthDiff = today.getMonth() - dob.getMonth();
+
+    if (
+      monthDiff < 0 ||
+      (monthDiff === 0 && today.getDate() < dob.getDate())
+    ) {
+      age--;
+    }
+
+    return age >= 6;
+  }, "Patient must be at least 6 years old"),
 
     gender: z.enum(["male", "female", "other"], {
       message: "Gender is required",

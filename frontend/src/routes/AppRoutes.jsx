@@ -1,53 +1,52 @@
-import AuthLayout from "../components/layout/AuthLayout";
-import Card from "../components/ui/Card";
-import Input from "../components/ui/Input";
-import Button from "../components/ui/Button";
+import { Navigate, Route, Routes } from "react-router-dom";
+
+import LoginPage from "../pages/public/LoginPage";
+import RegisterPage from "../pages/public/RegisterPage";
+import OtpVerificationPage from "../pages/public/OtpVerificationPage";
+import ForgotPasswordPage from "../pages/public/ForgotPasswordPage";
+import ResetPasswordPage from "../pages/public/ResetPasswordPage";
+import DoctorVerificationPendingPage from "../pages/public/DoctorVerificationPendingPage";
+
+import { ROUTES } from "../constants/routes";
 
 function AppRoutes() {
   return (
-    <AuthLayout>
-      <Card>
-        <div className="space-y-8">
-          <div className="space-y-2 text-center">
-            <h1
-              className="
-                font-manrope
-                text-3xl
-                font-extrabold
-                text-[#2D333B]
-              "
-            >
-              Welcome Back
-            </h1>
+    <Routes>
+      <Route
+        path={ROUTES.HOME}
+        element={<Navigate to={ROUTES.LOGIN} replace />}
+      />
 
-            <p className="text-sm text-[#595F69]">
-              Login to continue your account
-            </p>
-          </div>
+      <Route
+        path={ROUTES.LOGIN}
+        element={<LoginPage />}
+      />
 
-          <div className="space-y-6">
-            <Input
-              label="Email ID"
-              placeholder="name@example.com"
-              name="email"
-              register={() => ({})}
-            />
+      <Route
+        path={ROUTES.REGISTER}
+        element={<RegisterPage />}
+      />
 
-            <Input
-              label="Password"
-              type="password"
-              placeholder="••••••••"
-              name="password"
-              register={() => ({})}
-            />
+      <Route
+        path={ROUTES.VERIFY_OTP}
+        element={<OtpVerificationPage />}
+      />
 
-            <Button>
-              Login
-            </Button>
-          </div>
-        </div>
-      </Card>
-    </AuthLayout>
+      <Route
+        path={ROUTES.FORGOT_PASSWORD}
+        element={<ForgotPasswordPage />}
+      />
+
+      <Route
+        path={ROUTES.RESET_PASSWORD}
+        element={<ResetPasswordPage />}
+      />
+
+      <Route
+        path={ROUTES.DOCTOR_VERIFY}
+        element={<DoctorVerificationPendingPage />}
+      />
+    </Routes>
   );
 }
 
