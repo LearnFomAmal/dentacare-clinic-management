@@ -1,6 +1,7 @@
 import express from "express";
 import { protect } from "../../middlewares/auth.middleware.js";
-import {authorizeRoles} from "../../middlewares/role.middleware.js";
+import { protectAdmin } from "../../middlewares/adminAuth.middleware.js";
+
 import {
   getMyProfileController,
   updateMyProfileController,
@@ -16,40 +17,41 @@ import {
 
 const router = express.Router();
 
+// ==============================
+// PATIENT SELF ROUTES
+// ==============================
 router.get("/me", protect, getMyProfileController);
 router.patch("/me", protect, updateMyProfileController);
 router.patch("/change-password", protect, changePasswordController);
 router.delete("/me", protect, deleteMyAccountController);
 router.get("/sessions", protect, getMySessionsController);
 router.patch("/theme", protect, updateThemeController);
+
+// ==============================
+// ADMIN PATIENT MANAGEMENT ROUTES
+// ==============================
 router.get(
   "/patients",
-  protect,
-  authorizeRoles("admin"),
+  protectAdmin,
   getAllPatientsController
 );
 
-
 router.get(
   "/patients/:id",
-  protect,
-  authorizeRoles("admin"),
+  protectAdmin,
   getPatientDetailsController
 );
 
 router.patch(
   "/patients/:id/block",
-  protect,
-  authorizeRoles("admin"),
+  protectAdmin,
   blockUserController
 );
 
 router.patch(
   "/patients/:id/unblock",
-  protect,
-  authorizeRoles("admin"),
+  protectAdmin,
   unblockUserController
 );
-
 
 export default router;

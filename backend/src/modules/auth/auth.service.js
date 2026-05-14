@@ -206,15 +206,15 @@ export const loginService = async (email, password, userAgent, ipAddress) => {
     throw new AppError("Invalid email or password", 400);
   }
 
-  const accessToken = generateAccessToken({
-    userId: user._id,
-    role: user.role,
-  });
+ const accessToken = generateAccessToken({
+  userId: user._id,
+  role: "patient",
+});
 
-  const refreshToken = generateRefreshToken({
-    userId: user._id,
-    role: user.role,
-  });
+const refreshToken = generateRefreshToken({
+  userId: user._id,
+  role: "patient",
+});
 
 const activeSessions = await countActiveSessionsByUserId(user._id);
 
@@ -231,14 +231,14 @@ if (activeSessions >= 5) {
     expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
   });
 
-  const userData = {
-    _id: user._id,
-    username: user.username,
-    email: user.email,
-    role: user.role,
-    profileImage: user.personalInfo.profileImage,
-    theme: user.settings.theme,
-  };
+ const userData = {
+  _id: user._id,
+  username: user.username,
+  email: user.email,
+  role: "patient",
+  profileImage: user.personalInfo?.profileImage || "",
+  theme: user.settings?.theme || "light",
+};
 
   return { accessToken, refreshToken, userData };
 };

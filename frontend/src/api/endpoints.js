@@ -15,6 +15,20 @@ export const API_ENDPOINTS = {
     LOGOUT_ALL: "/auth/logout-all",
   },
 
+  USER: {
+    ME: "/users/me",
+    UPDATE_PROFILE: "/users/me",
+    CHANGE_PASSWORD: "/users/change-password",
+    DELETE_ACCOUNT: "/users/me",
+    SESSIONS: "/users/sessions",
+    UPDATE_THEME: "/users/theme",
+
+    ADMIN_GET_PATIENTS: "/users/patients",
+    ADMIN_GET_PATIENT_DETAILS: (id) => `/users/patients/${id}`,
+    ADMIN_BLOCK_PATIENT: (id) => `/users/patients/${id}/block`,
+    ADMIN_UNBLOCK_PATIENT: (id) => `/users/patients/${id}/unblock`,
+  },
+
   ADMIN: {
     LOGIN: "/admin/login",
     LOGOUT: "/admin/logout",
@@ -29,7 +43,13 @@ export const API_ENDPOINTS = {
   DOCTOR: {
     LOGIN: "/doctors/login",
     LOGOUT: "/doctors/logout",
+
     ME: "/doctors/me",
+    UPDATE_PROFILE: "/doctors/me",
+    CHANGE_PASSWORD: "/doctors/change-password",
+    DELETE_ACCOUNT: "/doctors/me",
+    UPDATE_THEME: "/doctors/theme",
+    SESSIONS: "/doctors/sessions",
 
     VERIFY_ACCOUNT: "/doctors/verify-account",
     RESEND_VERIFICATION_OTP: "/doctors/resend-verification-otp",
@@ -39,5 +59,13 @@ export const API_ENDPOINTS = {
     RESEND_FORGOT_PASSWORD_OTP: "/doctors/resend-forgot-password-otp",
 
     REFRESH_TOKEN: "/doctors/refresh-token",
+
+    ADMIN_CREATE: "/doctors",
+    ADMIN_GET_ALL: "/doctors",
+    ADMIN_GET_DETAILS: (id) => `/doctors/${id}`,
+    ADMIN_BLOCK: (id) => `/doctors/${id}/block`,
+    ADMIN_UNBLOCK: (id) => `/doctors/${id}/unblock`,
+    ADMIN_UPDATE_CONSULTATION_FEE: (id) =>
+      `/doctors/${id}/consultation-fee`,
   },
 };

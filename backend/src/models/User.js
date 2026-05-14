@@ -1,64 +1,81 @@
-import mongoose from 'mongoose'
+import mongoose from "mongoose";
 
 const userSchema = new mongoose.Schema(
-    {
-        username:{
-            type: String,
-            required: true,
-             trim: true,
-        },
-        email:{
-            type: String,
-            required: true,
-            unique: true,
-           lowercase: true,
-           trim: true,
-        },
-        password:{
-            type:String,
-            required: true,
-            select: false, // 🔒 Security boost
-     },
-       
-        personalInfo:{
-            dateOfBirth:Date,
-            gender:{
-                type:String,
-                enum:["male","female","other"],
-            },
-            phoneNumber:{
-                type:String, 
-                required: true,
-                trim: true,
-            },
-           bloodGroup:{
-           type:String,
-           enum:["A+","A-","B+","B-","AB+","AB-","O+","O-"],
-           },
-            profileImage:{
-                type:String,
-            default:"",
-            },
-        },
-            settings: {
-         theme: {
-         type: String,
-        enum: ["light", "dark"],
-         default: "light",
-        },
+  {
+    username: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+
+    email: {
+      type: String,
+      required: true,
+      unique: true,
+      lowercase: true,
+      trim: true,
+    },
+
+    password: {
+      type: String,
+      required: true,
+      select: false,
+    },
+
+    role: {
+      type: String,
+      enum: ["patient"],
+      default: "patient",
+    },
+
+    personalInfo: {
+      dateOfBirth: {
+        type: Date,
       },
+
+      gender: {
+        type: String,
+        enum: ["male", "female", "other"],
+      },
+
+      phoneNumber: {
+        type: String,
+        required: true,
+        trim: true,
+      },
+
+      bloodGroup: {
+        type: String,
+        enum: ["A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-"],
+      },
+
+      profileImage: {
+        type: String,
+        default: "",
+      },
+    },
+
+    settings: {
+      theme: {
+        type: String,
+        enum: ["light", "dark"],
+        default: "light",
+      },
+    },
 
     referral: {
       referralCode: {
         type: String,
         unique: true,
-        sparse: true, // ⚡ Essential for unique fields that might be empty
+        sparse: true,
       },
+
       referredBy: {
         type: mongoose.Schema.Types.ObjectId,
         ref: "User",
         default: null,
       },
+
       hasCompletedFirstAppointment: {
         type: Boolean,
         default: false,
@@ -66,15 +83,17 @@ const userSchema = new mongoose.Schema(
     },
 
     accountStatus: {
-       isVerified: {
+      isVerified: {
         type: Boolean,
         default: false,
       },
+
       isBlocked: {
         type: Boolean,
         default: false,
       },
-      isDeleted:{
+
+      isDeleted: {
         type: Boolean,
         default: false,
       },
@@ -86,10 +105,12 @@ const userSchema = new mongoose.Schema(
         default: 0,
         min: 0,
       },
+
       totalEarned: {
         type: Number,
         default: 0,
       },
+
       totalSpent: {
         type: Number,
         default: 0,
@@ -97,8 +118,8 @@ const userSchema = new mongoose.Schema(
     },
   },
   { timestamps: true }
-
 );
 
-const User=mongoose.model('User' , userSchema);
-export default User
+const User = mongoose.model("User", userSchema);
+
+export default User;

@@ -6,6 +6,7 @@ import { ROUTES } from "../../constants/routes";
 import { logoutApi } from "../../features/auth/authService";
 import {
   clearAccountType,
+  clearAuthStorage,
   clearAuthUser,
   getAccountType,
   getAuthUser,
@@ -23,18 +24,14 @@ function DashboardLayout({
   const handleLogout = async () => {
     try {
       await logoutApi(accountType);
-
-      clearAuthUser();
-      clearAccountType();
-
+      clearAuthStorage();
       toast.success("Logged out successfully");
 
       navigate(ROUTES.LOGIN, {
         replace: true,
       });
     } catch (error) {
-      clearAuthUser();
-      clearAccountType();
+      clearAuthStorage();
 
       const message =
         error?.response?.data?.message ||
@@ -82,7 +79,7 @@ function DashboardLayout({
         </div>
       </header>
 
-      <main className="mx-auto max-w-7xl px-6 py-8">
+    <main className="mx-auto max-w-[1180px] px-6 py-8">
         <div className="mb-8">
           <h1 className="font-manrope text-3xl font-extrabold text-[#2D333B]">
             {title}
@@ -92,9 +89,9 @@ function DashboardLayout({
             Welcome,{" "}
             <span className="font-semibold text-[#4C59A6]">
               {user?.username ||
-                user?.firstName ||
-                user?.email ||
-                "User"}
+  [user?.firstName, user?.lastName].filter(Boolean).join(" ") ||
+  user?.email ||
+  "User"}
             </span>
           </p>
         </div>

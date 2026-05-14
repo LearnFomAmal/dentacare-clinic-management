@@ -13,6 +13,7 @@ import { loginSchema } from "../../schemas/auth.schema";
 import { ROUTES } from "../../constants/routes";
 import { loginApi } from "../../features/auth/authService";
 import {
+  clearAuthStorage,
   saveAccountType,
   saveAuthUser,
 } from "../../utils/authStorage";
@@ -36,35 +37,51 @@ function LoginPage() {
 
   const selectedAccountType = watch("accountType");
 
-  const onSubmit = async (data) => {
-    try {
-      const response = await loginApi(data);
+ const onSubmit = async (data) => {
+  try {
+    // Clear old frontend auth before new login
+    clearAuthStorage();
 
-      saveAccountType(data.accountType);
-      saveAuthUser(response.data);
+    const response = await loginApi(data);
 
-      toast.success(response.message || "Login successful");
+    const expectedRole = data.accountType;
 
-      if (data.accountType === "admin") {
-        navigate(ROUTES.ADMIN_PROFILE);
-        return;
-      }
+    const backendUser = response.data || {};
 
-      if (data.accountType === "doctor") {
-        navigate(ROUTES.DOCTOR_SETTINGS);
-        return;
-      }
+    const normalizedUser = {
+      ...backendUser,
+      email: backendUser.email || data.email,
+      role: backendUser.role || expectedRole,
+      accountType: expectedRole,
+    };
 
-      navigate(ROUTES.USER_SETTINGS);
-    } catch (error) {
-      const message =
-        error?.response?.data?.message ||
-        error?.message ||
-        "Login failed";
+    saveAccountType(expectedRole);
+    saveAuthUser(normalizedUser);
 
-      toast.error(message);
+    toast.success(response.message || "Login successful");
+
+    if (expectedRole === "admin") {
+      navigate(ROUTES.ADMIN_PROFILE, { replace: true });
+      return;
     }
-  };
+
+    if (expectedRole === "doctor") {
+      navigate(ROUTES.DOCTOR_SETTINGS, { replace: true });
+      return;
+    }
+
+    navigate(ROUTES.USER_SETTINGS, { replace: true });
+  } catch (error) {
+    clearAuthStorage();
+
+    const message =
+      error?.response?.data?.message ||
+      error?.message ||
+      "Login failed";
+
+    toast.error(message);
+  }
+ };
 
   return (
     <AuthLayout>
