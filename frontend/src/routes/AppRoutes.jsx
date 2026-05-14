@@ -7,7 +7,13 @@ import ForgotPasswordPage from "../pages/public/ForgotPasswordPage";
 import ResetPasswordPage from "../pages/public/ResetPasswordPage";
 import DoctorVerificationPendingPage from "../pages/public/DoctorVerificationPendingPage";
 
+import PatientSettingsPage from "../pages/patient/PatientSettingsPage";
+import DoctorSettingsPage from "../pages/doctor/DoctorSettingsPage";
+import AdminProfilePage from "../pages/admin/AdminProfilePage";
+
 import { ROUTES } from "../constants/routes";
+import PublicRoute from "./PublicRoute";
+import ProtectedRoute from "./ProtectedRoute";
 
 function AppRoutes() {
   return (
@@ -17,34 +23,95 @@ function AppRoutes() {
         element={<Navigate to={ROUTES.LOGIN} replace />}
       />
 
+      {/* Public Auth Routes */}
       <Route
         path={ROUTES.LOGIN}
-        element={<LoginPage />}
+        element={
+          <PublicRoute>
+            <LoginPage />
+          </PublicRoute>
+        }
       />
 
       <Route
         path={ROUTES.REGISTER}
-        element={<RegisterPage />}
+        element={
+          <PublicRoute>
+            <RegisterPage />
+          </PublicRoute>
+        }
       />
 
       <Route
         path={ROUTES.VERIFY_OTP}
-        element={<OtpVerificationPage />}
+        element={
+          <PublicRoute>
+            <OtpVerificationPage />
+          </PublicRoute>
+        }
       />
 
       <Route
         path={ROUTES.FORGOT_PASSWORD}
-        element={<ForgotPasswordPage />}
+        element={
+          <PublicRoute>
+            <ForgotPasswordPage />
+          </PublicRoute>
+        }
       />
 
       <Route
         path={ROUTES.RESET_PASSWORD}
-        element={<ResetPasswordPage />}
+        element={
+          <PublicRoute>
+            <ResetPasswordPage />
+          </PublicRoute>
+        }
       />
 
       <Route
         path={ROUTES.DOCTOR_VERIFY}
-        element={<DoctorVerificationPendingPage />}
+        element={
+          <PublicRoute>
+            <DoctorVerificationPendingPage />
+          </PublicRoute>
+        }
+      />
+
+      {/* Patient Routes */}
+      <Route
+        path={ROUTES.USER_SETTINGS}
+        element={
+          <ProtectedRoute allowedRoles={["patient"]}>
+            <PatientSettingsPage />
+          </ProtectedRoute>
+        }
+      />
+
+      {/* Doctor Routes */}
+      <Route
+        path={ROUTES.DOCTOR_SETTINGS}
+        element={
+          <ProtectedRoute allowedRoles={["doctor"]}>
+            <DoctorSettingsPage />
+          </ProtectedRoute>
+        }
+      />
+
+      {/* Admin Routes */}
+      <Route
+        path={ROUTES.ADMIN_PROFILE}
+        element={
+          <ProtectedRoute allowedRoles={["admin"]}>
+            <AdminProfilePage />
+          </ProtectedRoute>
+        }
+      />
+
+      {/* Fallback */}
+      <Route
+        path="*"
+        element={<Navigate to={ROUTES.LOGIN} replace />}
       />
     </Routes>
   );
