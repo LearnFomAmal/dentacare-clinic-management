@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
+import toast from "react-hot-toast";
 
 import AuthLayout from "../../components/layout/AuthLayout";
 import Card from "../../components/ui/Card";
@@ -17,6 +18,8 @@ import Button from "../../components/ui/Button";
 
 import { registerSchema } from "../../schemas/auth.schema";
 import { ROUTES } from "../../constants/routes";
+import { registerApi } from "../../features/auth/authService";
+import { savePendingRegisterEmail } from "../../utils/authStorage";
 
 function RegisterPage() {
   const navigate = useNavigate();
@@ -41,23 +44,47 @@ function RegisterPage() {
   });
 
   const onSubmit = async (data) => {
-    console.log("Register form data:", data);
-
-    // API integration later:
-    // POST /auth/register
-    // then navigate to verify OTP with email state
-
-    navigate(ROUTES.VERIFY_OTP, {
-      state: {
+    try {
+      const payload = {
+        username: data.username,
         email: data.email,
-      },
-    });
+        password: data.password,
+        confirmPassword: data.confirmPassword,
+        dateOfBirth: data.dateOfBirth,
+        gender: data.gender,
+        phoneNumber: data.phoneNumber,
+        bloodGroup: data.bloodGroup,
+      };
+
+      if (data.referralCode?.trim()) {
+        payload.referralCode = data.referralCode.trim();
+      }
+
+      const response = await registerApi(payload);
+
+      savePendingRegisterEmail(data.email);
+
+      toast.success(response.message || "OTP sent to email");
+
+      navigate(ROUTES.VERIFY_OTP, {
+        state: {
+          email: data.email,
+        },
+      });
+    } catch (error) {
+      const message =
+        error?.response?.data?.message ||
+        error?.message ||
+        "Registration failed";
+
+      toast.error(message);
+    }
   };
 
   return (
     <AuthLayout>
-     <Card className="mx-auto max-w-[860px]">
-       <div className="space-y-7">
+      <Card className="mx-auto max-w-[860px]">
+        <div className="space-y-7">
           <div className="space-y-2 text-center">
             <h1 className="font-manrope text-[30px] font-extrabold leading-9 tracking-[-0.75px] text-[#2D333B]">
               Create Your Account
@@ -70,13 +97,13 @@ function RegisterPage() {
 
           <form
             onSubmit={handleSubmit(onSubmit)}
-             className="space-y-7"
+            className="space-y-7"
           >
             <div className="grid gap-x-8 gap-y-5 md:grid-cols-2">
               <Input
                 label="Username"
                 name="username"
-                placeholder="johndoe_99"
+                placeholder="Amal Kumar"
                 register={register}
                 error={errors.username}
                 icon={User}
@@ -128,27 +155,11 @@ function RegisterPage() {
 
                 <select
                   {...register("gender")}
-                  className={`
-                    h-[49px]
-                    w-full
-                    rounded-lg
-                    border
-                    bg-white
-                    px-4
-                    text-base
-                    text-[#2D333B]
-                    outline-none
-                    transition-all
-                    duration-200
-                    focus:border-[#4C59A6]
-                    focus:ring-2
-                    focus:ring-[#4C59A6]/10
-                    ${
-                      errors.gender
-                        ? "border-red-500"
-                        : "border-[rgba(172,178,189,0.2)]"
-                    }
-                  `}
+                  className={`h-[49px] w-full rounded-lg border bg-white px-4 text-sm text-[#2D333B] outline-none transition-all duration-200 focus:border-[#4C59A6] focus:ring-2 focus:ring-[#4C59A6]/10 ${
+                    errors.gender
+                      ? "border-red-500"
+                      : "border-[rgba(172,178,189,0.2)]"
+                  }`}
                 >
                   <option value="">Select Gender</option>
                   <option value="male">Male</option>
@@ -179,27 +190,11 @@ function RegisterPage() {
 
                 <select
                   {...register("bloodGroup")}
-                  className={`
-                    h-[49px]
-                    w-full
-                    rounded-lg
-                    border
-                    bg-white
-                    px-4
-                    text-base
-                    text-[#2D333B]
-                    outline-none
-                    transition-all
-                    duration-200
-                    focus:border-[#4C59A6]
-                    focus:ring-2
-                    focus:ring-[#4C59A6]/10
-                    ${
-                      errors.bloodGroup
-                        ? "border-red-500"
-                        : "border-[rgba(172,178,189,0.2)]"
-                    }
-                  `}
+                  className={`h-[49px] w-full rounded-lg border bg-white px-4 text-sm text-[#2D333B] outline-none transition-all duration-200 focus:border-[#4C59A6] focus:ring-2 focus:ring-[#4C59A6]/10 ${
+                    errors.bloodGroup
+                      ? "border-red-500"
+                      : "border-[rgba(172,178,189,0.2)]"
+                  }`}
                 >
                   <option value="">Select Group</option>
                   <option value="A+">A+</option>
@@ -220,7 +215,7 @@ function RegisterPage() {
               </div>
             </div>
 
-           <div className="mx-auto max-w-[520px] rounded-2xl border border-[rgba(172,178,189,0.2)] bg-[#F8FAFC] p-4">
+            <div className="mx-auto max-w-[520px] rounded-2xl border border-[rgba(172,178,189,0.2)] bg-[#F8FAFC] p-4">
               <Input
                 label="Referral Code Optional"
                 name="referralCode"
@@ -235,11 +230,8 @@ function RegisterPage() {
               </p>
             </div>
 
-           <div className="mx-auto max-w-[380px]">
-              <Button
-                type="submit"
-                loading={isSubmitting}
-              >
+            <div className="mx-auto max-w-[380px]">
+              <Button type="submit" loading={isSubmitting}>
                 Register
               </Button>
             </div>

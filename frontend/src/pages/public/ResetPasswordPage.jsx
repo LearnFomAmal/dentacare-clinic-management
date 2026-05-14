@@ -1,7 +1,16 @@
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { Mail, ShieldCheck, LockKeyhole } from "lucide-react";
+import {
+  Mail,
+  ShieldCheck,
+  LockKeyhole,
+  UserRound,
+  Stethoscope,
+  ShieldCheck as AdminIcon,
+} from "lucide-react";
+import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
+import toast from "react-hot-toast";
 
 import AuthLayout from "../../components/layout/AuthLayout";
 import Card from "../../components/ui/Card";
@@ -10,45 +19,115 @@ import Button from "../../components/ui/Button";
 
 import { resetPasswordSchema } from "../../schemas/auth.schema";
 import { ROUTES } from "../../constants/routes";
+import {
+  resendForgotPasswordOtpApi,
+  resetPasswordApi,
+} from "../../features/auth/authService";
+import {
+  clearPendingForgotPasswordData,
+  getPendingForgotPasswordData,
+} from "../../utils/authStorage";
 
 function ResetPasswordPage() {
   const navigate = useNavigate();
   const location = useLocation();
 
-  const emailFromForgotPassword = location.state?.email || "";
+  const pendingData = getPendingForgotPasswordData();
+
+  const accountTypeFromState =
+    location.state?.accountType || pendingData?.accountType || "patient";
+
+  const emailFromState =
+    location.state?.email || pendingData?.email || "";
+
+  const [resendTimer, setResendTimer] = useState(60);
+  const [isResending, setIsResending] = useState(false);
 
   const {
     register,
     handleSubmit,
+    watch,
+    getValues,
     formState: { errors, isSubmitting },
   } = useForm({
     resolver: zodResolver(resetPasswordSchema),
     defaultValues: {
-      email: emailFromForgotPassword,
+      accountType: accountTypeFromState,
+      email: emailFromState,
       otp: "",
       newPassword: "",
       confirmPassword: "",
     },
   });
 
+  const selectedAccountType = watch("accountType");
+
+  useEffect(() => {
+    if (resendTimer <= 0) return;
+
+    const interval = setInterval(() => {
+      setResendTimer((prev) => prev - 1);
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [resendTimer]);
+
   const onSubmit = async (data) => {
-    console.log("Reset password data:", data);
+    try {
+      const response = await resetPasswordApi(data);
 
-    // API integration later:
-    // Patient: POST /auth/forgot-password/verify-otp
-    // Doctor: POST /doctors/reset-password
-    // Admin: POST /admin/reset-password
+      clearPendingForgotPasswordData();
 
-    navigate(ROUTES.LOGIN);
+      toast.success(response?.message || "Password reset successful");
+
+      navigate(ROUTES.LOGIN, {
+        replace: true,
+      });
+    } catch (error) {
+      const message =
+        error?.response?.data?.message ||
+        error?.message ||
+        "Password reset failed";
+
+      toast.error(message);
+    }
   };
 
   const handleResendOtp = async () => {
-    console.log("Resend forgot password OTP");
+    try {
+      const accountType = getValues("accountType");
+      const email = getValues("email");
 
-    // API integration later:
-    // Doctor: POST /doctors/resend-forgot-password-otp
-    // Admin: POST /admin/resend-forgot-otp
-    // Patient backend currently has no forgot-password resend route unless we add it later.
+      if (!email) {
+        toast.error("Please enter your email first");
+        return;
+      }
+
+      if (resendTimer > 0) {
+        toast.error(`Please wait ${resendTimer}s before requesting another OTP`);
+        return;
+      }
+
+      setIsResending(true);
+
+      const response = await resendForgotPasswordOtpApi({
+        accountType,
+        email,
+      });
+
+      toast.success(response?.message || "OTP resent successfully");
+
+      setResendTimer(60);
+    } catch (error) {
+      const message =
+        error?.response?.data?.message ||
+        error?.message ||
+        "Failed to resend OTP";
+
+      toast.error(message);
+    } finally {
+      setIsResending(false);
+    }
   };
 
   return (
@@ -65,14 +144,64 @@ function ResetPasswordPage() {
             </h1>
 
             <p className="text-sm leading-5 text-[#595F69]">
-              Enter the OTP and set your new password
+              Enter your OTP and set a new password
             </p>
           </div>
 
-          <form
-            onSubmit={handleSubmit(onSubmit)}
-            className="space-y-6"
-          >
+          <div className="grid grid-cols-3 gap-3">
+            <label
+              className={`flex cursor-pointer flex-col items-center justify-center gap-2 rounded-2xl border px-3 py-3 text-xs font-semibold transition-all ${
+                selectedAccountType === "patient"
+                  ? "border-[#4C59A6] bg-[#B8B8FF]/30 text-[#4C59A6]"
+                  : "border-[rgba(172,178,189,0.2)] bg-white text-[#595F69]"
+              }`}
+            >
+              <input
+                type="radio"
+                value="patient"
+                className="hidden"
+                {...register("accountType")}
+              />
+              <UserRound size={18} />
+              Patient
+            </label>
+
+            <label
+              className={`flex cursor-pointer flex-col items-center justify-center gap-2 rounded-2xl border px-3 py-3 text-xs font-semibold transition-all ${
+                selectedAccountType === "doctor"
+                  ? "border-[#4C59A6] bg-[#B8B8FF]/30 text-[#4C59A6]"
+                  : "border-[rgba(172,178,189,0.2)] bg-white text-[#595F69]"
+              }`}
+            >
+              <input
+                type="radio"
+                value="doctor"
+                className="hidden"
+                {...register("accountType")}
+              />
+              <Stethoscope size={18} />
+              Doctor
+            </label>
+
+            <label
+              className={`flex cursor-pointer flex-col items-center justify-center gap-2 rounded-2xl border px-3 py-3 text-xs font-semibold transition-all ${
+                selectedAccountType === "admin"
+                  ? "border-[#4C59A6] bg-[#B8B8FF]/30 text-[#4C59A6]"
+                  : "border-[rgba(172,178,189,0.2)] bg-white text-[#595F69]"
+              }`}
+            >
+              <input
+                type="radio"
+                value="admin"
+                className="hidden"
+                {...register("accountType")}
+              />
+              <AdminIcon size={18} />
+              Admin
+            </label>
+          </div>
+
+          <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
             <Input
               label="Email ID"
               type="email"
@@ -112,21 +241,29 @@ function ResetPasswordPage() {
               icon={LockKeyhole}
             />
 
-            <Button
-              type="submit"
-              loading={isSubmitting}
-            >
+            <Button type="submit" loading={isSubmitting}>
               Update Password
             </Button>
           </form>
 
           <div className="space-y-3 text-center text-sm">
+            <p className="text-xs text-[#595F69]">
+              {resendTimer > 0
+                ? `You can resend OTP in ${resendTimer}s`
+                : "Didn't receive the OTP?"}
+            </p>
+
             <button
               type="button"
               onClick={handleResendOtp}
-              className="font-bold text-[#4C59A6] hover:underline"
+              disabled={resendTimer > 0 || isResending}
+              className={`font-bold transition-all ${
+                resendTimer > 0 || isResending
+                  ? "cursor-not-allowed text-gray-400"
+                  : "text-[#4C59A6] hover:underline"
+              }`}
             >
-              Resend OTP
+              {isResending ? "Resending..." : "Resend OTP"}
             </button>
 
             <div>

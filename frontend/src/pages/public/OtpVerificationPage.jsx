@@ -1,7 +1,9 @@
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Mail, ShieldCheck } from "lucide-react";
+import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
+import toast from "react-hot-toast";
 
 import AuthLayout from "../../components/layout/AuthLayout";
 import Card from "../../components/ui/Card";
@@ -11,15 +13,32 @@ import Button from "../../components/ui/Button";
 import { otpSchema } from "../../schemas/auth.schema";
 import { ROUTES } from "../../constants/routes";
 
+import {
+  resendRegisterOtpApi,
+  verifyRegisterOtpApi,
+} from "../../features/auth/authService";
+
+import {
+  clearPendingRegisterEmail,
+  getPendingRegisterEmail,
+} from "../../utils/authStorage";
+
 function OtpVerificationPage() {
   const navigate = useNavigate();
   const location = useLocation();
 
-  const emailFromRegister = location.state?.email || "";
+  const emailFromRegister =
+    location.state?.email ||
+    getPendingRegisterEmail() ||
+    "";
+
+  const [resendTimer, setResendTimer] = useState(60);
+  const [isResending, setIsResending] = useState(false);
 
   const {
     register,
     handleSubmit,
+    getValues,
     formState: { errors, isSubmitting },
   } = useForm({
     resolver: zodResolver(otpSchema),
@@ -29,20 +48,83 @@ function OtpVerificationPage() {
     },
   });
 
+  useEffect(() => {
+    if (resendTimer <= 0) return;
+
+    const interval = setInterval(() => {
+      setResendTimer((prev) => prev - 1);
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [resendTimer]);
+
   const onSubmit = async (data) => {
-    console.log("OTP verification data:", data);
+    try {
+      const response = await verifyRegisterOtpApi({
+        email: data.email,
+        otp: data.otp,
+      });
 
-    // API integration later:
-    // POST /auth/register/verify-otp
+      clearPendingRegisterEmail();
 
-    navigate(ROUTES.LOGIN);
+      toast.success(
+        response?.message ||
+          "Account verified successfully. Please login."
+      );
+
+      navigate(ROUTES.LOGIN, {
+        replace: true,
+      });
+    } catch (error) {
+      console.error("OTP verification error:", error);
+
+      const message =
+        error?.response?.data?.message ||
+        error?.message ||
+        "OTP verification failed";
+
+      toast.error(message);
+    }
   };
 
   const handleResendOtp = async () => {
-    console.log("Resend OTP for:", emailFromRegister);
+    try {
+      const email = getValues("email");
 
-    // API integration later:
-    // POST /auth/register/resend-otp
+      if (!email) {
+        toast.error("Please enter your email first");
+        return;
+      }
+
+      if (resendTimer > 0) {
+        toast.error(`Please wait ${resendTimer}s before requesting another OTP`);
+        return;
+      }
+
+      setIsResending(true);
+
+      const response = await resendRegisterOtpApi({
+        email,
+      });
+
+      toast.success(
+        response?.message ||
+          "OTP resent successfully"
+      );
+
+      setResendTimer(60);
+    } catch (error) {
+      console.error("Resend OTP error:", error);
+
+      const message =
+        error?.response?.data?.message ||
+        error?.message ||
+        "Failed to resend OTP";
+
+      toast.error(message);
+    } finally {
+      setIsResending(false);
+    }
   };
 
   return (
@@ -95,12 +177,23 @@ function OtpVerificationPage() {
           </form>
 
           <div className="space-y-3 text-center text-sm">
+            <p className="text-xs text-[#595F69]">
+              {resendTimer > 0
+                ? `You can resend OTP in ${resendTimer}s`
+                : "Didn't receive the OTP?"}
+            </p>
+
             <button
               type="button"
               onClick={handleResendOtp}
-              className="font-bold text-[#4C59A6] hover:underline"
+              disabled={resendTimer > 0 || isResending}
+              className={`font-bold transition-all ${
+                resendTimer > 0 || isResending
+                  ? "cursor-not-allowed text-gray-400"
+                  : "text-[#4C59A6] hover:underline"
+              }`}
             >
-              Resend OTP
+              {isResending ? "Resending..." : "Resend OTP"}
             </button>
 
             <div>

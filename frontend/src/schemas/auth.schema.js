@@ -15,7 +15,12 @@ const passwordSchema = z
   .regex(/[@$!%*?&]/, "Password must contain special character");
 
 export const loginSchema = z.object({
+  accountType: z.enum(["patient", "doctor", "admin"], {
+    message: "Account type is required",
+  }),
+
   email: emailSchema,
+
   password: z.string().min(1, "Password is required"),
 });
 
@@ -90,11 +95,19 @@ export const otpSchema = z.object({
 });
 
 export const forgotPasswordSchema = z.object({
+  accountType: z.enum(["patient", "doctor", "admin"], {
+    message: "Account type is required",
+  }),
+
   email: emailSchema,
 });
 
 export const resetPasswordSchema = z
   .object({
+    accountType: z.enum(["patient", "doctor", "admin"], {
+      message: "Account type is required",
+    }),
+
     email: emailSchema,
 
     otp: z

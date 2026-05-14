@@ -35,7 +35,8 @@ import {
   deleteOldOtps,
   updateOtpRecord,
 } from "./auth.repository.js";
-   import { hashOtp } from "../../shared/utils/hashOtp.js";
+
+import { hashOtp } from "../../shared/utils/hashOtp.js";
 
 export const registerRequestService = async (data) => {
   const {
@@ -271,6 +272,55 @@ const hashedOtp = await hashOtp(otp);
   await sendOtpMail(email, otp);
 };
 
+export const resendForgotPasswordOtpService = async (email) => {
+  const user = await findUserByEmail(email);
+
+  if (!user) {
+    throw new AppError("No account found with this email", 404);
+  }
+
+  if (user.accountStatus.isDeleted) {
+    throw new AppError("This account has been deleted", 403);
+  }
+
+  if (user.accountStatus.isBlocked) {
+    throw new AppError("This account has been blocked", 403);
+  }
+
+  const otpRecord = await findOtpRecord(email, "forgot_password");
+
+  if (!otpRecord) {
+    throw new AppError("No OTP request found", 404);
+  }
+
+  if (otpRecord.resendCount >= 3) {
+    throw new AppError("Maximum resend limit reached", 400);
+  }
+
+  if (new Date() < otpRecord.resendAvailableAt) {
+    const secondsLeft = Math.ceil(
+      (otpRecord.resendAvailableAt - new Date()) / 1000
+    );
+
+    throw new AppError(
+      `Please wait ${secondsLeft}s before requesting another OTP`,
+      400
+    );
+  }
+
+  const newOtp = generateOtp();
+  const hashedOtp = await hashOtp(newOtp);
+
+  otpRecord.otp = hashedOtp;
+  otpRecord.attempts = 0;
+  otpRecord.resendCount += 1;
+  otpRecord.expiresAt = new Date(Date.now() + 5 * 60 * 1000);
+  otpRecord.resendAvailableAt = new Date(Date.now() + 60 * 1000);
+
+  await otpRecord.save();
+
+  await sendOtpMail(email, newOtp);
+};
 
 export const forgotPasswordVerifyOtpService = async (email, enteredOtp, newPassword) => {
   const otpRecord = await findOtpRecord(email, "forgot_password");

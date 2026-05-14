@@ -21,6 +21,7 @@ import {
    refreshAccessTokenService,
    logoutService,
    logoutAllService,
+   resendForgotPasswordOtpService,
 } from "./auth.service.js";
 
 export const registerRequestController = asyncHandler(async (req, res) => {
@@ -46,7 +47,7 @@ export const verifyRegisterOtpController = asyncHandler(async (req, res) => {
   validateOtpInput(email, otp);
 
   await verifyRegisterOtpService(email, otp);
-
+ 
   sendResponse(res, 201, true, "Account created successfully. Please login.");
 });
 
@@ -82,6 +83,18 @@ export const forgotPasswordRequestController = asyncHandler(async (req, res) => 
 
   sendResponse(res, 200, true, "OTP sent for password reset");
 });
+
+export const resendForgotPasswordOtpController = asyncHandler(
+  async (req, res) => {
+    const { email } = req.body;
+
+    validateForgotPasswordInput(email);
+
+    await resendForgotPasswordOtpService(email);
+
+    sendResponse(res, 200, true, "OTP resent successfully");
+  }
+);
 
 export const forgotPasswordVerifyOtpController = asyncHandler(async (req, res) => {
   const { email, otp, newPassword, confirmPassword } = req.body;
@@ -121,3 +134,4 @@ export const logoutAllController = asyncHandler(async (req, res) => {
 
   sendResponse(res, 200, true, "Logged out from all devices");
 });
+
