@@ -15,6 +15,9 @@ import { ROUTES } from "../constants/routes";
 import PublicRoute from "./PublicRoute";
 import ProtectedRoute from "./ProtectedRoute";
 
+import AdminUsersPage from "../pages/admin/AdminUsersPage";
+import AdminUserDetailsPage from "../pages/admin/AdminUserDetailsPage";
+
 function AppRoutes() {
   return (
     <Routes>
@@ -108,13 +111,36 @@ function AppRoutes() {
         }
       />
 
+      <Route
+  path={ROUTES.ADMIN_USERS}
+  element={
+    <ProtectedRoute allowedRoles={["admin"]}>
+      <AdminUsersPage />
+    </ProtectedRoute>
+  }
+/>
+
+<Route
+  path={ROUTES.ADMIN_USER_DETAILS}
+  element={
+    <ProtectedRoute allowedRoles={["admin"]}>
+      <AdminUserDetailsPage />
+    </ProtectedRoute>
+  }
+/>
+
+
       {/* Fallback */}
       <Route
         path="*"
         element={<Navigate to={ROUTES.LOGIN} replace />}
       />
+
+      
     </Routes>
+
   );
+
 }
 
 export default AppRoutes;

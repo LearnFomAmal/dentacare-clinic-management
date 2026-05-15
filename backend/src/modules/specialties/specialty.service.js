@@ -6,8 +6,8 @@ import {
   findSpecialtyById,
   getAllSpecialties,
   updateSpecialtyById,
+  getAllActiveSpecialties,
 } from "./specialty.repository.js";
-
 
 // CREATE SPECIALTY
 export const createSpecialtyService =
@@ -173,16 +173,6 @@ export const updateSpecialtyStatusService =
     return updatedSpecialty;
   };
 
-  export const getAllActiveSpecialtiesService =
-  async () => {
-
-    return Specialty.find({
-      status: "active",
-    })
-    .sort({
-      displayName: 1,
-    })
-    .select(
-      "_id displayName description"
-    );
-  };
+ export const getAllActiveSpecialtiesService = async () => {
+  return getAllActiveSpecialties();
+};

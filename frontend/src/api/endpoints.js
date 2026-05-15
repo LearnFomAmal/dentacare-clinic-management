@@ -68,4 +68,14 @@ export const API_ENDPOINTS = {
     ADMIN_UPDATE_CONSULTATION_FEE: (id) =>
       `/doctors/${id}/consultation-fee`,
   },
+
+  SPECIALTY: {
+  CREATE: "/specialties",
+  GET_ALL: "/specialties",
+  GET_ACTIVE_PUBLIC: "/specialties/public",
+  UPDATE: (id) => `/specialties/${id}`,
+  UPDATE_STATUS: (id) => `/specialties/${id}/status`,
+},
+
 };
+

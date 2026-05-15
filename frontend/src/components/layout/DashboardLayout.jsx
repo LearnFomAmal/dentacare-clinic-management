@@ -67,6 +67,31 @@ function DashboardLayout({
               </p>
             </div>
           </Link>
+          
+               {accountType === "admin" && (
+  <nav className="hidden items-center gap-2 md:flex">
+    <Link
+      to={ROUTES.ADMIN_PROFILE}
+      className="rounded-2xl px-4 py-2 text-sm font-semibold text-[#595F69] transition hover:bg-[#F8FAFC] hover:text-[#4C59A6]"
+    >
+      Profile
+    </Link>
+
+    <Link
+      to={ROUTES.ADMIN_USERS}
+      className="rounded-2xl px-4 py-2 text-sm font-semibold text-[#595F69] transition hover:bg-[#F8FAFC] hover:text-[#4C59A6]"
+    >
+      Patients
+    </Link>
+
+    <Link
+      to={ROUTES.ADMIN_DOCTORS}
+      className="rounded-2xl px-4 py-2 text-sm font-semibold text-[#595F69] transition hover:bg-[#F8FAFC] hover:text-[#4C59A6]"
+    >
+      Doctors
+    </Link>
+  </nav>
+)}
 
           <button
             type="button"

@@ -46,3 +46,13 @@ export const updateSpecialtyById = (
     }
   );
 };
+
+export const getAllActiveSpecialties = () => {
+  return Specialty.find({
+    status: "active",
+  })
+    .sort({
+      displayName: 1,
+    })
+    .select("_id displayName name description status");
+};
