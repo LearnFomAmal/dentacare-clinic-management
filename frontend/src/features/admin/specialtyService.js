@@ -7,6 +7,16 @@ export const getAllSpecialtiesApi = async () => {
   return response.data;
 };
 
+
+export const getActiveSpecialtiesApi = async () => {
+  const response = await axiosInstance.get(
+    API_ENDPOINTS.SPECIALTY.GET_ACTIVE_PUBLIC
+  );
+
+  return response.data;
+};
+
+
 export const createSpecialtyApi = async (payload) => {
   const response = await axiosInstance.post(
     API_ENDPOINTS.SPECIALTY.CREATE,

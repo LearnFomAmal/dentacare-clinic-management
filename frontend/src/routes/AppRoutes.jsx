@@ -18,6 +18,11 @@ import ProtectedRoute from "./ProtectedRoute";
 import AdminUsersPage from "../pages/admin/AdminUsersPage";
 import AdminUserDetailsPage from "../pages/admin/AdminUserDetailsPage";
 
+import AdminDoctorsPage from "../pages/admin/AdminDoctorsPage";
+import AdminDoctorDetailsPage from "../pages/admin/AdminDoctorDetailsPage";
+import AdminAddDoctorPage from "../pages/admin/AdminAddDoctorPage";
+import AdminEditDoctorFeePage from "../pages/admin/AdminEditDoctorFeePage";
+
 function AppRoutes() {
   return (
     <Routes>
@@ -129,6 +134,41 @@ function AppRoutes() {
   }
 />
 
+<Route
+  path={ROUTES.ADMIN_DOCTORS}
+  element={
+    <ProtectedRoute allowedRoles={["admin"]}>
+      <AdminDoctorsPage />
+    </ProtectedRoute>
+  }
+/>
+
+<Route
+  path={ROUTES.ADMIN_ADD_DOCTOR}
+  element={
+    <ProtectedRoute allowedRoles={["admin"]}>
+      <AdminAddDoctorPage />
+    </ProtectedRoute>
+  }
+/>
+
+<Route
+  path={ROUTES.ADMIN_DOCTOR_DETAILS}
+  element={
+    <ProtectedRoute allowedRoles={["admin"]}>
+      <AdminDoctorDetailsPage />
+    </ProtectedRoute>
+  }
+/>
+
+<Route
+  path={ROUTES.ADMIN_EDIT_DOCTOR_FEE}
+  element={
+    <ProtectedRoute allowedRoles={["admin"]}>
+      <AdminEditDoctorFeePage />
+    </ProtectedRoute>
+  }
+/>
 
       {/* Fallback */}
       <Route
