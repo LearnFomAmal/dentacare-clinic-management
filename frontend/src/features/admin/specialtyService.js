@@ -43,3 +43,11 @@ export const updateSpecialtyStatusApi = async (id, status) => {
 
   return response.data;
 };
+
+export const deleteSpecialtyApi = async (id) => {
+  const response = await axiosInstance.delete(
+    API_ENDPOINTS.SPECIALTY.DELETE(id)
+  );
+
+  return response.data;
+};

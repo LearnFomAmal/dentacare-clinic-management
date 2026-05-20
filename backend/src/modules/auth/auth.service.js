@@ -174,9 +174,11 @@ if (!isOtpMatched) {
       referredBy: temp.referredBy || null,
     },
 
-    accountStatus: {
-      isVerified: true,
-    },
+   accountStatus: {
+    isVerified: true,
+    isBlocked: false,
+    isDeleted: false,
+   },
   });
  
   await deleteOldOtps(email, "register");
@@ -216,10 +218,13 @@ const refreshToken = generateRefreshToken({
   role: "patient",
 });
 
-const activeSessions = await countActiveSessionsByUserId(user._id);
+const activeSessions = await countActiveSessionsByUserId(
+  user._id,
+  "user"
+);
 
 if (activeSessions >= 5) {
-  await revokeOldestSessionByUserId(user._id);
+  await revokeOldestSessionByUserId(user._id, "user");
 }
 
   await createSession({
@@ -368,7 +373,7 @@ if (isSamePassword) {
   await updateUserPasswordByEmail(email, hashedPassword);
 
 
-  await revokeAllSessionsByUserId(user._id);
+ await revokeAllSessionsByUserId(user._id, "user");
 
   await deleteOldOtps(email, "forgot_password");
 };
@@ -395,23 +400,28 @@ if (!user || user.accountStatus.isDeleted) {
 if (user.accountStatus.isBlocked) {
   throw new AppError("User account blocked", 401);
 }
-  const session = await findSessionByRefreshToken(refreshToken);
-  if (!session) {
+if (decoded.role !== "patient") {
+  throw new AppError("Invalid token role", 403);
+}
+
+const session = await findSessionByRefreshToken(refreshToken);
+
+if (!session) {
   throw new AppError(
     "Session expired. Please login again.",
     401
   );
 }
 
-   if (new Date() > session.expiresAt) {
+if (session.userType !== "user") {
+  throw new AppError("Invalid session type", 401);
+}
+
+if (new Date() > session.expiresAt) {
   throw new AppError("Session expired. Please login again.", 401);
 }
 
-  if (!session) {
-    throw new AppError("Session expired. Please login again.", 401);
-  }
-
-  if (session.userId.toString() !== decoded.userId) {
+if (session.userId.toString() !== decoded.userId) {
   throw new AppError("Session mismatch", 401);
 }
   const newAccessToken = generateAccessToken({
@@ -438,5 +448,5 @@ export const logoutService = async (refreshToken) => {
 };
 
 export const logoutAllService = async (userId) => {
-  await revokeAllSessionsByUserId(userId);
+  await revokeAllSessionsByUserId(userId, "user");
 };

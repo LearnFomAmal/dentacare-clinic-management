@@ -15,9 +15,10 @@ import {
   findAdminByEmail,
   findAdminByEmailWithPassword,
   findAdminById,
+  updateAdminById,
 } from "./admin.repository.js";
 
-import otpGenerator from "../../shared/utils/otpGenerator.js";
+import generateOtp from "../../shared/utils/otpGenerator.js";
 
 import {
   generateAccessToken,
@@ -32,6 +33,12 @@ import {
   revokeOldestSessionByUserId,
 } from "../auth/session.repository.js";
 
+
+import {
+  createOtpRecord,
+  findOtpRecord,
+  deleteOldOtps,
+} from "../auth/auth.repository.js";
 
 // ==============================
 // ADMIN LOGIN
@@ -82,14 +89,15 @@ export const adminLoginService = async (
     role: "admin",
   });
 
-  const activeSessions =
-    await countActiveSessionsByUserId(admin._id);
+const activeSessions =
+  await countActiveSessionsByUserId(admin._id, "admin");
 
-  if (activeSessions >= 5) {
-    await revokeOldestSessionByUserId(
-      admin._id
-    );
-  }
+if (activeSessions >= 5) {
+  await revokeOldestSessionByUserId(
+    admin._id,
+    "admin"
+  );
+}
 
   await createSession({
     userId: admin._id,
@@ -158,189 +166,155 @@ export const getCurrentAdminService =
 // ==============================
 // FORGOT PASSWORD
 // ==============================
-export const forgotAdminPasswordService =
-  async (email) => {
-    const admin =
-      await findAdminByEmail(email);
-
-    if (!admin) {
-      throw new AppError(
-        "Admin not found",
-        404
-      );
-    }
-
-    const otp = otpGenerator();
-    const hashedOtp =
-      await hashOtp(otp);
-
-    admin.forgotPasswordOtp =
-      hashedOtp;
-
-    admin.forgotPasswordOtpExpire =
-      new Date(
-        Date.now() +
-          5 * 60 * 1000
-      );
-
-    admin.forgotPasswordOtpVerified =
-      false;
-
-    await admin.save();
-
-    await sendOtpMail(email, otp);
-
-    return true;
-  };
-
-
 // ==============================
-// VERIFY FORGOT OTP
+// ADMIN FORGOT PASSWORD - SEND OTP
 // ==============================
-export const verifyForgotOtpService =
-  async (email, otp) => {
-    const admin =
-      await findAdminByEmail(email)
-        .select(
-          "+forgotPasswordOtp +forgotPasswordOtpExpire"
-        );
+export const forgotAdminPasswordService = async (email) => {
+  const admin = await findAdminByEmail(email);
 
-    if (!admin) {
-      throw new AppError(
-        "Admin not found",
-        404
-      );
-    }
+  if (!admin) {
+    throw new AppError("Admin not found", 404);
+  }
 
-    if (
-      !admin.forgotPasswordOtp ||
-      !admin.forgotPasswordOtpExpire
-    ) {
-      throw new AppError(
-        "OTP not found",
-        404
-      );
-    }
+  if (admin.accountStatus?.isBlocked) {
+    throw new AppError("Admin account blocked", 403);
+  }
 
-    if (
-      admin.forgotPasswordOtpExpire <
-      new Date()
-    ) {
-      throw new AppError(
-        "OTP expired",
-        400
-      );
-    }
+  await deleteOldOtps(email, "admin_forgot_password");
 
-    const isValid =
-      await compareOtp(
-        otp,
-        admin.forgotPasswordOtp
-      );
+  const otp = generateOtp();
+  const hashedOtp = await hashOtp(otp);
 
-    if (!isValid) {
-      throw new AppError(
-        "Invalid OTP",
-        400
-      );
-    }
-
-    admin.forgotPasswordOtpVerified =
-      true;
-
-    await admin.save();
-
-    return true;
-  };
-
-
-// ==============================
-// RESET PASSWORD
-// ==============================
-export const resetAdminPasswordService =
-  async (
+  await createOtpRecord({
     email,
-    newPassword
-  ) => {
-    const admin =
-      await findAdminByEmail(email)
-        .select(
-          "+forgotPasswordOtpVerified"
-        );
+    otp: hashedOtp,
+    purpose: "admin_forgot_password",
+    expiresAt: new Date(Date.now() + 5 * 60 * 1000),
+    resendAvailableAt: new Date(Date.now() + 60 * 1000),
+  });
 
-    if (!admin) {
-      throw new AppError(
-        "Admin not found",
-        404
-      );
-    }
+  await sendOtpMail(email, otp);
+};
 
-    if (
-      !admin.forgotPasswordOtpVerified
-    ) {
-      throw new AppError(
-        "OTP not verified",
-        400
-      );
-    }
 
-    admin.password =
-      await hashPassword(
-        newPassword
-      );
+// ==============================
+// ADMIN VERIFY FORGOT OTP
+// ==============================
+export const verifyForgotOtpService = async (email, otp) => {
+  const otpRecord = await findOtpRecord(
+    email,
+    "admin_forgot_password"
+  );
 
-    admin.forgotPasswordOtp =
-      undefined;
-    admin.forgotPasswordOtpExpire =
-      undefined;
-    admin.forgotPasswordOtpVerified =
-      undefined;
+  if (!otpRecord) {
+    throw new AppError("OTP not found", 404);
+  }
 
-    await admin.save();
+  if (new Date() > otpRecord.expiresAt) {
+    throw new AppError("OTP expired", 400);
+  }
 
-    await revokeAllSessionsByUserId(
-      admin._id
+  if (otpRecord.attempts >= 5) {
+    throw new AppError("Maximum OTP attempts exceeded", 400);
+  }
+
+  const isOtpValid = await compareOtp(otp, otpRecord.otp);
+
+  if (!isOtpValid) {
+    otpRecord.attempts += 1;
+    await otpRecord.save();
+
+    throw new AppError("Invalid OTP", 400);
+  }
+
+  otpRecord.isUsed = true;
+  await otpRecord.save();
+};
+
+
+// ==============================
+// ADMIN RESET PASSWORD
+// ==============================
+export const resetAdminPasswordService = async (
+  email,
+  newPassword
+) => {
+  const admin = await findAdminByEmail(email);
+
+  if (!admin) {
+    throw new AppError("Admin not found", 404);
+  }
+
+  const verifiedOtp = await findOtpRecord(
+    email,
+    "admin_forgot_password"
+  );
+
+  if (!verifiedOtp || verifiedOtp.isUsed !== true) {
+    throw new AppError("OTP not verified", 400);
+  }
+
+  const hashedPassword = await hashPassword(newPassword);
+
+  await updateAdminById(admin._id, {
+    password: hashedPassword,
+  });
+
+  await revokeAllSessionsByUserId(admin._id, "admin");
+  
+  await deleteOldOtps(email, "admin_forgot_password");
+};
+
+
+// ==============================
+// ADMIN RESEND FORGOT OTP
+// ==============================
+export const resendForgotOtpService = async (email) => {
+  const admin = await findAdminByEmail(email);
+
+  if (!admin) {
+    throw new AppError("Admin not found", 404);
+  }
+
+  if (admin.accountStatus?.isBlocked) {
+    throw new AppError("Admin account blocked", 403);
+  }
+
+  const otpRecord = await findOtpRecord(
+    email,
+    "admin_forgot_password"
+  );
+
+  if (!otpRecord) {
+    throw new AppError("OTP record not found", 404);
+  }
+
+  if (new Date() < otpRecord.resendAvailableAt) {
+    const secondsLeft = Math.ceil(
+      (otpRecord.resendAvailableAt - new Date()) / 1000
     );
 
-    return true;
-  };
+    throw new AppError(
+      `Please wait ${secondsLeft}s before requesting another OTP`,
+      400
+    );
+  }
 
+  if (otpRecord.resendCount >= 5) {
+    throw new AppError("Maximum resend limit exceeded", 400);
+  }
 
-// ==============================
-// RESEND OTP
-// ==============================
-export const resendForgotOtpService =
-  async (email) => {
-    const admin =
-      await findAdminByEmail(email);
+  const newOtp = generateOtp();
+  const hashedOtp = await hashOtp(newOtp);
 
-    if (!admin) {
-      throw new AppError(
-        "Admin not found",
-        404
-      );
-    }
+  otpRecord.otp = hashedOtp;
+  otpRecord.attempts = 0;
+  otpRecord.resendCount += 1;
+  otpRecord.isUsed = false;
+  otpRecord.expiresAt = new Date(Date.now() + 5 * 60 * 1000);
+  otpRecord.resendAvailableAt = new Date(Date.now() + 60 * 1000);
 
-    const otp = otpGenerator();
+  await otpRecord.save();
 
-    const hashedOtp =
-      await hashOtp(otp);
-
-    admin.forgotPasswordOtp =
-      hashedOtp;
-
-    admin.forgotPasswordOtpExpire =
-      new Date(
-        Date.now() +
-          5 * 60 * 1000
-      );
-
-    admin.forgotPasswordOtpVerified =
-      false;
-
-    await admin.save();
-
-    await sendOtpMail(email, otp);
-
-    return true;
-  };
+  await sendOtpMail(email, newOtp);
+};

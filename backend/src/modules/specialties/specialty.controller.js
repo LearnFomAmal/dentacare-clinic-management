@@ -13,7 +13,8 @@ import {
   getAllSpecialtiesService,
   updateSpecialtyService,
   updateSpecialtyStatusService,
-  getAllActiveSpecialtiesService
+  getAllActiveSpecialtiesService,
+  deleteSpecialtyService
 } from "./specialty.service.js";
 
 
@@ -114,3 +115,15 @@ export const updateSpecialtyStatusController =
       specialties
     );
   });
+
+  export const deleteSpecialtyController = asyncHandler(async (req, res) => {
+  const result = await deleteSpecialtyService(req.params.id);
+
+  sendResponse(
+    res,
+    200,
+    true,
+    "Specialty deleted successfully",
+    result
+  );
+});

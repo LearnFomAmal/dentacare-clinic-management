@@ -2,10 +2,10 @@ import { Navigate } from "react-router-dom";
 
 import { ROUTES } from "../constants/routes";
 import {
-  clearAccountType,
-  clearAuthUser,
-  getAccountType,
   getAuthUser,
+  getAccountType,
+  saveAccountType,
+  clearAuthStorage,
 } from "../utils/authStorage";
 
 const getRoleHome = (role) => {
@@ -15,25 +15,23 @@ const getRoleHome = (role) => {
 };
 
 function ProtectedRoute({ children, allowedRoles = [] }) {
-  const user = getAuthUser();
-  const accountType = getAccountType();
+  const routeRole =
+    allowedRoles.length === 1 ? allowedRoles[0] : getAccountType();
 
-  if (!user || !accountType) {
+  if (!routeRole) {
     return <Navigate to={ROUTES.LOGIN} replace />;
   }
 
-  const actualRole =
-    user.role ||
-    accountType;
+  const user = getAuthUser(routeRole);
 
-  const normalizedRole =
-    actualRole === "patient" ? "patient" : actualRole;
+  if (!user) {
+    return <Navigate to={ROUTES.LOGIN} replace />;
+  }
 
-  // Prevent stale localStorage mismatch
-  if (accountType !== normalizedRole) {
-    clearAuthUser();
-    clearAccountType();
+  const normalizedRole = user.role || user.accountType || routeRole;
 
+  if (normalizedRole !== routeRole) {
+    clearAuthStorage(routeRole);
     return <Navigate to={ROUTES.LOGIN} replace />;
   }
 
@@ -48,6 +46,9 @@ function ProtectedRoute({ children, allowedRoles = [] }) {
       />
     );
   }
+
+  // Make this browser tab remember which role it is using.
+  saveAccountType(normalizedRole);
 
   return children;
 }

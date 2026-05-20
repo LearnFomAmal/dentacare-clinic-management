@@ -7,8 +7,9 @@ import {
   getAllSpecialties,
   updateSpecialtyById,
   getAllActiveSpecialties,
+  deleteSpecialtyById,
 } from "./specialty.repository.js";
-
+import { countDoctorsBySpecialtyId } from "../doctors/doctor.repository.js";
 // CREATE SPECIALTY
 export const createSpecialtyService =
   async (data) => {
@@ -175,4 +176,27 @@ export const updateSpecialtyStatusService =
 
  export const getAllActiveSpecialtiesService = async () => {
   return getAllActiveSpecialties();
+};
+
+export const deleteSpecialtyService = async (id) => {
+  const specialty = await findSpecialtyById(id);
+
+  if (!specialty) {
+    throw new AppError("Specialty not found", 404);
+  }
+
+  const assignedDoctors = await countDoctorsBySpecialtyId(id);
+
+  if (assignedDoctors > 0) {
+    throw new AppError(
+      "Cannot delete specialty because doctors are assigned to it. Deactivate it instead.",
+      400
+    );
+  }
+
+  await deleteSpecialtyById(id);
+
+  return {
+    _id: id,
+  };
 };

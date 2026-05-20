@@ -127,17 +127,28 @@ export const resetPasswordSchema = z
 
 export const doctorVerificationSchema = z
   .object({
-    email: emailSchema,
+    email: z
+      .string()
+      .min(1, "Email is required")
+      .email("Invalid email format"),
 
     otp: z
       .string()
-      .min(6, "OTP must be 6 digits")
-      .max(6, "OTP must be 6 digits")
-      .regex(/^\d{6}$/, "OTP must contain only numbers"),
+      .min(1, "OTP is required")
+      .regex(/^\d{6}$/, "OTP must be 6 digits"),
 
-    newPassword: passwordSchema,
+    newPassword: z
+      .string()
+      .min(8, "Password must be at least 8 characters")
+      .max(20, "Password must be less than 20 characters")
+      .regex(/[a-z]/, "Password must include lowercase letter")
+      .regex(/[A-Z]/, "Password must include uppercase letter")
+      .regex(/\d/, "Password must include number")
+      .regex(/[@$!%*?&]/, "Password must include special character"),
 
-    confirmPassword: z.string().min(1, "Confirm password is required"),
+    confirmPassword: z
+      .string()
+      .min(1, "Confirm password is required"),
   })
   .refine((data) => data.newPassword === data.confirmPassword, {
     message: "Passwords do not match",

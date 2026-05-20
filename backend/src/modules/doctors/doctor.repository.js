@@ -17,9 +17,10 @@ export const findDoctorById = (doctorId) =>{
 }
 
 export const updateDoctorById = (doctorId,payload) => {
-    return Doctor.findByIdAndUpdate(doctorId,payload,  {
-      returnDocument: "after",
-    }
+    return Doctor.findByIdAndUpdate(doctorId,payload,{
+  new: true,
+  runValidators: true,
+}
 )
 }
 
@@ -85,7 +86,7 @@ export const getAllDoctors = async (filters, options) => {
 
   // 🔍 FEE (max fee filter example)
   if (filters.fee) {
-    query["professionalInfo.fee"] = { $lte: Number(filters.fee) };
+    query["professionalInfo.consultationFee"] = { $lte: Number(filters.fee) };
   }
 
   // 🔍 SEARCH (name)
@@ -189,3 +190,25 @@ export const updateDoctorConsultationFeeById = async (
   ).select("-password");
 };
 
+export const countDoctorsBySpecialtyId = (specialtyId) => {
+  return Doctor.countDocuments({
+    "specialization.specialtyId": specialtyId,
+    "accountStatus.isDeleted": false,
+  });
+};
+
+export const updateDoctorProfileImageById = (
+  doctorId,
+  profileImage
+) => {
+  return Doctor.findByIdAndUpdate(
+    doctorId,
+    {
+      "professionalInfo.profileImage": profileImage,
+    },
+    {
+      new: true,
+      runValidators: true,
+    }
+  ).select("-password");
+};

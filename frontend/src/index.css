@@ -2,6 +2,9 @@
 
 @import "tailwindcss";
 
+/* Tailwind v4 class-based dark mode */
+@custom-variant dark (&:where(.dark, .dark *));
+
 :root {
   --color-primary: #4c59a6;
   --color-secondary: #b8b8ff;
@@ -11,6 +14,15 @@
   --color-background: #f8fafc;
   --color-card: #ffffff;
   --color-border: rgba(172, 178, 189, 0.2);
+}
+
+.dark {
+  --color-heading: #f8fafc;
+  --color-text: #cbd5e1;
+  --color-placeholder: #94a3b8;
+  --color-background: #020617;
+  --color-card: #0f172a;
+  --color-border: rgba(148, 163, 184, 0.25);
 }
 
 * {
@@ -27,6 +39,9 @@ body {
   font-family: "Inter", sans-serif;
   background-color: var(--color-background);
   color: var(--color-text);
+  transition:
+    background-color 0.2s ease,
+    color 0.2s ease;
 }
 
 h1,

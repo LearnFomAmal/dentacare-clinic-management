@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
-import { Calendar, Image, Phone, User } from "lucide-react";
+import { Calendar, Phone, User } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import toast from "react-hot-toast";
 
+import ProfileImageUploader from "../../components/common/ProfileImageUploader";
 import DashboardLayout from "../../components/layout/DashboardLayout";
 import SettingsSection from "../../components/common/SettingsSection";
 import Input from "../../components/ui/Input";
@@ -12,11 +13,14 @@ import Select from "../../components/ui/Select";
 import Button from "../../components/ui/Button";
 import ConfirmModal from "../../components/ui/ConfirmModal";
 
+import { applyTheme } from "../../utils/themeStorage";
+
 import {
   changeUserPasswordApi,
   deleteUserAccountApi,
   getMyProfileApi,
   updateMyProfileApi,
+  updateUserProfileImageApi,
   updateUserThemeApi,
 } from "../../features/user/userService";
 
@@ -27,8 +31,7 @@ import {
 } from "../../schemas/settings.schema";
 
 import {
-  clearAccountType,
-  clearAuthUser,
+  clearAuthStorage,
   saveAuthUser,
 } from "../../utils/authStorage";
 
@@ -39,8 +42,11 @@ function PatientSettingsPage() {
 
   const [profile, setProfile] = useState(null);
   const [isLoadingProfile, setIsLoadingProfile] = useState(true);
+
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
 
   const {
     register: registerProfile,
@@ -59,7 +65,6 @@ function PatientSettingsPage() {
         gender: "",
         phoneNumber: "",
         bloodGroup: "",
-        profileImage: "",
       },
     },
   });
@@ -108,58 +113,138 @@ function PatientSettingsPage() {
     return date.toISOString().split("T")[0];
   };
 
+  const normalizeUser = (user) => {
+    return {
+      ...user,
+
+      role: user?.role || "patient",
+      accountType: "patient",
+
+      accountStatus: {
+        isVerified: Boolean(user?.accountStatus?.isVerified),
+        isBlocked: Boolean(user?.accountStatus?.isBlocked),
+        isDeleted: Boolean(user?.accountStatus?.isDeleted),
+      },
+
+      walletSummary: {
+        balance: user?.walletSummary?.balance ?? 0,
+        totalEarned: user?.walletSummary?.totalEarned ?? 0,
+        totalSpent: user?.walletSummary?.totalSpent ?? 0,
+      },
+
+      referral: {
+        referralCode: user?.referral?.referralCode || "",
+        referredBy: user?.referral?.referredBy || null,
+        hasCompletedFirstAppointment: Boolean(
+          user?.referral?.hasCompletedFirstAppointment
+        ),
+      },
+
+      settings: {
+        theme: user?.settings?.theme || user?.theme || "light",
+      },
+
+      personalInfo: {
+        dateOfBirth: user?.personalInfo?.dateOfBirth || "",
+        gender: user?.personalInfo?.gender || "",
+        phoneNumber: user?.personalInfo?.phoneNumber || "",
+        bloodGroup: user?.personalInfo?.bloodGroup || "",
+        profileImage: user?.personalInfo?.profileImage || user?.profileImage || "",
+      },
+    };
+  };
+
+  const syncFormsWithUser = (user) => {
+    resetProfileForm({
+      username: user?.username || "",
+      personalInfo: {
+        dateOfBirth: formatDateForInput(user?.personalInfo?.dateOfBirth),
+        gender: user?.personalInfo?.gender || "",
+        phoneNumber: user?.personalInfo?.phoneNumber || "",
+        bloodGroup: user?.personalInfo?.bloodGroup || "",
+      },
+    });
+
+    resetThemeForm({
+      theme: user?.settings?.theme || "light",
+    });
+  };
+
+  const handleUnauthorized = (error) => {
+    if (
+      error?.response?.status === 401 ||
+      error?.response?.status === 403
+    ) {
+      clearAuthStorage("patient");
+
+      navigate(ROUTES.LOGIN, {
+        replace: true,
+      });
+    }
+  };
+
   const fetchProfile = async () => {
     try {
       setIsLoadingProfile(true);
 
       const response = await getMyProfileApi();
-      const user = response.data;
 
-      setProfile(user);
+      const userFromApi = response?.data;
 
-      resetProfileForm({
-        username: user?.username || "",
-        personalInfo: {
-          dateOfBirth: formatDateForInput(
-            user?.personalInfo?.dateOfBirth
-          ),
-          gender: user?.personalInfo?.gender || "",
-          phoneNumber: user?.personalInfo?.phoneNumber || "",
-          bloodGroup: user?.personalInfo?.bloodGroup || "",
-          profileImage: user?.personalInfo?.profileImage || "",
-        },
-      });
+      if (!userFromApi?._id) {
+        throw new Error("Invalid profile response from server");
+      }
 
-      resetThemeForm({
-        theme: user?.settings?.theme || "light",
-      });
-    }catch(error) {
-  const message =
-    error?.response?.data?.message ||
-    error?.message ||
-    "Failed to fetch profile";
+      const updatedUser = normalizeUser(userFromApi);
 
-  toast.error(message);
+      setProfile(updatedUser);
+      saveAuthUser(updatedUser, "patient");
+      syncFormsWithUser(updatedUser);
 
-  if (
-    error?.response?.status === 401 ||
-    error?.response?.status === 403
-  ) {
-    clearAuthUser();
-    clearAccountType();
+      applyTheme(updatedUser?.settings?.theme || "light");
+    } catch (error) {
+      const message =
+        error?.response?.data?.message ||
+        error?.message ||
+        "Failed to fetch profile";
 
-    navigate(ROUTES.LOGIN, {
-      replace: true,
-    });
-  }
- } finally {
-  setIsLoadingProfile(false);
- } 
+      toast.error(message);
+      handleUnauthorized(error);
+    } finally {
+      setIsLoadingProfile(false);
+    }
   };
 
   useEffect(() => {
     fetchProfile();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const handleProfileImageUpload = async (file) => {
+    try {
+      setIsUploadingImage(true);
+
+      const response = await updateUserProfileImageApi(file);
+
+      const updatedUser = normalizeUser(response.data);
+
+      setProfile(updatedUser);
+      saveAuthUser(updatedUser, "patient");
+      syncFormsWithUser(updatedUser);
+
+      toast.success(response.message || "Profile image updated successfully");
+    } catch (error) {
+      const message =
+        error?.response?.data?.message ||
+        error?.message ||
+        "Failed to upload profile image";
+
+      toast.error(message);
+      handleUnauthorized(error);
+    } finally {
+      setIsUploadingImage(false);
+    }
+  };
 
   const onProfileSubmit = async (data) => {
     try {
@@ -170,16 +255,16 @@ function PatientSettingsPage() {
           gender: data.personalInfo.gender || undefined,
           phoneNumber: data.personalInfo.phoneNumber || undefined,
           bloodGroup: data.personalInfo.bloodGroup || undefined,
-          profileImage: data.personalInfo.profileImage || "",
         },
       };
 
       const response = await updateMyProfileApi(payload);
 
-      const updatedUser = response.data;
+      const updatedUser = normalizeUser(response.data);
 
       setProfile(updatedUser);
-      saveAuthUser(updatedUser);
+      saveAuthUser(updatedUser, "patient");
+      syncFormsWithUser(updatedUser);
 
       toast.success(response.message || "Profile updated successfully");
     } catch (error) {
@@ -189,6 +274,7 @@ function PatientSettingsPage() {
         "Failed to update profile";
 
       toast.error(message);
+      handleUnauthorized(error);
     }
   };
 
@@ -196,15 +282,20 @@ function PatientSettingsPage() {
     try {
       const response = await updateUserThemeApi(data.theme);
 
-      toast.success(response.message || "Theme updated successfully");
-
-      setProfile((prev) => ({
-        ...prev,
+      const updatedUser = normalizeUser({
+        ...profile,
         settings: {
-          ...prev?.settings,
+          ...profile?.settings,
           theme: data.theme,
         },
-      }));
+        theme: data.theme,
+      });
+
+      setProfile(updatedUser);
+      saveAuthUser(updatedUser, "patient");
+      applyTheme(data.theme);
+
+      toast.success(response.message || "Theme updated successfully");
     } catch (error) {
       const message =
         error?.response?.data?.message ||
@@ -212,6 +303,7 @@ function PatientSettingsPage() {
         "Failed to update theme";
 
       toast.error(message);
+      handleUnauthorized(error);
     }
   };
 
@@ -225,8 +317,7 @@ function PatientSettingsPage() {
 
       resetPasswordForm();
 
-      clearAuthUser();
-      clearAccountType();
+      clearAuthStorage("patient");
 
       toast.success(
         response.message ||
@@ -243,6 +334,7 @@ function PatientSettingsPage() {
         "Failed to change password";
 
       toast.error(message);
+      handleUnauthorized(error);
     }
   };
 
@@ -252,8 +344,7 @@ function PatientSettingsPage() {
 
       const response = await deleteUserAccountApi();
 
-      clearAuthUser();
-      clearAccountType();
+      clearAuthStorage("patient");
 
       toast.success(response.message || "Account deleted successfully");
 
@@ -267,6 +358,7 @@ function PatientSettingsPage() {
         "Failed to delete account";
 
       toast.error(message);
+      handleUnauthorized(error);
     } finally {
       setIsDeleting(false);
       setDeleteModalOpen(false);
@@ -276,8 +368,8 @@ function PatientSettingsPage() {
   if (isLoadingProfile) {
     return (
       <DashboardLayout title="Patient Settings">
-        <div className="rounded-3xl border border-[rgba(172,178,189,0.1)] bg-white p-8 shadow-[0_12px_40px_rgba(76,89,166,0.08)]">
-          <p className="text-sm font-medium text-[#595F69]">
+        <div className="rounded-3xl border border-[rgba(172,178,189,0.1)] bg-white p-8 shadow-[0_12px_40px_rgba(76,89,166,0.08)] dark:border-slate-800 dark:bg-slate-900 dark:shadow-none">
+          <p className="text-sm font-medium text-[#595F69] dark:text-slate-400">
             Loading profile...
           </p>
         </div>
@@ -288,11 +380,21 @@ function PatientSettingsPage() {
   return (
     <DashboardLayout title="Patient Settings">
       <div className="grid gap-6 xl:grid-cols-[1.4fr_0.9fr]">
-        {/* Profile */}
         <SettingsSection
           title="Profile Information"
           description="Update your personal information and contact details."
         >
+          <div className="mb-6">
+            <ProfileImageUploader
+              title="Profile Picture"
+              description="Upload a clear patient profile picture. JPG, PNG or WEBP up to 2MB."
+              user={profile}
+              imageUrl={profile?.personalInfo?.profileImage || ""}
+              onUpload={handleProfileImageUpload}
+              isUploading={isUploadingImage}
+            />
+          </div>
+
           <form
             onSubmit={handleProfileSubmit(onProfileSubmit)}
             className="space-y-6"
@@ -353,15 +455,6 @@ function PatientSettingsPage() {
                 <option value="O+">O+</option>
                 <option value="O-">O-</option>
               </Select>
-
-              <Input
-                label="Profile Image URL"
-                name="personalInfo.profileImage"
-                placeholder="https://example.com/profile.jpg"
-                register={registerProfile}
-                error={profileErrors.personalInfo?.profileImage}
-                icon={Image}
-              />
             </div>
 
             <div className="flex justify-end">
@@ -378,50 +471,40 @@ function PatientSettingsPage() {
         </SettingsSection>
 
         <div className="space-y-6">
-          {/* Account Summary */}
           <SettingsSection
             title="Account Summary"
             description="Basic account and wallet information."
           >
             <div className="space-y-4 text-sm">
-              <div className="flex justify-between border-b border-[rgba(172,178,189,0.15)] pb-3">
-                <span className="text-[#595F69]">Email</span>
-                <span className="font-semibold text-[#2D333B]">
-                  {profile?.email || "Not available"}
-                </span>
-              </div>
+              <SummaryRow
+                label="Email"
+                value={profile?.email || "Not available"}
+              />
 
-              <div className="flex justify-between border-b border-[rgba(172,178,189,0.15)] pb-3">
-                <span className="text-[#595F69]">Role</span>
-                <span className="font-semibold capitalize text-[#2D333B]">
-                  {profile?.role || "patient"}
-                </span>
-              </div>
+              <SummaryRow
+                label="Role"
+                value={profile?.role || "patient"}
+                capitalize
+              />
 
-              <div className="flex justify-between border-b border-[rgba(172,178,189,0.15)] pb-3">
-                <span className="text-[#595F69]">Verified</span>
-                <span className="font-semibold text-[#2D333B]">
-              {profile ? (profile?.accountStatus?.isVerified ? "Yes" : "No") : "Not loaded"}
-                </span>
-              </div>
+              <SummaryRow
+                label="Verified"
+                value={profile?.accountStatus?.isVerified ? "Yes" : "No"}
+              />
 
-              <div className="flex justify-between border-b border-[rgba(172,178,189,0.15)] pb-3">
-                <span className="text-[#595F69]">Wallet Balance</span>
-                <span className="font-semibold text-[#4C59A6]">
-                  ₹{profile?.walletSummary?.balance || 0}
-                </span>
-              </div>
+              <SummaryRow
+                label="Wallet Balance"
+                value={`₹${profile?.walletSummary?.balance ?? 0}`}
+                highlight
+              />
 
-              <div className="flex justify-between">
-                <span className="text-[#595F69]">Referral Code</span>
-                <span className="font-semibold text-[#2D333B]">
-                  {profile?.referral?.referralCode || "Not available"}
-                </span>
-              </div>
+              <SummaryRow
+                label="Referral Code"
+                value={profile?.referral?.referralCode || "Not available"}
+              />
             </div>
           </SettingsSection>
 
-          {/* Theme */}
           <SettingsSection
             title="Theme"
             description="Choose your preferred appearance."
@@ -452,7 +535,6 @@ function PatientSettingsPage() {
           </SettingsSection>
         </div>
 
-        {/* Password */}
         <SettingsSection
           title="Change Password"
           description="Changing your password will log you out from all devices."
@@ -501,7 +583,6 @@ function PatientSettingsPage() {
           </form>
         </SettingsSection>
 
-        {/* Danger Zone */}
         <SettingsSection
           title="Danger Zone"
           description="Deleting your account is permanent for login access. Your data will be soft deleted."
@@ -528,6 +609,31 @@ function PatientSettingsPage() {
         onCancel={() => setDeleteModalOpen(false)}
       />
     </DashboardLayout>
+  );
+}
+
+function SummaryRow({
+  label,
+  value,
+  capitalize = false,
+  highlight = false,
+}) {
+  return (
+    <div className="flex justify-between border-b border-[rgba(172,178,189,0.15)] pb-3 dark:border-slate-800">
+      <span className="text-[#595F69] dark:text-slate-400">
+        {label}
+      </span>
+
+      <span
+        className={`font-semibold ${
+          highlight
+            ? "text-[#4C59A6] dark:text-[#B8B8FF]"
+            : "text-[#2D333B] dark:text-slate-100"
+        } ${capitalize ? "capitalize" : ""}`}
+      >
+        {value}
+      </span>
+    </div>
   );
 }
 

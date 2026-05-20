@@ -3,7 +3,7 @@ import { Mail, Lock, UserRound, Stethoscope, ShieldCheck } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import toast from "react-hot-toast";
-
+import PasswordInput from "../../components/ui/PasswordInput";
 import AuthLayout from "../../components/layout/AuthLayout";
 import Card from "../../components/ui/Card";
 import Input from "../../components/ui/Input";
@@ -17,7 +17,7 @@ import {
   saveAccountType,
   saveAuthUser,
 } from "../../utils/authStorage";
-
+import { applyTheme } from "../../utils/themeStorage";
 function LoginPage() {
   const navigate = useNavigate();
 
@@ -40,9 +40,12 @@ function LoginPage() {
  const onSubmit = async (data) => {
   try {
     // Clear old frontend auth before new login
-    clearAuthStorage();
+   // Clear only this role before replacing this role's session.
+// Do not clear admin/doctor/patient sessions from other tabs.
+clearAuthStorage(data.accountType);
 
-    const response = await loginApi(data);
+  const response = await loginApi(data);
+
 
     const expectedRole = data.accountType;
 
@@ -55,9 +58,9 @@ function LoginPage() {
       accountType: expectedRole,
     };
 
-    saveAccountType(expectedRole);
-    saveAuthUser(normalizedUser);
-
+   saveAccountType(expectedRole);
+   saveAuthUser(normalizedUser, expectedRole);
+   applyTheme(response?.data?.theme || response?.data?.settings?.theme || "light");
     toast.success(response.message || "Login successful");
 
     if (expectedRole === "admin") {
@@ -72,15 +75,28 @@ function LoginPage() {
 
     navigate(ROUTES.USER_SETTINGS, { replace: true });
   } catch (error) {
-    clearAuthStorage();
+  const message =
+    error?.response?.data?.message ||
+    error?.message ||
+    "Login failed";
 
-    const message =
-      error?.response?.data?.message ||
-      error?.message ||
-      "Login failed";
+  if (
+    data.accountType === "doctor" &&
+    message.toLowerCase().includes("verify")
+  ) {
+    toast.error("Please verify your doctor account first");
 
-    toast.error(message);
+    navigate(ROUTES.DOCTOR_VERIFY, {
+      state: {
+        email: data.email,
+      },
+    });
+
+    return;
   }
+
+  toast.error(message);
+}
  };
 
   return (
@@ -190,14 +206,13 @@ function LoginPage() {
                 </Link>
               </div>
 
-              <Input
-                type="password"
-                name="password"
-                placeholder="••••••••"
-                register={register}
-                error={errors.password}
-                icon={Lock}
-              />
+              <PasswordInput
+            //  label="Password"
+            name="password"
+            placeholder="••••••••"
+            register={register}
+             error={errors.password}
+              /> 
             </div>
 
             <Button

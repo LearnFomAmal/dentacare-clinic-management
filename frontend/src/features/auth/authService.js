@@ -42,7 +42,7 @@ export const verifyRegisterOtpApi = async (payload) => {
     API_ENDPOINTS.AUTH.REGISTER_VERIFY_OTP,
     payload
   );
-  console.log(response.data);
+  
   
   return response.data;
 };
@@ -59,9 +59,7 @@ export const resendRegisterOtpApi = async (payload) => {
 // ==============================
 // FORGOT PASSWORD - SEND OTP
 // ==============================
-export const forgotPasswordApi = async (payload) => {
-  const { accountType, email } = payload;
-
+export const forgotPasswordApi = async ({ email, accountType }) => {
   let endpoint = API_ENDPOINTS.AUTH.FORGOT_PASSWORD;
 
   if (accountType === "doctor") {
@@ -72,27 +70,21 @@ export const forgotPasswordApi = async (payload) => {
     endpoint = API_ENDPOINTS.ADMIN.FORGOT_PASSWORD;
   }
 
-  const response = await axiosInstance.post(endpoint, {
-    email,
-  });
+  const response = await axiosInstance.post(endpoint, { email });
 
   return response.data;
 };
 
-// ==============================
-// RESET PASSWORD
-// ==============================
-export const resetPasswordApi = async (payload) => {
-  const {
-    accountType,
-    email,
-    otp,
-    newPassword,
-    confirmPassword,
-  } = payload;
 
-  // PATIENT:
-  // Backend verifies OTP and resets password in one endpoint.
+
+export const resetPasswordApi = async ({
+  email,
+  otp,
+  newPassword,
+  confirmPassword,
+  accountType,
+}) => {
+  // PATIENT: one endpoint handles OTP verification + password reset
   if (accountType === "patient") {
     const response = await axiosInstance.post(
       API_ENDPOINTS.AUTH.FORGOT_PASSWORD_VERIFY_OTP,
@@ -107,8 +99,7 @@ export const resetPasswordApi = async (payload) => {
     return response.data;
   }
 
-  // DOCTOR:
-  // Backend verifies OTP and resets password in one endpoint.
+  // DOCTOR: one endpoint handles OTP verification + password reset
   if (accountType === "doctor") {
     const response = await axiosInstance.post(
       API_ENDPOINTS.DOCTOR.RESET_PASSWORD,
@@ -123,18 +114,12 @@ export const resetPasswordApi = async (payload) => {
     return response.data;
   }
 
-  // ADMIN:
-  // Backend currently has two separate endpoints:
-  // 1. verify OTP
-  // 2. reset password
+  // ADMIN: backend is two-step: verify OTP first, then reset password
   if (accountType === "admin") {
-    await axiosInstance.post(
-      API_ENDPOINTS.ADMIN.VERIFY_FORGOT_OTP,
-      {
-        email,
-        otp,
-      }
-    );
+    await axiosInstance.post(API_ENDPOINTS.ADMIN.VERIFY_FORGOT_OTP, {
+      email,
+      otp,
+    });
 
     const response = await axiosInstance.post(
       API_ENDPOINTS.ADMIN.RESET_PASSWORD,
@@ -149,7 +134,6 @@ export const resetPasswordApi = async (payload) => {
 
   throw new Error("Invalid account type");
 };
-
 // ==============================
 // RESEND FORGOT PASSWORD OTP
 // ==============================

@@ -66,13 +66,15 @@ export const loginController = asyncHandler(async (req, res) => {
     ipAddress
   );
 
- setAuthCookies(res, accessToken, refreshToken);
-
-
+  setAuthCookies(
+    res,
+    accessToken,
+    refreshToken,
+    "patient"
+  );
 
   sendResponse(res, 200, true, "Login successful", userData);
 });
-
 
 export const forgotPasswordRequestController = asyncHandler(async (req, res) => {
   const { email } = req.body;
@@ -108,21 +110,27 @@ export const forgotPasswordVerifyOtpController = asyncHandler(async (req, res) =
 
 
 export const refreshTokenController = asyncHandler(async (req, res) => {
-  const refreshToken = req.cookies.refreshToken;
+  const refreshToken = req.cookies?.patientRefreshToken;
 
-  const { newAccessToken, newRefreshToken } = await refreshAccessTokenService(refreshToken);
+  const { newAccessToken, newRefreshToken } =
+    await refreshAccessTokenService(refreshToken);
 
-  setAuthCookies(res, newAccessToken, newRefreshToken);
+  setAuthCookies(
+    res,
+    newAccessToken,
+    newRefreshToken,
+    "patient"
+  );
 
   sendResponse(res, 200, true, "Access token refreshed");
 });
 
 export const logoutController = asyncHandler(async (req, res) => {
-  const refreshToken = req.cookies.refreshToken;
+  const refreshToken = req.cookies?.patientRefreshToken;
 
   await logoutService(refreshToken);
 
-  clearAuthCookies(res);
+  clearAuthCookies(res, "patient");
 
   sendResponse(res, 200, true, "Logged out successfully");
 });
@@ -130,7 +138,7 @@ export const logoutController = asyncHandler(async (req, res) => {
 export const logoutAllController = asyncHandler(async (req, res) => {
   await logoutAllService(req.user.userId);
 
-  clearAuthCookies(res);
+  clearAuthCookies(res, "patient");
 
   sendResponse(res, 200, true, "Logged out from all devices");
 });

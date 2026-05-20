@@ -45,3 +45,20 @@ export const getDoctorSessionsApi = async () => {
   const response = await axiosInstance.get(API_ENDPOINTS.DOCTOR.SESSIONS);
   return response.data;
 };
+
+export const updateDoctorProfileImageApi = async (file) => {
+  const formData = new FormData();
+  formData.append("profileImage", file);
+
+  const response = await axiosInstance.patch(
+    API_ENDPOINTS.DOCTOR.UPDATE_PROFILE_IMAGE,
+    formData,
+    {
+      headers: {
+        "Content-Type": "multipart/form-data",
+      },
+    }
+  );
+
+  return response.data;
+};

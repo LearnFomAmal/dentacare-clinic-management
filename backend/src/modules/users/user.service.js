@@ -8,28 +8,63 @@ import {
   updateUserById,
   softDeleteUserById,
   findPatientByIdForAdmin,
-   getAllPatients,
-    blockUserById,
+  getAllPatients,
+  blockUserById,
   unblockUserById,
+  updateUserProfileImageById,
 } from "./user.repository.js";
+
+import { uploadBufferToCloudinary } from "../../shared/utils/cloudinaryUpload.js";
 
 import {
   revokeAllSessionsByUserId,
   countActiveSessionsByUserId,
-  revokeOldestSessionByUserId,
+ 
 } from "../auth/session.repository.js";
 
 const sanitizeUserResponse = (user) => {
   return {
     _id: user._id,
+
     username: user.username,
     email: user.email,
     role: user.role,
-    personalInfo: user.personalInfo,
-    theme: user.settings.theme,
+
+    personalInfo: {
+      dateOfBirth: user.personalInfo?.dateOfBirth || null,
+      gender: user.personalInfo?.gender || "",
+      phoneNumber: user.personalInfo?.phoneNumber || "",
+      bloodGroup: user.personalInfo?.bloodGroup || "",
+      profileImage: user.personalInfo?.profileImage || "",
+    },
+
+    settings: {
+      theme: user.settings?.theme || "light",
+    },
+
+    referral: {
+      referralCode: user.referral?.referralCode || "",
+      referredBy: user.referral?.referredBy || null,
+      hasCompletedFirstAppointment:
+        user.referral?.hasCompletedFirstAppointment || false,
+    },
+
+    accountStatus: {
+      isVerified: user.accountStatus?.isVerified || false,
+      isBlocked: user.accountStatus?.isBlocked || false,
+      isDeleted: user.accountStatus?.isDeleted || false,
+    },
+
+    walletSummary: {
+      balance: user.walletSummary?.balance || 0,
+      totalEarned: user.walletSummary?.totalEarned || 0,
+      totalSpent: user.walletSummary?.totalSpent || 0,
+    },
+
+    createdAt: user.createdAt,
+    updatedAt: user.updatedAt,
   };
 };
-
 // GET PROFILE
 export const getMyProfileService = async (userId) => {
   const user = await findUserById(userId);
@@ -75,7 +110,14 @@ export const changePasswordService = async (userId, currentPassword, newPassword
   if (!user || user.accountStatus.isDeleted) {
     throw new AppError("User not found", 404);
   }
+const isSamePassword = await comparePassword(newPassword, user.password);
 
+if (isSamePassword) {
+  throw new AppError(
+    "New password must be different from current password",
+    400
+  );
+}
   const isMatch = await comparePassword(currentPassword, user.password);
 
   if (!isMatch) {
@@ -101,10 +143,7 @@ export const deleteMyAccountService = async (userId) => {
   }
 
   await softDeleteUserById(userId);
-  await revokeOldestSessionByUserId(
-  user._id,
-  "user"
-);
+await revokeAllSessionsByUserId(user._id, "user");
 };
 
 // ACTIVE SESSION COUNT
@@ -137,16 +176,18 @@ export const updateThemeService = async (userId, theme) => {
     "settings.theme": theme,
   });
 
-  return {
-    theme: updatedUser.settings.theme,
-  };
+  return sanitizeUserResponse(updatedUser);
 };
 
-export const getAllPatientsService = async (filters, options) => {
+// ==============================
+// ADMIN: GET ALL PATIENTS
+// ==============================
+export const getAllPatientsService = async (
+  filters = {},
+  options = {}
+) => {
   return getAllPatients(filters, options);
 };
-
-
 
 const calculateAge = (dob) => {
   if (!dob) return null;
@@ -167,23 +208,41 @@ export const getPatientDetailsService = async (patientId) => {
   return {
     _id: patient._id,
 
-    name: patient.username,
-
+    username: patient.username,
     email: patient.email,
+    role: patient.role,
 
-    phone: patient.personalInfo?.phoneNumber || null,
-
-    gender: patient.personalInfo?.gender || null,
-
-    profileImage: patient.personalInfo?.profileImage || "",
-
-    bloodGroup: patient.personalInfo?.bloodGroup || null,
+    personalInfo: {
+      dateOfBirth: patient.personalInfo?.dateOfBirth || null,
+      gender: patient.personalInfo?.gender || "",
+      phoneNumber: patient.personalInfo?.phoneNumber || "",
+      bloodGroup: patient.personalInfo?.bloodGroup || "",
+      profileImage: patient.personalInfo?.profileImage || "",
+    },
 
     age: calculateAge(patient.personalInfo?.dateOfBirth),
 
-    accountCreatedAt: patient.createdAt,
+    accountStatus: {
+      isVerified: patient.accountStatus?.isVerified || false,
+      isBlocked: patient.accountStatus?.isBlocked || false,
+      isDeleted: patient.accountStatus?.isDeleted || false,
+    },
 
-    accountStatus: patient.accountStatus,
+    walletSummary: {
+      balance: patient.walletSummary?.balance ?? 0,
+      totalEarned: patient.walletSummary?.totalEarned ?? 0,
+      totalSpent: patient.walletSummary?.totalSpent ?? 0,
+    },
+
+    referral: {
+      referralCode: patient.referral?.referralCode || "",
+      referredBy: patient.referral?.referredBy || null,
+      hasCompletedFirstAppointment:
+        patient.referral?.hasCompletedFirstAppointment || false,
+    },
+
+    createdAt: patient.createdAt,
+    updatedAt: patient.updatedAt,
   };
 };
 
@@ -198,10 +257,7 @@ export const blockUserService = async (userId) => {
   }
 
   await blockUserById(userId);
-  await revokeOldestSessionByUserId(
-  user._id,
-  "user"
-);
+await revokeAllSessionsByUserId(user._id, "user");
 
   return {
     _id: userId,
@@ -223,4 +279,32 @@ export const unblockUserService = async (userId) => {
     _id: userId,
     isBlocked: false,
   };
+};
+
+export const updatePatientProfileImageService = async (
+  userId,
+  file
+) => {
+  const user = await findUserById(userId);
+
+  if (!user || user.accountStatus.isDeleted) {
+    throw new AppError("User not found", 404);
+  }
+
+  if (!file) {
+    throw new AppError("Profile image is required", 400);
+  }
+
+  const uploadResult = await uploadBufferToCloudinary({
+    buffer: file.buffer,
+    folder: "dentacare/patients",
+    publicId: `patient_${user._id}`,
+  });
+
+  const updatedUser = await updateUserProfileImageById(
+    user._id,
+    uploadResult.secure_url
+  );
+
+  return sanitizeUserResponse(updatedUser);
 };

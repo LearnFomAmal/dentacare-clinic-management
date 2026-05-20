@@ -1,48 +1,59 @@
-import mongoose from 'mongoose'
+import mongoose from "mongoose";
 
 const doctorSchema = new mongoose.Schema(
-    {
-        firstName: {
-            type: String,
-            required: true,
-            trim: true,
-        },
-        lastName: {
-            type: String,
-            required: true,
-            trim: true,
-        },
-        email: {
-            type: String,
-            required: true,
-            unique: true,
-            lowercase: true,
-            trim: true,
-        },
-        password: {
-            type: String,
-            required: true,
-            select: false,
-        },
-       
-      specialty: {
-   specialtyId:{
-    type: mongoose.Schema.Types.ObjectId,
-    ref: "Specialty", 
-    required: true,
-   },
-   name:{
-  type: String,
-  required: true,
-  trim: true,
-   }
-},
+  {
+    firstName: {
+      type: String,
+      required: true,
+      trim: true,
+    },
 
-     professionalInfo: {
+    lastName: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+
+    email: {
+      type: String,
+      required: true,
+      unique: true,
+      lowercase: true,
+      trim: true,
+    },
+
+    password: {
+      type: String,
+      required: true,
+      select: false,
+    },
+
+    specialization: {
+      specialtyId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "Specialty",
+        required: true,
+      },
+
+      name: {
+        type: String,
+        required: true,
+        trim: true,
+      },
+
+      displayName: {
+        type: String,
+        default: "",
+        trim: true,
+      },
+    },
+
+    professionalInfo: {
       experience: {
         type: Number,
         required: true,
         min: 0,
+        max: 25,
       },
 
       education: {
@@ -55,11 +66,13 @@ const doctorSchema = new mongoose.Schema(
         type: Number,
         required: true,
         min: 0,
+        max: 10000,
       },
 
       contactNumber: {
         type: String,
         required: true,
+        trim: true,
       },
 
       profileImage: {
@@ -68,7 +81,7 @@ const doctorSchema = new mongoose.Schema(
       },
     },
 
-     settings: {
+    settings: {
       theme: {
         type: String,
         enum: ["light", "dark"],
@@ -76,12 +89,12 @@ const doctorSchema = new mongoose.Schema(
       },
     },
 
-  stats: {
+    stats: {
       averageRating: {
         type: Number,
         default: 0,
         min: 0,
-         max: 5,
+        max: 5,
       },
 
       totalReviews: {
@@ -101,12 +114,10 @@ const doctorSchema = new mongoose.Schema(
     },
 
     accountStatus: {
-
-
-    isVerified: {
-     type: Boolean,
-    default: false,
-    },
+      isVerified: {
+        type: Boolean,
+        default: false,
+      },
 
       isBlocked: {
         type: Boolean,
@@ -117,17 +128,16 @@ const doctorSchema = new mongoose.Schema(
         type: Boolean,
         default: false,
       },
-      
-      mustChangePassword: {
-       type: Boolean,
-        default: true,
-   },
-    },
-    
-    },
-     { timestamps: true },
-)
 
-const Doctor = mongoose.model('Doctor',doctorSchema)
+      mustChangePassword: {
+        type: Boolean,
+        default: true,
+      },
+    },
+  },
+  { timestamps: true }
+);
+
+const Doctor = mongoose.model("Doctor", doctorSchema);
 
 export default Doctor;

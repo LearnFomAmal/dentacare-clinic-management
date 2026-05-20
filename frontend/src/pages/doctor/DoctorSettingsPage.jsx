@@ -2,12 +2,12 @@ import { useEffect, useState } from "react";
 import {
   BriefcaseBusiness,
   GraduationCap,
-  Image,
   Phone,
   Stethoscope,
   User,
   Wallet,
 } from "lucide-react";
+import ProfileImageUploader from "../../components/common/ProfileImageUploader";
 import { useNavigate } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -25,6 +25,7 @@ import {
   deleteDoctorAccountApi,
   getMyDoctorProfileApi,
   updateDoctorProfileApi,
+  updateDoctorProfileImageApi,
   updateDoctorThemeApi,
 } from "../../features/doctor/doctorService";
 
@@ -41,7 +42,7 @@ import {
 } from "../../utils/authStorage";
 
 import { ROUTES } from "../../constants/routes";
-
+import { applyTheme } from "../../utils/themeStorage";
 function DoctorSettingsPage() {
   const navigate = useNavigate();
 
@@ -49,7 +50,7 @@ function DoctorSettingsPage() {
   const [isLoadingProfile, setIsLoadingProfile] = useState(true);
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
-
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
   const {
     register: registerProfile,
     handleSubmit: handleProfileSubmit,
@@ -67,7 +68,7 @@ function DoctorSettingsPage() {
         experience: 0,
         education: "",
         contactNumber: "",
-        profileImage: "",
+      
       },
     },
   });
@@ -120,7 +121,7 @@ function DoctorSettingsPage() {
           experience: doctor?.professionalInfo?.experience || 0,
           education: doctor?.professionalInfo?.education || "",
           contactNumber: doctor?.professionalInfo?.contactNumber || "",
-          profileImage: doctor?.professionalInfo?.profileImage || "",
+         
         },
       });
 
@@ -154,7 +155,56 @@ function DoctorSettingsPage() {
   useEffect(() => {
     fetchProfile();
   }, []);
+ const handleProfileImageUpload = async (file) => {
+  try {
+    setIsUploadingImage(true);
 
+    const response = await updateDoctorProfileImageApi(file);
+
+    const updatedDoctor = response.data;
+
+    setProfile(updatedDoctor);
+
+    saveAuthUser(
+      {
+        _id: updatedDoctor?._id,
+        firstName: updatedDoctor?.firstName,
+        lastName: updatedDoctor?.lastName,
+        email: updatedDoctor?.email,
+        role: "doctor",
+        accountType: "doctor",
+        profileImage:
+          updatedDoctor?.profileImage ||
+          updatedDoctor?.professionalInfo?.profileImage ||
+          "",
+        theme: updatedDoctor?.settings?.theme || "light",
+      },
+      "doctor"
+    );
+
+    resetProfileForm({
+      firstName: updatedDoctor?.firstName || "",
+      lastName: updatedDoctor?.lastName || "",
+      professionalInfo: {
+        experience: updatedDoctor?.professionalInfo?.experience || 0,
+        education: updatedDoctor?.professionalInfo?.education || "",
+        contactNumber:
+          updatedDoctor?.professionalInfo?.contactNumber || "",
+      },
+    });
+
+    toast.success(response.message || "Profile image updated successfully");
+  } catch (error) {
+    const message =
+      error?.response?.data?.message ||
+      error?.message ||
+      "Failed to upload profile image";
+
+    toast.error(message);
+  } finally {
+    setIsUploadingImage(false);
+  }
+};
   const onProfileSubmit = async (data) => {
     try {
       const payload = {
@@ -164,7 +214,7 @@ function DoctorSettingsPage() {
           experience: Number(data.professionalInfo.experience),
           education: data.professionalInfo.education,
           contactNumber: data.professionalInfo.contactNumber,
-          profileImage: data.professionalInfo.profileImage || "",
+          
         },
       };
 
@@ -174,17 +224,22 @@ function DoctorSettingsPage() {
 
       setProfile(updatedDoctor);
 
-      saveAuthUser({
-        _id: updatedDoctor?._id,
-        firstName: updatedDoctor?.firstName,
-        lastName: updatedDoctor?.lastName,
-        email: updatedDoctor?.email,
-        role: "doctor",
-        accountType: "doctor",
-        profileImage: updatedDoctor?.professionalInfo?.profileImage || "",
-        theme: updatedDoctor?.settings?.theme || "light",
-      });
-
+     saveAuthUser(
+  {
+    _id: updatedDoctor?._id,
+    firstName: updatedDoctor?.firstName,
+    lastName: updatedDoctor?.lastName,
+    email: updatedDoctor?.email,
+    role: "doctor",
+    accountType: "doctor",
+    profileImage:
+      updatedDoctor?.profileImage ||
+      updatedDoctor?.professionalInfo?.profileImage ||
+      "",
+    theme: updatedDoctor?.settings?.theme || "light",
+  },
+  "doctor"
+);
       toast.success(response.message || "Doctor profile updated successfully");
     } catch (error) {
       const message =
@@ -209,6 +264,7 @@ function DoctorSettingsPage() {
           theme: data.theme,
         },
       }));
+      applyTheme(data.theme);
     } catch (error) {
       const message =
         error?.response?.data?.message ||
@@ -297,6 +353,20 @@ function DoctorSettingsPage() {
           title="Professional Profile"
           description="Update your visible doctor profile and contact details."
         >
+           <div className="mb-6">
+  <ProfileImageUploader
+    title="Doctor Profile Picture"
+    description="Upload a professional doctor profile picture. JPG, PNG or WEBP up to 2MB."
+    user={profile}
+    imageUrl={
+      profile?.profileImage ||
+      profile?.professionalInfo?.profileImage ||
+      ""
+    }
+    onUpload={handleProfileImageUpload}
+    isUploading={isUploadingImage}
+  />
+</div>
           <form
             onSubmit={handleProfileSubmit(onProfileSubmit)}
             className="space-y-6"
@@ -348,14 +418,6 @@ function DoctorSettingsPage() {
                 icon={Phone}
               />
 
-              <Input
-                label="Profile Image URL"
-                name="professionalInfo.profileImage"
-                placeholder="https://example.com/doctor.jpg"
-                register={registerProfile}
-                error={profileErrors.professionalInfo?.profileImage}
-                icon={Image}
-              />
             </div>
 
             <div className="flex justify-end">

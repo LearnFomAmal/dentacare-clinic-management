@@ -6,6 +6,7 @@ import {
   updateSpecialtyController,
   updateSpecialtyStatusController,
   getAllActiveSpecialtiesController,
+  deleteSpecialtyController,
 } from "./specialty.controller.js";
 
 import {
@@ -47,6 +48,12 @@ router.patch(
   "/:id/status",
   protectAdmin,
   updateSpecialtyStatusController
+);
+
+router.delete(
+  "/:id",
+  protectAdmin,
+  deleteSpecialtyController
 );
 
 export default router;

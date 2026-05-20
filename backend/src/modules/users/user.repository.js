@@ -142,3 +142,19 @@ export const unblockUserById = (userId) => {
     }
   );
 };
+
+export const updateUserProfileImageById = (
+  userId,
+  profileImage
+) => {
+  return User.findByIdAndUpdate(
+    userId,
+    {
+      "personalInfo.profileImage": profileImage,
+    },
+    {
+      new: true,
+      runValidators: true,
+    }
+  );
+};

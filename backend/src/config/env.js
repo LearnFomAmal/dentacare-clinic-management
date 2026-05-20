@@ -4,8 +4,12 @@ dotenv.config();
 const requiredEnvVariables = [
   "MONGO_URI",
   "ACCESS_TOKEN_SECRET",
+  "ACCESS_TOKEN_EXPIRES",
   "REFRESH_TOKEN_SECRET",
+  "REFRESH_TOKEN_EXPIRES",
   "FRONTEND_URL",
+  "EMAIL_USER",
+  "EMAIL_PASS",
 ];
 
 requiredEnvVariables.forEach((key) => {
@@ -34,14 +38,11 @@ export const env = {
   REFRESH_TOKEN_EXPIRES:
     process.env.REFRESH_TOKEN_EXPIRES,
 
-  CLOUDINARY_NAME:
-    process.env.CLOUDINARY_NAME,
+CLOUDINARY_CLOUD_NAME: process.env.CLOUDINARY_CLOUD_NAME,
 
-  CLOUDINARY_KEY:
-    process.env.CLOUDINARY_KEY,
+CLOUDINARY_API_KEY: process.env.CLOUDINARY_API_KEY,
 
-  CLOUDINARY_SECRET:
-    process.env.CLOUDINARY_SECRET,
+CLOUDINARY_API_SECRET: process.env.CLOUDINARY_API_SECRET,
 
   EMAIL_USER: process.env.EMAIL_USER,
 

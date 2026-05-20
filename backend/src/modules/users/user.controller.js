@@ -13,6 +13,7 @@ import {
   getPatientDetailsService,
   blockUserService,
   unblockUserService,
+  updatePatientProfileImageService,
 } from "./user.service.js";
 
 import {
@@ -22,7 +23,9 @@ import {
 } from "./user.validator.js";
 
 
-// GET PROFILE
+// ==============================
+// PATIENT: GET PROFILE
+// ==============================
 export const getMyProfileController = asyncHandler(async (req, res) => {
   const user = await getMyProfileService(req.user.userId);
 
@@ -30,7 +33,9 @@ export const getMyProfileController = asyncHandler(async (req, res) => {
 });
 
 
-// UPDATE PROFILE
+// ==============================
+// PATIENT: UPDATE PROFILE
+// ==============================
 export const updateMyProfileController = asyncHandler(async (req, res) => {
   validateUpdateProfileInput(req.body);
 
@@ -43,11 +48,21 @@ export const updateMyProfileController = asyncHandler(async (req, res) => {
 });
 
 
-// CHANGE PASSWORD
+// ==============================
+// PATIENT: CHANGE PASSWORD
+// ==============================
 export const changePasswordController = asyncHandler(async (req, res) => {
-  const { currentPassword, newPassword, confirmPassword } = req.body;
+  const {
+    currentPassword,
+    newPassword,
+    confirmPassword,
+  } = req.body;
 
-  validateChangePasswordInput(currentPassword, newPassword, confirmPassword);
+  validateChangePasswordInput(
+    currentPassword,
+    newPassword,
+    confirmPassword
+  );
 
   await changePasswordService(
     req.user.userId,
@@ -55,50 +70,80 @@ export const changePasswordController = asyncHandler(async (req, res) => {
     newPassword
   );
 
-  clearAuthCookies(res);
+ clearAuthCookies(res, "patient");
 
-  sendResponse(res, 200, true, "Password changed. Please login again.");
+  sendResponse(
+    res,
+    200,
+    true,
+    "Password changed. Please login again."
+  );
 });
 
 
-// DELETE ACCOUNT
+// ==============================
+// PATIENT: DELETE ACCOUNT
+// ==============================
 export const deleteMyAccountController = asyncHandler(async (req, res) => {
   await deleteMyAccountService(req.user.userId);
 
-  clearAuthCookies(res);
+ clearAuthCookies(res, "patient");
 
-  sendResponse(res, 200, true, "Account deleted successfully");
+  sendResponse(
+    res,
+    200,
+    true,
+    "Account deleted successfully"
+  );
 });
 
 
-// SESSION INFO
+// ==============================
+// PATIENT: SESSION INFO
+// ==============================
 export const getMySessionsController = asyncHandler(async (req, res) => {
   const data = await getMySessionInfoService(req.user.userId);
 
-  sendResponse(res, 200, true, "Session data fetched", data);
+  sendResponse(
+    res,
+    200,
+    true,
+    "Session data fetched",
+    data
+  );
 });
 
 
-// UPDATE THEME
+// ==============================
+// PATIENT: UPDATE THEME
+// ==============================
 export const updateThemeController = asyncHandler(async (req, res) => {
   const { theme } = req.body;
 
   validateThemeInput(theme);
 
-  const data = await updateThemeService(req.user.userId, theme);
+  const data = await updateThemeService(
+    req.user.userId,
+    theme
+  );
 
-  sendResponse(res, 200, true, "Theme updated", data);
+  sendResponse(
+    res,
+    200,
+    true,
+    "Theme updated",
+    data
+  );
 });
 
 
-
-
-
-
+// ==============================
+// ADMIN: GET ALL PATIENTS
+// ==============================
 export const getAllPatientsController = asyncHandler(async (req, res) => {
   const filters = {
-    search: req.query.search,
-    status: req.query.status, // blocked/unblocked
+    search: req.query.search || "",
+    status: req.query.status || "",
   };
 
   const options = {
@@ -108,7 +153,10 @@ export const getAllPatientsController = asyncHandler(async (req, res) => {
     order: req.query.order || "desc",
   };
 
-  const result = await getAllPatientsService(filters, options);
+  const result = await getAllPatientsService(
+    filters,
+    options
+  );
 
   sendResponse(
     res,
@@ -119,6 +167,10 @@ export const getAllPatientsController = asyncHandler(async (req, res) => {
   );
 });
 
+
+// ==============================
+// ADMIN: GET PATIENT DETAILS
+// ==============================
 export const getPatientDetailsController = asyncHandler(async (req, res) => {
   const patientId = req.params.id;
 
@@ -133,15 +185,51 @@ export const getPatientDetailsController = asyncHandler(async (req, res) => {
   );
 });
 
+
+// ==============================
+// ADMIN: BLOCK PATIENT
+// ==============================
 export const blockUserController = asyncHandler(async (req, res) => {
-  await blockUserService(req.params.id);
+  const result = await blockUserService(req.params.id);
 
-  sendResponse(res, 200, true, "User blocked successfully");
+  sendResponse(
+    res,
+    200,
+    true,
+    "User blocked successfully",
+    result
+  );
 });
 
+
+// ==============================
 // ADMIN: UNBLOCK PATIENT
+// ==============================
 export const unblockUserController = asyncHandler(async (req, res) => {
-  await unblockUserService(req.params.id);
+  const result = await unblockUserService(req.params.id);
 
-  sendResponse(res, 200, true, "User unblocked successfully");
+  sendResponse(
+    res,
+    200,
+    true,
+    "User unblocked successfully",
+    result
+  );
 });
+
+export const updatePatientProfileImageController = asyncHandler(
+  async (req, res) => {
+    const updatedUser = await updatePatientProfileImageService(
+      req.user.userId,
+      req.file
+    );
+
+    sendResponse(
+      res,
+      200,
+      true,
+      "Profile image updated successfully",
+      updatedUser
+    );
+  }
+);

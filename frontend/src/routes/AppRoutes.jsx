@@ -22,14 +22,15 @@ import AdminDoctorsPage from "../pages/admin/AdminDoctorsPage";
 import AdminDoctorDetailsPage from "../pages/admin/AdminDoctorDetailsPage";
 import AdminAddDoctorPage from "../pages/admin/AdminAddDoctorPage";
 import AdminEditDoctorFeePage from "../pages/admin/AdminEditDoctorFeePage";
+import HomePage from "../pages/public/HomePage";
 
 function AppRoutes() {
   return (
     <Routes>
       <Route
-        path={ROUTES.HOME}
-        element={<Navigate to={ROUTES.LOGIN} replace />}
-      />
+  path={ROUTES.HOME}
+  element={<HomePage />}
+  />
 
       {/* Public Auth Routes */}
       <Route
@@ -173,7 +174,7 @@ function AppRoutes() {
       {/* Fallback */}
       <Route
         path="*"
-        element={<Navigate to={ROUTES.LOGIN} replace />}
+        element={<Navigate to={<HomePage />} replace />}
       />
 
       

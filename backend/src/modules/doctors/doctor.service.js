@@ -40,8 +40,9 @@ import {
   findDoctorDetailsById,
   verifyDoctorById,
   updateDoctorConsultationFeeById,
+  updateDoctorProfileImageById,
 } from "./doctor.repository.js";
-
+import { uploadBufferToCloudinary } from "../../shared/utils/cloudinaryUpload.js";
 import {
   createSession,
   revokeSessionByRefreshToken,
@@ -64,6 +65,54 @@ import {
 
 
 import { findSpecialtyById } from "../specialties/specialty.repository.js";
+
+const sanitizeDoctorResponse = (doctor) => {
+  return {
+    _id: doctor._id,
+
+    firstName: doctor.firstName,
+    lastName: doctor.lastName,
+    email: doctor.email,
+
+    specialization: doctor.specialization,
+
+    professionalInfo: {
+      experience: doctor.professionalInfo?.experience || 0,
+      education: doctor.professionalInfo?.education || "",
+      consultationFee:
+        doctor.professionalInfo?.consultationFee || 0,
+      contactNumber:
+        doctor.professionalInfo?.contactNumber || "",
+      profileImage:
+        doctor.professionalInfo?.profileImage || "",
+    },
+
+    profileImage:
+      doctor.professionalInfo?.profileImage || "",
+
+    settings: {
+      theme: doctor.settings?.theme || "light",
+    },
+
+    stats: {
+      averageRating: doctor.stats?.averageRating || 0,
+      totalReviews: doctor.stats?.totalReviews || 0,
+      totalPatients: doctor.stats?.totalPatients || 0,
+      totalAppointments: doctor.stats?.totalAppointments || 0,
+    },
+
+    accountStatus: {
+      isVerified: doctor.accountStatus?.isVerified || false,
+      isBlocked: doctor.accountStatus?.isBlocked || false,
+      isDeleted: doctor.accountStatus?.isDeleted || false,
+      mustChangePassword:
+        doctor.accountStatus?.mustChangePassword || false,
+    },
+
+    createdAt: doctor.createdAt,
+    updatedAt: doctor.updatedAt,
+  };
+};
 // ==============================
 // ADMIN CREATE DOCTOR
 // ==============================
@@ -105,24 +154,32 @@ if (specialty.status !== "active") {
 }
   const hashedPassword = await hashPassword(tempPassword);
 
-  const doctor = await createDoctor({
-    firstName,
-    lastName,
-    email,
-    password: hashedPassword,
+ const doctor = await createDoctor({
+  firstName,
+  lastName,
+  email,
+  password: hashedPassword,
 
-   specialization: {
-  specialtyId: specialty._id,
-  name: specialty.name,
-},
+  specialization: {
+    specialtyId: specialty._id,
+    name: specialty.name,
+    displayName: specialty.displayName || specialty.name,
+  },
 
-    professionalInfo: {
-      experience,
-      education,
-      consultationFee,
-      contactNumber,
-    },
-  });
+  professionalInfo: {
+    experience: Number(experience),
+    education,
+    consultationFee: Number(consultationFee),
+    contactNumber,
+  },
+
+  accountStatus: {
+    isVerified: false,
+    isBlocked: false,
+    isDeleted: false,
+    mustChangePassword: true,
+  },
+});
 
   await deleteOldOtps(email, "doctor_verify");
 
@@ -148,7 +205,7 @@ if (specialty.status !== "active") {
     tempPassword
   );
 
-  return doctor;
+  return sanitizeDoctorResponse(doctor);
 };
 
 // ==============================
@@ -185,6 +242,11 @@ export const doctorLoginService = async (
     password,
     doctor.password
   );
+
+  if (!isPasswordMatched) {
+    throw new AppError("Invalid email or password", 400);
+  }
+
   if (
   doctor.accountStatus.mustChangePassword
 ) {
@@ -193,9 +255,7 @@ export const doctorLoginService = async (
     403
   );
 }
-  if (!isPasswordMatched) {
-    throw new AppError("Invalid email or password", 400);
-  }
+  
 
   const accessToken = generateAccessToken({
     doctorId: doctor._id,
@@ -254,7 +314,7 @@ export const getMyDoctorProfileService = async (doctorId) => {
     throw new AppError("Doctor not found", 404);
   }
 
-  return doctor;
+ return sanitizeDoctorResponse(doctor);
 };
 
 
@@ -266,33 +326,29 @@ export const updateDoctorProfileService = async (
   payload
 ) => {
   const doctor = await findDoctorById(doctorId);
- const allowedPayload = {
-    firstName: payload.firstName,
-    lastName: payload.lastName,
-};
+const allowedPayload = {};
 
-if (payload.professionalInfo) {
+if (payload.firstName) {
+  allowedPayload.firstName = payload.firstName;
+}
 
-  allowedPayload.professionalInfo = {};
+if (payload.lastName) {
+  allowedPayload.lastName = payload.lastName;
+}
 
-  if (payload.professionalInfo.education) {
-    allowedPayload.professionalInfo.education =
-      payload.professionalInfo.education;
-  }
+if (payload.professionalInfo?.education) {
+  allowedPayload["professionalInfo.education"] =
+    payload.professionalInfo.education;
+}
 
-  if (
-    payload.professionalInfo.contactNumber
-  ) {
-    allowedPayload.professionalInfo.contactNumber =
-      payload.professionalInfo.contactNumber;
-  }
+if (payload.professionalInfo?.contactNumber) {
+  allowedPayload["professionalInfo.contactNumber"] =
+    payload.professionalInfo.contactNumber;
+}
 
-  if (
-    payload.professionalInfo.profileImage
-  ) {
-    allowedPayload.professionalInfo.profileImage =
-      payload.professionalInfo.profileImage;
-  }
+if (payload.professionalInfo?.profileImage) {
+  allowedPayload["professionalInfo.profileImage"] =
+    payload.professionalInfo.profileImage;
 }
   if (!doctor || doctor.accountStatus.isDeleted) {
     throw new AppError("Doctor not found", 404);
@@ -448,35 +504,14 @@ export const verifyDoctorAccountService = async (
   otp,
   newPassword
 ) => {
-
-  const otpRecord = await findOtpRecord(
-    email,
-    "doctor_verify"
-  );
+  const otpRecord = await findOtpRecord(email, "doctor_verify");
 
   if (!otpRecord) {
     throw new AppError("OTP not found", 404);
   }
 
-  const doctor = await findDoctorById(
-    otpRecord.doctorId
-  );
-
-  if (!doctor) {
-    throw new AppError(
-      "Doctor not found",
-      404
-    );
-  }
-
-  if (doctor.accountStatus.isVerified) {
-    throw new AppError(
-      "Doctor already verified",
-      400
-    );
-  }
-  if (!otpRecord) {
-    throw new AppError("OTP not found", 404);
+  if (otpRecord.isUsed) {
+    throw new AppError("OTP already used", 400);
   }
 
   if (new Date() > otpRecord.expiresAt) {
@@ -484,51 +519,41 @@ export const verifyDoctorAccountService = async (
   }
 
   if (otpRecord.attempts >= 5) {
-    throw new AppError(
-      "Maximum OTP attempts exceeded",
-      400
-    );
+    throw new AppError("Maximum OTP attempts exceeded", 400);
   }
-  const isOtpValid =
-  await compareOtp(
-    otp,
-    otpRecord.otp
-  );
 
+  const doctor = await findDoctorById(otpRecord.doctorId);
+
+  if (!doctor || doctor.accountStatus.isDeleted) {
+    throw new AppError("Doctor not found", 404);
+  }
+
+  if (doctor.accountStatus.isVerified) {
+    throw new AppError("Doctor already verified", 400);
+  }
+
+  const isOtpValid = await compareOtp(otp, otpRecord.otp);
 
   if (!isOtpValid) {
     otpRecord.attempts += 1;
-
     await otpRecord.save();
 
     throw new AppError("Invalid OTP", 400);
   }
 
-  const hashedPassword = await hashPassword(
-    newPassword
-  );
+  const hashedPassword = await hashPassword(newPassword);
 
-  await updateDoctorById(
-    otpRecord.doctorId,
-    {
-      password: hashedPassword,
+  await updateDoctorById(doctor._id, {
+    password: hashedPassword,
+    "accountStatus.isVerified": true,
+    "accountStatus.mustChangePassword": false,
+  });
 
-      "accountStatus.isVerified": true,
-
-      "accountStatus.mustChangePassword": false,
-    }
-  );
   otpRecord.isUsed = true;
- await otpRecord.save();
- if (otpRecord.isUsed) {
-  throw new AppError(
-    "OTP already used",
-    400
-  );
-}
+  await otpRecord.save();
+
   await deleteOldOtps(email, "doctor_verify");
 };
-
 
 export const refreshDoctorTokenService =
   async (refreshToken) => {
@@ -559,7 +584,9 @@ export const refreshDoctorTokenService =
         403
       );
     }
-
+       if (session.userType !== "doctor") {
+  throw new AppError("Invalid session type", 401);
+}
     const session =
       await findSessionByRefreshToken(
         refreshToken
@@ -759,15 +786,16 @@ export const refreshDoctorTokenService =
       );
     }
 
-    if (
-      doctor.accountStatus
-        .isBlocked
-    ) {
+    if (doctor.accountStatus.isBlocked ) {
       throw new AppError(
         "Doctor account blocked",
         403
       );
     }
+
+    if (doctor.accountStatus.isDeleted) {
+  throw new AppError("Doctor account deleted", 403);
+}
 
     await deleteOldOtps(
       email,
@@ -812,108 +840,71 @@ export const refreshDoctorTokenService =
     return;
   };
 
-  export const resetDoctorPasswordService =
-  async (
+ export const resetDoctorPasswordService = async (
+  email,
+  otp,
+  newPassword
+) => {
+  const otpRecord = await findOtpRecord(
     email,
-    otp,
-    newPassword
-  ) => {
+    "doctor_forgot_password"
+  );
 
-    const otpRecord =
-      await findOtpRecord(
-        email,
-        "doctor_forgot_password"
-      );
+  if (!otpRecord) {
+    throw new AppError("OTP not found", 404);
+  }
 
-    if (!otpRecord) {
-      throw new AppError(
-        "OTP not found",
-        404
-      );
-    }
+  if (otpRecord.isUsed) {
+    throw new AppError("OTP already used", 400);
+  }
 
-    if (
-      new Date() >
-      otpRecord.expiresAt
-    ) {
-      throw new AppError(
-        "OTP expired",
-        400
-      );
-    }
+  if (new Date() > otpRecord.expiresAt) {
+    throw new AppError("OTP expired", 400);
+  }
 
-    if (
-      otpRecord.attempts >= 5
-    ) {
-      throw new AppError(
-        "Maximum OTP attempts exceeded",
-        400
-      );
-    }
+  if (otpRecord.attempts >= 5) {
+    throw new AppError("Maximum OTP attempts exceeded", 400);
+  }
 
-    const isOtpValid =
-      await compareOtp(
-        otp,
-        otpRecord.otp
-      );
+  const isOtpValid = await compareOtp(otp, otpRecord.otp);
 
-    if (!isOtpValid) {
+  if (!isOtpValid) {
+    otpRecord.attempts += 1;
+    await otpRecord.save();
 
-      otpRecord.attempts += 1;
+    throw new AppError("Invalid OTP", 400);
+  }
 
-      await otpRecord.save();
+  const doctor = await findDoctorByEmail(email).select("+password");
 
-      throw new AppError(
-        "Invalid OTP",
-        400
-      );
-    }
+  if (!doctor || doctor.accountStatus.isDeleted) {
+    throw new AppError("Doctor not found", 404);
+  }
+  const isSamePassword = await comparePassword(
+  newPassword,
+  doctor.password
+);
 
-    const doctor =
-      await findDoctorByEmail(
-        email
-      ).select("+password");
-
-    if (!doctor) {
-      throw new AppError(
-        "Doctor not found",
-        404
-      );
-    }
-
-    const hashedPassword =
-      await hashPassword(
-        newPassword
-      );
-
-    await updateDoctorById(
-      doctor._id,
-      {
-        password:
-          hashedPassword,
-      }
-    );
-
-    // revoke all devices
-    await revokeAllSessionsByUserId(
-      doctor._id,
-      "doctor"
-    );
-   otpRecord.isUsed = true;
-await otpRecord.save();
-if (otpRecord.isUsed) {
+if (isSamePassword) {
   throw new AppError(
-    "OTP already used",
+    "New password cannot be same as old password",
     400
   );
 }
-    await deleteOldOtps(
-      email,
-      "doctor_forgot_password"
-    );
 
-    return;
-  };
+  const hashedPassword = await hashPassword(newPassword);
+
+  await updateDoctorById(doctor._id, {
+    password: hashedPassword,
+  });
+
+  await revokeAllSessionsByUserId(doctor._id, "doctor");
+
+  otpRecord.isUsed = true;
+  await otpRecord.save();
+
+  await deleteOldOtps(email, "doctor_forgot_password");
+};
 
   export const resendForgotPasswordOtpService =
   async (email) => {
@@ -1070,4 +1061,32 @@ export const updateDoctorConsultationFeeService = async (
     currentConsultationFee:
       updatedDoctor.professionalInfo?.consultationFee,
   };
+};
+
+export const updateDoctorProfileImageService = async (
+  doctorId,
+  file
+) => {
+  const doctor = await findDoctorById(doctorId);
+
+  if (!doctor || doctor.accountStatus.isDeleted) {
+    throw new AppError("Doctor not found", 404);
+  }
+
+  if (!file) {
+    throw new AppError("Profile image is required", 400);
+  }
+
+  const uploadResult = await uploadBufferToCloudinary({
+    buffer: file.buffer,
+    folder: "dentacare/doctors",
+    publicId: `doctor_${doctor._id}`,
+  });
+
+  const updatedDoctor = await updateDoctorProfileImageById(
+    doctor._id,
+    uploadResult.secure_url
+  );
+
+  return sanitizeDoctorResponse(updatedDoctor);
 };

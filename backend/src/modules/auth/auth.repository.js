@@ -1,7 +1,18 @@
 import Otp from "../../models/Otp.js";
 
 export const findOtpRecord = (email, purpose) => {
-  return Otp.findOne({ email, purpose, isUsed: false }).sort({ createdAt: -1 });
+  return Otp.findOne({
+    email,
+    purpose,
+  }).sort({ createdAt: -1 });
+};
+
+export const findUnusedOtpRecord = (email, purpose) => {
+  return Otp.findOne({
+    email,
+    purpose,
+    isUsed: false,
+  }).sort({ createdAt: -1 });
 };
 
 export const createOtpRecord = (payload) => {
@@ -13,5 +24,7 @@ export const deleteOldOtps = (email, purpose) => {
 };
 
 export const updateOtpRecord = (id, payload) => {
-  return Otp.findByIdAndUpdate(id, payload, { new: true });
+  return Otp.findByIdAndUpdate(id, payload, {
+    new: true,
+  });
 };

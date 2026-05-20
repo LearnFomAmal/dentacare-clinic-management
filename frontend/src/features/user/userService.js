@@ -45,3 +45,20 @@ export const getUserSessionsApi = async () => {
   const response = await axiosInstance.get(API_ENDPOINTS.USER.SESSIONS);
   return response.data;
 };
+
+export const updateUserProfileImageApi = async (file) => {
+  const formData = new FormData();
+  formData.append("profileImage", file);
+
+  const response = await axiosInstance.patch(
+    API_ENDPOINTS.USER.UPDATE_PROFILE_IMAGE,
+    formData,
+    {
+      headers: {
+        "Content-Type": "multipart/form-data",
+      },
+    }
+  );
+
+  return response.data;
+};

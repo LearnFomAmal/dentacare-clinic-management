@@ -53,11 +53,12 @@ export const adminLoginController =
       ipAddress
     );
 
-    setAuthCookies(
-      res,
-      accessToken,
-      refreshToken
-    );
+   setAuthCookies(
+  res,
+  accessToken,
+  refreshToken,
+  "admin"
+  );
 
     sendResponse(
       res,
@@ -74,14 +75,11 @@ export const adminLoginController =
 // ==============================
 export const adminLogoutController =
   asyncHandler(async (req, res) => {
-    const refreshToken =
-      req.cookies.refreshToken;
+    const refreshToken = req.cookies?.adminRefreshToken;
 
-    await adminLogoutService(
-      refreshToken
-    );
+    await adminLogoutService(refreshToken);
 
-    clearAuthCookies(res);
+    clearAuthCookies(res, "admin");
 
     sendResponse(
       res,
@@ -165,20 +163,13 @@ export const verifyForgotOtpController =
 // ==============================
 export const resetAdminPasswordController =
   asyncHandler(async (req, res) => {
-    const { email, password } =
-      req.body;
+    const { email, password } = req.body;
 
-    validateResetPasswordInput(
-      email,
-      password
-    );
+    validateResetPasswordInput(email, password);
 
-    await resetAdminPasswordService(
-      email,
-      password
-    );
+    await resetAdminPasswordService(email, password);
 
-    clearAuthCookies(res);
+    clearAuthCookies(res, "admin");
 
     sendResponse(
       res,

@@ -73,6 +73,7 @@ function ResetPasswordPage() {
   }, [resendTimer]);
 
   const onSubmit = async (data) => {
+     console.log("RESET PASSWORD SUBMIT DATA:", data);
     try {
       const response = await resetPasswordApi(data);
 

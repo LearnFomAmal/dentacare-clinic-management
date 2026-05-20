@@ -38,6 +38,7 @@ import {
   resendForgotPasswordOtpService,
   getDoctorDetailsService,
  updateDoctorConsultationFeeService,
+ updateDoctorProfileImageService,
 } from "./doctor.service.js";
 
 
@@ -72,7 +73,12 @@ export const doctorLoginController = asyncHandler(async (req, res) => {
       ipAddress
     );
 
-  setAuthCookies(res, accessToken, refreshToken);
+  setAuthCookies(
+  res,
+  accessToken,
+  refreshToken,
+  "doctor"
+);
 
   sendResponse(res, 200, true, "Doctor login successful", doctorData);
 });
@@ -139,7 +145,7 @@ export const changeDoctorPasswordController = asyncHandler(
       newPassword
     );
 
-    clearAuthCookies(res);
+    clearAuthCookies(res,"doctor");
 
     sendResponse(
       res,
@@ -156,11 +162,11 @@ export const changeDoctorPasswordController = asyncHandler(
 // ==============================
 export const doctorLogoutController = asyncHandler(
   async (req, res) => {
-    const refreshToken = req.cookies.refreshToken;
+    const refreshToken = req.cookies?.doctorRefreshToken;
 
     await doctorLogoutService(refreshToken);
 
-    clearAuthCookies(res);
+    clearAuthCookies(res, "doctor");
 
     sendResponse(
       res,
@@ -171,17 +177,14 @@ export const doctorLogoutController = asyncHandler(
   }
 );
 
-
 // ==============================
 // DELETE ACCOUNT
 // ==============================
 export const deleteDoctorAccountController = asyncHandler(
   async (req, res) => {
-    await deleteDoctorAccountService(
-      req.doctor.doctorId
-    );
+    await deleteDoctorAccountService(req.doctor.doctorId);
 
-    clearAuthCookies(res);
+    clearAuthCookies(res, "doctor");
 
     sendResponse(
       res,
@@ -337,18 +340,15 @@ export const verifyDoctorAccountController =
 
   export const refreshDoctorTokenController =
   asyncHandler(async (req, res) => {
-    const refreshToken =
-      req.cookies.refreshToken;
+    const refreshToken = req.cookies?.doctorRefreshToken;
 
-    const data =
-      await refreshDoctorTokenService(
-        refreshToken
-      );
+    const data = await refreshDoctorTokenService(refreshToken);
 
     setAuthCookies(
       res,
       data.accessToken,
-      data.refreshToken
+      data.refreshToken,
+      "doctor"
     );
 
     sendResponse(
@@ -409,12 +409,8 @@ export const verifyDoctorAccountController =
     );
   });
 
-  export const resetDoctorPasswordController =
-  asyncHandler(async (
-    req,
-    res
-  ) => {
-
+ export const resetDoctorPasswordController =
+  asyncHandler(async (req, res) => {
     const {
       email,
       otp,
@@ -435,7 +431,7 @@ export const verifyDoctorAccountController =
       newPassword
     );
 
-    clearAuthCookies(res);
+    clearAuthCookies(res, "doctor");
 
     sendResponse(
       res,
@@ -502,6 +498,23 @@ export const updateDoctorConsultationFeeController = asyncHandler(
       true,
       "Consultation fee updated successfully",
       result
+    );
+  }
+);
+
+export const updateDoctorProfileImageController = asyncHandler(
+  async (req, res) => {
+    const updatedDoctor = await updateDoctorProfileImageService(
+      req.doctor.doctorId,
+      req.file
+    );
+
+    sendResponse(
+      res,
+      200,
+      true,
+      "Profile image updated successfully",
+      updatedDoctor
     );
   }
 );

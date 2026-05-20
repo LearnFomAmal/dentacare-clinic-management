@@ -56,3 +56,7 @@ export const getAllActiveSpecialties = () => {
     })
     .select("_id displayName name description status");
 };
+
+export const deleteSpecialtyById = (id) => {
+  return Specialty.findByIdAndDelete(id);
+};

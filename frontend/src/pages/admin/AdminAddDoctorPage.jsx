@@ -130,101 +130,106 @@ function AdminAddDoctorPage() {
           className="space-y-6"
         >
           <div className="grid gap-5 md:grid-cols-2">
-            <Input
-              label="First Name"
-              name="firstName"
-              placeholder="Sarah"
-              register={register}
-              error={errors.firstName}
-              icon={User}
-            />
+           <Input
+  label="First Name"
+  name="firstName"
+  placeholder="Sarah"
+  register={register}
+  error={errors.firstName}
+  icon={User}
+/>
+
+<Input
+  label="Last Name"
+  name="lastName"
+  placeholder="Jenkins"
+  register={register}
+  error={errors.lastName}
+  icon={User}
+/>
 
             <Input
-              label="Last Name"
-              name="lastName"
-              placeholder="Jenkins"
-              register={register}
-              error={errors.lastName}
-              icon={User}
-            />
+  label="Email ID"
+  type="email"
+  name="email"
+  placeholder="doctor@example.com"
+  register={register}
+  error={errors.email}
+  icon={Mail}
+/>
 
-            <Input
-              label="Email ID"
-              type="email"
-              name="email"
-              placeholder="doctor@example.com"
-              register={register}
-              error={errors.email}
-              icon={Mail}
-            />
+<Input
+  label="Contact Number"
+  name="contactNumber"
+  placeholder="9876543210"
+  register={register}
+  error={errors.contactNumber}
+  icon={Phone}
+/>
 
-            <Input
-              label="Contact Number"
-              name="contactNumber"
-              placeholder="9876543210"
-              register={register}
-              error={errors.contactNumber}
-              icon={Phone}
-            />
 
             <Select
-              label="Specialty"
-              name="specializationId"
-              register={register}
-              error={errors.specializationId}
-            >
-              <option value="">
-                {isLoadingSpecialties
-                  ? "Loading specialties..."
-                  : "Select Specialty"}
-              </option>
+  label="Specialty"
+  name="specializationId"
+  register={register}
+  error={errors.specializationId}
+>
+  <option value="">Select Specialty</option>
 
-              {specialties.map((specialty) => (
-                <option
-                  key={specialty._id}
-                  value={specialty._id}
-                >
-                  {specialty.displayName ||
-                    specialty.name}
-                </option>
-              ))}
-            </Select>
+  {specialties.map((specialty) => (
+    <option key={specialty._id} value={specialty._id}>
+      {specialty.displayName || specialty.name}
+    </option>
+  ))}
+</Select>
 
-            <Input
-              label="Experience"
-              type="number"
-              name="experience"
-              placeholder="5"
-              register={register}
-              error={errors.experience}
-              icon={BriefcaseBusiness}
-            />
+         <Input
+  label="Experience"
+  type="number"
+  name="experience"
+  placeholder="5"
+  register={register}
+  error={errors.experience}
+  icon={BriefcaseBusiness}
+  min="0"
+  max="25"
+/>
 
-            <Input
-              label="Education"
-              name="education"
-              placeholder="BDS, MDS Orthodontics"
-              register={register}
-              error={errors.education}
-              icon={GraduationCap}
-            />
+<Input
+  label="Education"
+  name="education"
+  placeholder="BDS, MDS Orthodontics"
+  register={register}
+  error={errors.education}
+  icon={GraduationCap}
+/>
 
-            <Input
-              label="Consultation Fee"
-              type="number"
-              name="consultationFee"
-              placeholder="500"
-              register={register}
-              error={errors.consultationFee}
-              icon={Wallet}
-            />
+<Input
+  label="Consultation Fee"
+  type="number"
+  name="consultationFee"
+  placeholder="500"
+  register={register}
+  error={errors.consultationFee}
+  icon={Wallet}
+  min="0"
+  max="10000"
+/>
+
           </div>
 
           <div className="rounded-2xl border border-[rgba(172,178,189,0.15)] bg-[#F8FAFC] p-5">
-            <div className="mb-2 flex items-center gap-2 font-semibold text-[#2D333B]">
-              <Stethoscope size={18} className="text-[#4C59A6]" />
-              Doctor Verification Flow
-            </div>
+         {doctor?.profileImage ? (
+  <img
+    src={doctor.profileImage}
+    alt={doctor?.name || "Doctor"}
+    className="h-16 w-16 rounded-3xl object-cover"
+  />
+) : (
+  <div className="flex h-16 w-16 items-center justify-center rounded-3xl bg-[#B8B8FF]/40 text-[#4C59A6]">
+    <Stethoscope size={30} />
+  </div>
+)}
 
             <p className="text-sm leading-6 text-[#595F69]">
               After creating the doctor, backend will generate a temporary password and OTP, then send both to the doctor email. Doctor must verify account and set a new password before login.

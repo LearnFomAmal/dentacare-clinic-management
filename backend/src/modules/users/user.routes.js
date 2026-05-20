@@ -1,7 +1,7 @@
 import express from "express";
 import { protect } from "../../middlewares/auth.middleware.js";
 import { protectAdmin } from "../../middlewares/adminAuth.middleware.js";
-
+import { uploadProfileImage } from "../../middlewares/upload.middleware.js";
 import {
   getMyProfileController,
   updateMyProfileController,
@@ -13,6 +13,7 @@ import {
   getPatientDetailsController,
   blockUserController,
   unblockUserController,
+  updatePatientProfileImageController,
 } from "./user.controller.js";
 
 const router = express.Router();
@@ -52,6 +53,13 @@ router.patch(
   "/patients/:id/unblock",
   protectAdmin,
   unblockUserController
+);
+
+router.patch(
+  "/me/profile-image",
+  protect,
+  uploadProfileImage,
+  updatePatientProfileImageController
 );
 
 export default router;

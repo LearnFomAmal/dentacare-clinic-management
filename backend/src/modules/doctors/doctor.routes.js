@@ -6,25 +6,27 @@ import {
   getMyDoctorProfileController,
   updateDoctorProfileController,
   changeDoctorPasswordController,
-  doctorLogoutController,
-  deleteDoctorAccountController,
-  getDoctorSessionsController,
-  updateDoctorThemeController,
-  getAllDoctorsController,
-  blockDoctorController,
-  unblockDoctorController,
-  verifyDoctorAccountController,
-  refreshDoctorTokenController,
-  resendDoctorVerificationOtpController,
-  forgotDoctorPasswordController,
+ doctorLogoutController,
+ deleteDoctorAccountController,
+ getDoctorSessionsController,
+ updateDoctorThemeController,
+ getAllDoctorsController,
+ blockDoctorController,
+ unblockDoctorController,
+ verifyDoctorAccountController,
+ refreshDoctorTokenController,
+ resendDoctorVerificationOtpController,
+ forgotDoctorPasswordController,
  resetDoctorPasswordController,
  resendForgotPasswordOtpController,
  getDoctorDetailsController,
-  updateDoctorConsultationFeeController,
+ updateDoctorConsultationFeeController,
+ updateDoctorProfileImageController,
 } from "./doctor.controller.js";
 
 import { protectDoctor } from "../../middlewares/doctorAuth.middleware.js";
 import { protectAdmin } from "../../middlewares/adminAuth.middleware.js";
+import { uploadProfileImage } from "../../middlewares/upload.middleware.js";
 const router = express.Router();
 
 
@@ -128,6 +130,13 @@ router.get(
   "/:id",
   protectAdmin,
   getDoctorDetailsController
+);
+
+router.patch(
+  "/me/profile-image",
+  protectDoctor,
+  uploadProfileImage,
+  updateDoctorProfileImageController
 );
 
 export default router;

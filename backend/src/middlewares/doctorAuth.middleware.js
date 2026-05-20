@@ -1,20 +1,15 @@
 import jwt from "jsonwebtoken";
+
 import { env } from "../config/env.js";
 import AppError from "../shared/errors/AppError.js";
 import { findDoctorById } from "../modules/doctors/doctor.repository.js";
 
-export const protectDoctor = async (
-  req,
-  res,
-  next
-) => {
+export const protectDoctor = async (req, res, next) => {
   try {
-    const token = req.cookies?.accessToken;
+    const token = req.cookies?.doctorAccessToken;
 
     if (!token) {
-      return next(
-        new AppError("Unauthorized access", 401)
-      );
+      return next(new AppError("Unauthorized access", 401));
     }
 
     const decoded = jwt.verify(
@@ -23,46 +18,29 @@ export const protectDoctor = async (
     );
 
     if (decoded.role !== "doctor") {
-      return next(
-        new AppError("Doctor access only", 403)
-      );
+      return next(new AppError("Doctor access only", 403));
     }
 
-    const doctor = await findDoctorById(
-      decoded.doctorId
-    );
+    if (!decoded.doctorId) {
+      return next(new AppError("Invalid doctor token", 401));
+    }
+
+    const doctor = await findDoctorById(decoded.doctorId);
 
     if (!doctor) {
-      return next(
-        new AppError("Doctor not found", 404)
-      );
+      return next(new AppError("Doctor not found", 404));
     }
 
     if (doctor.accountStatus?.isDeleted) {
-      return next(
-        new AppError(
-          "Doctor account deleted",
-          403
-        )
-      );
+      return next(new AppError("Doctor account deleted", 403));
     }
 
     if (doctor.accountStatus?.isBlocked) {
-      return next(
-        new AppError(
-          "Doctor account blocked",
-          403
-        )
-      );
+      return next(new AppError("Doctor account blocked", 403));
     }
 
     if (!doctor.accountStatus?.isVerified) {
-      return next(
-        new AppError(
-          "Doctor account not verified",
-          403
-        )
-      );
+      return next(new AppError("Doctor account not verified", 403));
     }
 
     req.doctor = {
@@ -72,11 +50,6 @@ export const protectDoctor = async (
 
     next();
   } catch (error) {
-    return next(
-      new AppError(
-        "Invalid or expired token",
-        401
-      )
-    );
+    return next(new AppError("Invalid or expired token", 401));
   }
 };

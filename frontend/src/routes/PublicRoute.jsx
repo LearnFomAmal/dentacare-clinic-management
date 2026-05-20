@@ -2,8 +2,6 @@ import { Navigate } from "react-router-dom";
 
 import { ROUTES } from "../constants/routes";
 import {
-  clearAccountType,
-  clearAuthUser,
   getAccountType,
   getAuthUser,
 } from "../utils/authStorage";
@@ -15,27 +13,19 @@ const getRoleHome = (role) => {
 };
 
 function PublicRoute({ children }) {
-  const user = getAuthUser();
-  const accountType = getAccountType();
+  const activeAccountType = getAccountType();
 
-  if (user && accountType) {
-    const actualRole = user.role || accountType;
-    const normalizedRole =
-      actualRole === "patient" ? "patient" : actualRole;
+  if (activeAccountType) {
+    const activeUser = getAuthUser(activeAccountType);
 
-    if (accountType !== normalizedRole) {
-      clearAuthUser();
-      clearAccountType();
-
-      return <Navigate to={ROUTES.LOGIN} replace />;
+    if (activeUser) {
+      return (
+        <Navigate
+          to={getRoleHome(activeAccountType)}
+          replace
+        />
+      );
     }
-
-    return (
-      <Navigate
-        to={getRoleHome(normalizedRole)}
-        replace
-      />
-    );
   }
 
   return children;

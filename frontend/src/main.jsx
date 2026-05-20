@@ -8,7 +8,9 @@ import ErrorBoundary from "./components/common/ErrorBoundary";
 import App from "./App";
 import "./index.css";
 import { store } from "./app/store";
+import { getStoredTheme, applyTheme } from "./utils/themeStorage";
 
+applyTheme(getStoredTheme());
 createRoot(document.getElementById("root")).render(
   <StrictMode>
     <Provider store={store}>
