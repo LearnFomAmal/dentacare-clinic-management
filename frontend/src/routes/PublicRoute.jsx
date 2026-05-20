@@ -1,10 +1,8 @@
 import { Navigate } from "react-router-dom";
+import { useAppSelector } from "../app/hooks";
 
 import { ROUTES } from "../constants/routes";
-import {
-  getAccountType,
-  getAuthUser,
-} from "../utils/authStorage";
+import { getAccountType, getAuthUser } from "../utils/authStorage";
 
 const getRoleHome = (role) => {
   if (role === "admin") return ROUTES.ADMIN_PROFILE;
@@ -13,19 +11,31 @@ const getRoleHome = (role) => {
 };
 
 function PublicRoute({ children }) {
-  const activeAccountType = getAccountType();
+  const { isAuthenticated, user, accountType, role } = useAppSelector(
+    (state) => state.auth
+  );
 
-  if (activeAccountType) {
-    const activeUser = getAuthUser(activeAccountType);
+  if (isAuthenticated && user) {
+    return (
+      <Navigate
+        to={getRoleHome(role || accountType)}
+        replace
+      />
+    );
+  }
 
-    if (activeUser) {
-      return (
-        <Navigate
-          to={getRoleHome(activeAccountType)}
-          replace
-        />
-      );
-    }
+  const storedAccountType = getAccountType();
+  const storedUser = storedAccountType
+    ? getAuthUser(storedAccountType)
+    : null;
+
+  if (storedAccountType && storedUser) {
+    return (
+      <Navigate
+        to={getRoleHome(storedAccountType)}
+        replace
+      />
+    );
   }
 
   return children;

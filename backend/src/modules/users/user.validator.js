@@ -1,14 +1,6 @@
 import AppError from "../../shared/errors/AppError.js";
 
 export const validateUpdateProfileInput = (data) => {
-  if (!data) return;
-
-  if (data.personalInfo?.phoneNumber) {
-    const phoneRegex = /^[6-9]\d{9}$/;
-    if (!phoneRegex.test(data.personalInfo.phoneNumber)) {
-      throw new AppError("Invalid phone number", 400);
-    }
-  }export const validateUpdateProfileInput = (data) => {
   if (!data || Object.keys(data).length === 0) {
     throw new AppError("No update data provided", 400);
   }
@@ -85,7 +77,7 @@ export const validateUpdateProfileInput = (data) => {
     }
   }
 };
-};
+
 
 export const validateChangePasswordInput = (
   currentPassword,

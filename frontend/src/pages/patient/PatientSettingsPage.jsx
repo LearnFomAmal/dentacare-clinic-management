@@ -12,7 +12,8 @@ import Input from "../../components/ui/Input";
 import Select from "../../components/ui/Select";
 import Button from "../../components/ui/Button";
 import ConfirmModal from "../../components/ui/ConfirmModal";
-
+import { useAppDispatch } from "../../app/hooks";
+import { clearAuth, setAuthUser } from "../../features/auth/authSlice";
 import { applyTheme } from "../../utils/themeStorage";
 
 import {
@@ -39,7 +40,7 @@ import { ROUTES } from "../../constants/routes";
 
 function PatientSettingsPage() {
   const navigate = useNavigate();
-
+  const dispatch = useAppDispatch();
   const [profile, setProfile] = useState(null);
   const [isLoadingProfile, setIsLoadingProfile] = useState(true);
 
@@ -170,18 +171,19 @@ function PatientSettingsPage() {
     });
   };
 
-  const handleUnauthorized = (error) => {
-    if (
-      error?.response?.status === 401 ||
-      error?.response?.status === 403
-    ) {
-      clearAuthStorage("patient");
+const handleUnauthorized = (error) => {
+  if (
+    error?.response?.status === 401 ||
+    error?.response?.status === 403
+  ) {
+    clearAuthStorage("patient");
+    dispatch(clearAuth("patient"));
 
-      navigate(ROUTES.LOGIN, {
-        replace: true,
-      });
-    }
-  };
+    navigate(ROUTES.LOGIN, {
+      replace: true,
+    });
+  }
+};
 
   const fetchProfile = async () => {
     try {
@@ -199,6 +201,12 @@ function PatientSettingsPage() {
 
       setProfile(updatedUser);
       saveAuthUser(updatedUser, "patient");
+      dispatch(
+       setAuthUser({
+         user: updatedUser,
+         accountType: "patient",
+         })
+    );
       syncFormsWithUser(updatedUser);
 
       applyTheme(updatedUser?.settings?.theme || "light");
@@ -230,6 +238,12 @@ function PatientSettingsPage() {
 
       setProfile(updatedUser);
       saveAuthUser(updatedUser, "patient");
+      dispatch(
+  setAuthUser({
+    user: updatedUser,
+    accountType: "patient",
+  })
+);
       syncFormsWithUser(updatedUser);
 
       toast.success(response.message || "Profile image updated successfully");
@@ -264,6 +278,12 @@ function PatientSettingsPage() {
 
       setProfile(updatedUser);
       saveAuthUser(updatedUser, "patient");
+      dispatch(
+  setAuthUser({
+    user: updatedUser,
+    accountType: "patient",
+  })
+);
       syncFormsWithUser(updatedUser);
 
       toast.success(response.message || "Profile updated successfully");
@@ -293,6 +313,12 @@ function PatientSettingsPage() {
 
       setProfile(updatedUser);
       saveAuthUser(updatedUser, "patient");
+      dispatch(
+  setAuthUser({
+    user: updatedUser,
+    accountType: "patient",
+  })
+);
       applyTheme(data.theme);
 
       toast.success(response.message || "Theme updated successfully");
@@ -318,7 +344,7 @@ function PatientSettingsPage() {
       resetPasswordForm();
 
       clearAuthStorage("patient");
-
+      dispatch(clearAuth("patient"));
       toast.success(
         response.message ||
           "Password changed successfully. Please login again."
@@ -345,7 +371,7 @@ function PatientSettingsPage() {
       const response = await deleteUserAccountApi();
 
       clearAuthStorage("patient");
-
+      dispatch(clearAuth("patient"));
       toast.success(response.message || "Account deleted successfully");
 
       navigate(ROUTES.LOGIN, {

@@ -1,5 +1,5 @@
 import { Link, useNavigate } from "react-router-dom";
-import { Mail, Lock, UserRound, Stethoscope, ShieldCheck } from "lucide-react";
+import { Mail, UserRound, Stethoscope, ShieldCheck } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import toast from "react-hot-toast";
@@ -8,19 +8,14 @@ import AuthLayout from "../../components/layout/AuthLayout";
 import Card from "../../components/ui/Card";
 import Input from "../../components/ui/Input";
 import Button from "../../components/ui/Button";
-
+import { useAppDispatch } from "../../app/hooks";
+import { loginUser } from "../../features/auth/authSlice";
 import { loginSchema } from "../../schemas/auth.schema";
 import { ROUTES } from "../../constants/routes";
-import { loginApi } from "../../features/auth/authService";
-import {
-  clearAuthStorage,
-  saveAccountType,
-  saveAuthUser,
-} from "../../utils/authStorage";
 import { applyTheme } from "../../utils/themeStorage";
 function LoginPage() {
   const navigate = useNavigate();
-
+  const dispatch = useAppDispatch();
   const {
     register,
     handleSubmit,
@@ -37,67 +32,43 @@ function LoginPage() {
 
   const selectedAccountType = watch("accountType");
 
- const onSubmit = async (data) => {
+const onSubmit = async (data) => {
   try {
-    // Clear old frontend auth before new login
-   // Clear only this role before replacing this role's session.
-// Do not clear admin/doctor/patient sessions from other tabs.
-clearAuthStorage(data.accountType);
+    const result = await dispatch(loginUser(data)).unwrap();
 
-  const response = await loginApi(data);
+    applyTheme(
+      result?.user?.theme ||
+        result?.user?.settings?.theme ||
+        "light"
+    );
 
+    toast.success(result.message || "Login successful");
 
-    const expectedRole = data.accountType;
-
-    const backendUser = response.data || {};
-
-    const normalizedUser = {
-      ...backendUser,
-      email: backendUser.email || data.email,
-      role: backendUser.role || expectedRole,
-      accountType: expectedRole,
-    };
-
-   saveAccountType(expectedRole);
-   saveAuthUser(normalizedUser, expectedRole);
-   applyTheme(response?.data?.theme || response?.data?.settings?.theme || "light");
-    toast.success(response.message || "Login successful");
-
-    if (expectedRole === "admin") {
-      navigate(ROUTES.ADMIN_PROFILE, { replace: true });
-      return;
-    }
-
-    if (expectedRole === "doctor") {
-      navigate(ROUTES.DOCTOR_SETTINGS, { replace: true });
-      return;
-    }
-
-    navigate(ROUTES.USER_SETTINGS, { replace: true });
+    navigate(result.redirectTo, { replace: true });
   } catch (error) {
-  const message =
-    error?.response?.data?.message ||
-    error?.message ||
-    "Login failed";
+    const message =
+      error?.message ||
+      "Login failed";
 
-  if (
-    data.accountType === "doctor" &&
-    message.toLowerCase().includes("verify")
-  ) {
-    toast.error("Please verify your doctor account first");
+    if (
+      data.accountType === "doctor" &&
+      message.toLowerCase().includes("verify")
+    ) {
+      toast.error("Please verify your doctor account first");
 
-    navigate(ROUTES.DOCTOR_VERIFY, {
-      state: {
-        email: data.email,
-      },
-    });
+      navigate(ROUTES.DOCTOR_VERIFY, {
+        replace: true,
+        state: {
+          email: data.email,
+        },
+      });
 
-    return;
+      return;
+    }
+
+    toast.error(message);
   }
-
-  toast.error(message);
-}
- };
+};
 
   return (
     <AuthLayout>

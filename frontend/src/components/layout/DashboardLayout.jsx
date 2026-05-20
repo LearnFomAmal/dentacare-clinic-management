@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { LogOut, ShieldPlus } from "lucide-react";
 import toast from "react-hot-toast";
@@ -10,6 +11,8 @@ import {
   getAuthUser,
   saveAccountType,
 } from "../../utils/authStorage";
+import { useAppDispatch, useAppSelector } from "../../app/hooks";
+import { clearAuth } from "../../features/auth/authSlice";
 
 const getRoleFromPath = (pathname) => {
   if (pathname.startsWith("/admin")) return "admin";
@@ -17,41 +20,50 @@ const getRoleFromPath = (pathname) => {
   return "patient";
 };
 
-function DashboardLayout({
-  children,
-  title = "Dashboard",
-}) {
+const getRoleHome = (role) => {
+  if (role === "admin") return ROUTES.ADMIN_PROFILE;
+  if (role === "doctor") return ROUTES.DOCTOR_SETTINGS;
+  return ROUTES.USER_SETTINGS;
+};
+
+function DashboardLayout({ children, title = "Dashboard" }) {
   const navigate = useNavigate();
   const location = useLocation();
+  const dispatch = useAppDispatch();
+
+  const { user: reduxUser, accountType: reduxAccountType } = useAppSelector(
+    (state) => state.auth
+  );
 
   const routeRole = getRoleFromPath(location.pathname);
-  const accountType = getAccountType() || routeRole;
 
-  if (accountType !== routeRole) {
-    saveAccountType(routeRole);
-  }
+  useEffect(() => {
+    const activeAccountType = getAccountType();
 
-  const user = getAuthUser(routeRole);
+    if (activeAccountType !== routeRole) {
+      saveAccountType(routeRole);
+    }
+  }, [routeRole]);
+
+  const storedUser = getAuthUser(routeRole);
+
+  const user =
+    reduxAccountType === routeRole && reduxUser
+      ? reduxUser
+      : storedUser;
 
   const handleLogout = async () => {
     try {
+      // Try backend logout, but frontend logout must work even if backend fails.
       await logoutApi(routeRole);
-
+    } catch {
+      // Ignore backend logout failure here.
+      // The local session should still be cleared.
+    } finally {
       clearAuthStorage(routeRole);
+      dispatch(clearAuth(routeRole));
 
       toast.success("Logged out successfully");
-
-      navigate(ROUTES.LOGIN, {
-        replace: true,
-      });
-    } catch (error) {
-      clearAuthStorage(routeRole);
-
-      const message =
-        error?.response?.data?.message ||
-        "Session cleared";
-
-      toast.error(message);
 
       navigate(ROUTES.LOGIN, {
         replace: true,
@@ -64,13 +76,7 @@ function DashboardLayout({
       <header className="border-b border-[rgba(172,178,189,0.2)] bg-white dark:border-slate-800 dark:bg-slate-900">
         <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-4">
           <Link
-            to={
-              routeRole === "admin"
-                ? ROUTES.ADMIN_PROFILE
-                : routeRole === "doctor"
-                  ? ROUTES.DOCTOR_SETTINGS
-                  : ROUTES.USER_SETTINGS
-            }
+            to={getRoleHome(routeRole)}
             className="flex items-center gap-3"
           >
             <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#4C59A6] text-white">

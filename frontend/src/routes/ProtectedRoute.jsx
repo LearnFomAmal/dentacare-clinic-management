@@ -1,11 +1,12 @@
 import { Navigate } from "react-router-dom";
+import { useAppSelector } from "../app/hooks";
 
 import { ROUTES } from "../constants/routes";
 import {
-  getAuthUser,
-  getAccountType,
-  saveAccountType,
   clearAuthStorage,
+  getAccountType,
+  getAuthUser,
+  saveAccountType,
 } from "../utils/authStorage";
 
 const getRoleHome = (role) => {
@@ -15,22 +16,41 @@ const getRoleHome = (role) => {
 };
 
 function ProtectedRoute({ children, allowedRoles = [] }) {
+  const {
+    user: reduxUser,
+    role: reduxRole,
+    accountType: reduxAccountType,
+    isAuthenticated,
+  } = useAppSelector((state) => state.auth);
+
   const routeRole =
-    allowedRoles.length === 1 ? allowedRoles[0] : getAccountType();
+    allowedRoles.length === 1
+      ? allowedRoles[0]
+      : reduxAccountType || getAccountType();
 
   if (!routeRole) {
     return <Navigate to={ROUTES.LOGIN} replace />;
   }
 
-  const user = getAuthUser(routeRole);
+  let user = null;
+  let normalizedRole = null;
 
-  if (!user) {
-    return <Navigate to={ROUTES.LOGIN} replace />;
+  if (isAuthenticated && reduxUser) {
+    user = reduxUser;
+    normalizedRole = reduxRole || reduxAccountType || reduxUser.role;
+  } else {
+    const storedUser = getAuthUser(routeRole);
+
+    if (!storedUser) {
+      clearAuthStorage(routeRole);
+      return <Navigate to={ROUTES.LOGIN} replace />;
+    }
+
+    user = storedUser;
+    normalizedRole = storedUser.role || storedUser.accountType || routeRole;
   }
 
-  const normalizedRole = user.role || user.accountType || routeRole;
-
-  if (normalizedRole !== routeRole) {
+  if (!user || normalizedRole !== routeRole) {
     clearAuthStorage(routeRole);
     return <Navigate to={ROUTES.LOGIN} replace />;
   }
@@ -47,7 +67,6 @@ function ProtectedRoute({ children, allowedRoles = [] }) {
     );
   }
 
-  // Make this browser tab remember which role it is using.
   saveAccountType(normalizedRole);
 
   return children;

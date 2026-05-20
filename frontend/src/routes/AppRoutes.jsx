@@ -1,5 +1,11 @@
 import { Navigate, Route, Routes } from "react-router-dom";
 
+import { ROUTES } from "../constants/routes";
+
+import PublicRoute from "./PublicRoute";
+import ProtectedRoute from "./ProtectedRoute";
+
+import HomePage from "../pages/public/HomePage";
 import LoginPage from "../pages/public/LoginPage";
 import RegisterPage from "../pages/public/RegisterPage";
 import OtpVerificationPage from "../pages/public/OtpVerificationPage";
@@ -9,28 +15,27 @@ import DoctorVerificationPendingPage from "../pages/public/DoctorVerificationPen
 
 import PatientSettingsPage from "../pages/patient/PatientSettingsPage";
 import DoctorSettingsPage from "../pages/doctor/DoctorSettingsPage";
+
 import AdminProfilePage from "../pages/admin/AdminProfilePage";
-
-import { ROUTES } from "../constants/routes";
-import PublicRoute from "./PublicRoute";
-import ProtectedRoute from "./ProtectedRoute";
-
 import AdminUsersPage from "../pages/admin/AdminUsersPage";
 import AdminUserDetailsPage from "../pages/admin/AdminUserDetailsPage";
-
 import AdminDoctorsPage from "../pages/admin/AdminDoctorsPage";
 import AdminDoctorDetailsPage from "../pages/admin/AdminDoctorDetailsPage";
 import AdminAddDoctorPage from "../pages/admin/AdminAddDoctorPage";
 import AdminEditDoctorFeePage from "../pages/admin/AdminEditDoctorFeePage";
-import HomePage from "../pages/public/HomePage";
 
 function AppRoutes() {
   return (
     <Routes>
+      {/* Public Landing Page */}
       <Route
-  path={ROUTES.HOME}
-  element={<HomePage />}
-  />
+        path={ROUTES.HOME}
+        element={
+          <PublicRoute>
+            <HomePage />
+          </PublicRoute>
+        }
+      />
 
       {/* Public Auth Routes */}
       <Route
@@ -118,70 +123,63 @@ function AppRoutes() {
       />
 
       <Route
-  path={ROUTES.ADMIN_USERS}
-  element={
-    <ProtectedRoute allowedRoles={["admin"]}>
-      <AdminUsersPage />
-    </ProtectedRoute>
-  }
-/>
-
-<Route
-  path={ROUTES.ADMIN_USER_DETAILS}
-  element={
-    <ProtectedRoute allowedRoles={["admin"]}>
-      <AdminUserDetailsPage />
-    </ProtectedRoute>
-  }
-/>
-
-<Route
-  path={ROUTES.ADMIN_DOCTORS}
-  element={
-    <ProtectedRoute allowedRoles={["admin"]}>
-      <AdminDoctorsPage />
-    </ProtectedRoute>
-  }
-/>
-
-<Route
-  path={ROUTES.ADMIN_ADD_DOCTOR}
-  element={
-    <ProtectedRoute allowedRoles={["admin"]}>
-      <AdminAddDoctorPage />
-    </ProtectedRoute>
-  }
-/>
-
-<Route
-  path={ROUTES.ADMIN_DOCTOR_DETAILS}
-  element={
-    <ProtectedRoute allowedRoles={["admin"]}>
-      <AdminDoctorDetailsPage />
-    </ProtectedRoute>
-  }
-/>
-
-<Route
-  path={ROUTES.ADMIN_EDIT_DOCTOR_FEE}
-  element={
-    <ProtectedRoute allowedRoles={["admin"]}>
-      <AdminEditDoctorFeePage />
-    </ProtectedRoute>
-  }
-/>
-
-      {/* Fallback */}
-      <Route
-        path="*"
-        element={<Navigate to={<HomePage />} replace />}
+        path={ROUTES.ADMIN_USERS}
+        element={
+          <ProtectedRoute allowedRoles={["admin"]}>
+            <AdminUsersPage />
+          </ProtectedRoute>
+        }
       />
 
-      
+      <Route
+        path={ROUTES.ADMIN_USER_DETAILS}
+        element={
+          <ProtectedRoute allowedRoles={["admin"]}>
+            <AdminUserDetailsPage />
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path={ROUTES.ADMIN_DOCTORS}
+        element={
+          <ProtectedRoute allowedRoles={["admin"]}>
+            <AdminDoctorsPage />
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path={ROUTES.ADMIN_ADD_DOCTOR}
+        element={
+          <ProtectedRoute allowedRoles={["admin"]}>
+            <AdminAddDoctorPage />
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path={ROUTES.ADMIN_DOCTOR_DETAILS}
+        element={
+          <ProtectedRoute allowedRoles={["admin"]}>
+            <AdminDoctorDetailsPage />
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path={ROUTES.ADMIN_EDIT_DOCTOR_FEE}
+        element={
+          <ProtectedRoute allowedRoles={["admin"]}>
+            <AdminEditDoctorFeePage />
+          </ProtectedRoute>
+        }
+      />
+
+      {/* Fallback */}
+      <Route path="*" element={<Navigate to={ROUTES.HOME} replace />} />
     </Routes>
-
   );
-
 }
 
 export default AppRoutes;

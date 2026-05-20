@@ -36,16 +36,16 @@ import {
 } from "../../schemas/settings.schema";
 
 import {
-  clearAccountType,
-  clearAuthUser,
+  clearAuthStorage,
   saveAuthUser,
 } from "../../utils/authStorage";
-
+import { useAppDispatch } from "../../app/hooks";
+import { clearAuth, setAuthUser } from "../../features/auth/authSlice";
 import { ROUTES } from "../../constants/routes";
 import { applyTheme } from "../../utils/themeStorage";
 function DoctorSettingsPage() {
   const navigate = useNavigate();
-
+  const dispatch = useAppDispatch();
   const [profile, setProfile] = useState(null);
   const [isLoadingProfile, setIsLoadingProfile] = useState(true);
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
@@ -104,6 +104,19 @@ function DoctorSettingsPage() {
       theme: "light",
     },
   });
+   const normalizeDoctorForAuth = (doctor) => ({
+  _id: doctor?._id,
+  firstName: doctor?.firstName,
+  lastName: doctor?.lastName,
+  email: doctor?.email,
+  role: "doctor",
+  accountType: "doctor",
+  profileImage:
+    doctor?.profileImage ||
+    doctor?.professionalInfo?.profileImage ||
+    "",
+  theme: doctor?.settings?.theme || "light",
+});
 
   const fetchProfile = async () => {
     try {
@@ -113,7 +126,16 @@ function DoctorSettingsPage() {
       const doctor = response.data;
 
       setProfile(doctor);
+       const authDoctor = normalizeDoctorForAuth(doctor);
 
+saveAuthUser(authDoctor, "doctor");
+
+dispatch(
+  setAuthUser({
+    user: authDoctor,
+    accountType: "doctor",
+  })
+);
       resetProfileForm({
         firstName: doctor?.firstName || "",
         lastName: doctor?.lastName || "",
@@ -140,9 +162,8 @@ function DoctorSettingsPage() {
         error?.response?.status === 401 ||
         error?.response?.status === 403
       ) {
-        clearAuthUser();
-        clearAccountType();
-
+        clearAuthStorage("doctor");
+        dispatch(clearAuth("doctor"));
         navigate(ROUTES.LOGIN, {
           replace: true,
         });
@@ -165,22 +186,16 @@ function DoctorSettingsPage() {
 
     setProfile(updatedDoctor);
 
-    saveAuthUser(
-      {
-        _id: updatedDoctor?._id,
-        firstName: updatedDoctor?.firstName,
-        lastName: updatedDoctor?.lastName,
-        email: updatedDoctor?.email,
-        role: "doctor",
-        accountType: "doctor",
-        profileImage:
-          updatedDoctor?.profileImage ||
-          updatedDoctor?.professionalInfo?.profileImage ||
-          "",
-        theme: updatedDoctor?.settings?.theme || "light",
-      },
-      "doctor"
-    );
+   const authDoctor = normalizeDoctorForAuth(updatedDoctor);
+
+   saveAuthUser(authDoctor, "doctor");
+
+   dispatch(
+    setAuthUser({
+     user: authDoctor,
+    accountType: "doctor",
+   })
+  );
 
     resetProfileForm({
       firstName: updatedDoctor?.firstName || "",
@@ -224,21 +239,15 @@ function DoctorSettingsPage() {
 
       setProfile(updatedDoctor);
 
-     saveAuthUser(
-  {
-    _id: updatedDoctor?._id,
-    firstName: updatedDoctor?.firstName,
-    lastName: updatedDoctor?.lastName,
-    email: updatedDoctor?.email,
-    role: "doctor",
+     const authDoctor = normalizeDoctorForAuth(updatedDoctor);
+
+saveAuthUser(authDoctor, "doctor");
+
+dispatch(
+  setAuthUser({
+    user: authDoctor,
     accountType: "doctor",
-    profileImage:
-      updatedDoctor?.profileImage ||
-      updatedDoctor?.professionalInfo?.profileImage ||
-      "",
-    theme: updatedDoctor?.settings?.theme || "light",
-  },
-  "doctor"
+  })
 );
       toast.success(response.message || "Doctor profile updated successfully");
     } catch (error) {
@@ -264,6 +273,22 @@ function DoctorSettingsPage() {
           theme: data.theme,
         },
       }));
+      const authDoctor = normalizeDoctorForAuth({
+  ...profile,
+  settings: {
+    ...profile?.settings,
+    theme: data.theme,
+  },
+});
+
+saveAuthUser(authDoctor, "doctor");
+
+dispatch(
+  setAuthUser({
+    user: authDoctor,
+    accountType: "doctor",
+  })
+);
       applyTheme(data.theme);
     } catch (error) {
       const message =
@@ -285,8 +310,8 @@ function DoctorSettingsPage() {
 
       resetPasswordForm();
 
-      clearAuthUser();
-      clearAccountType();
+   clearAuthStorage("doctor");
+dispatch(clearAuth("doctor"));
 
       toast.success(
         response.message ||
@@ -312,8 +337,8 @@ function DoctorSettingsPage() {
 
       const response = await deleteDoctorAccountApi();
 
-      clearAuthUser();
-      clearAccountType();
+      clearAuthStorage("doctor");
+      dispatch(clearAuth("doctor"));
 
       toast.success(response.message || "Doctor account deleted successfully");
 
