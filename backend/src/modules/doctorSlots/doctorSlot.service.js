@@ -2,7 +2,7 @@ import AppError from "../../shared/errors/AppError.js";
 
 import {
   createDoctorSlotDay,
-  findDoctorslotDayByDoctorAndDate,
+  findSlotDayByDoctorAndDate,
   findSlotDaysByDoctorAndDateRange,
   findSlotDayByIdAndDoctor,
   saveSlotDay,

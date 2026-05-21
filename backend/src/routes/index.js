@@ -8,6 +8,7 @@ import doctorRoutes from "../modules/doctors/doctor.routes.js";
 import adminRoutes from "../modules/admin/admin.routes.js";
 import specialtyRoutes from "../modules/specialties/specialty.routes.js";
 import doctorSlotRoutes from "../modules/doctorSlots/doctorSlot.routes.js";
+import publicDoctorRoutes from "../modules/publicDoctors/publicDoctor.routes.js";
 const router = Router();
 
 // ==========================================
@@ -16,6 +17,7 @@ const router = Router();
 router.use("/auth", authRoutes);
 router.use("/users", userRoutes);
 router.use("/doctors/slots", doctorSlotRoutes);
+router.use("/doctors/public", publicDoctorRoutes);
 router.use("/doctors", doctorRoutes);
 router.use("/admin", adminRoutes);
 router.use("/specialties", specialtyRoutes);

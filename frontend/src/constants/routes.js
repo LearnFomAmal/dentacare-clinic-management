@@ -7,12 +7,15 @@ export const ROUTES = {
 
   FORGOT_PASSWORD: "/forgot-password",
   RESET_PASSWORD: "/reset-password",
+  
+  FIND_DOCTORS: "/doctors",
+  DOCTOR_DETAILS: "/doctors/:doctorId",
 
   DOCTOR_VERIFY: "/doctor-verification",
   DOCTOR_SLOTS: "/doctor/slots",
   USER_SETTINGS: "/settings",
   DOCTOR_SETTINGS: "/doctor/settings",
-
+ 
   ADMIN_PROFILE: "/admin/profile",
   ADMIN_USERS: "/admin/users",
   ADMIN_USER_DETAILS: "/admin/users/:id",

@@ -1,4 +1,7 @@
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
+import toast from "react-hot-toast";
+import { useAppDispatch, useAppSelector } from "../../app/hooks";
+import { logoutUser } from "../../features/auth/authSlice";
 import {
   CalendarDays,
   ChevronLeft,
@@ -137,10 +140,29 @@ function HomePage() {
 }
 
 function HomeNavbar() {
+  const navigate = useNavigate();
+  const dispatch = useAppDispatch();
+
+  const { isAuthenticated, role, user } = useAppSelector(
+    (state) => state.auth
+  );
+
+  const isPatient = isAuthenticated && role === "patient";
+
+  const handleLogout = async () => {
+    try {
+      await dispatch(logoutUser(role)).unwrap();
+      toast.success("Logged out successfully");
+      navigate(ROUTES.LOGIN, { replace: true });
+    } catch {
+      toast.success("Logged out successfully");
+      navigate(ROUTES.LOGIN, { replace: true });
+    }
+  };
+
   return (
     <header className="sticky top-0 z-50 border-b border-[#F1F2F8] bg-white/95 backdrop-blur-md">
       <div className="mx-auto flex h-[78px] max-w-[1237px] items-center justify-between px-8 lg:px-12">
-        {/* Logo - Left */}
         <Link to={ROUTES.HOME} className="flex items-center gap-3">
           <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#9381FF] text-white shadow-[0_8px_20px_rgba(147,129,255,0.25)]">
             <ShieldPlus size={21} />
@@ -151,46 +173,110 @@ function HomeNavbar() {
           </span>
         </Link>
 
-        {/* Nav - Center */}
         <nav className="hidden items-center gap-10 md:flex">
-          <a
-            href="#home"
+          <Link
+            to={ROUTES.HOME}
             className="text-[15px] font-semibold text-[#2D333B] transition hover:text-[#7E87E1]"
           >
             Home
-          </a>
+          </Link>
 
-          <a
-            href="#services"
-            className="text-[15px] font-semibold text-[#2D333B] transition hover:text-[#7E87E1]"
-          >
-            Services
-          </a>
+          {isPatient && (
+            <>
+              <Link
+                to={ROUTES.USER_SETTINGS}
+                className="text-[15px] font-semibold text-[#2D333B] transition hover:text-[#7E87E1]"
+              >
+                Dashboard
+              </Link>
 
-          <a
-            href="#doctors"
-            className="text-[15px] font-semibold text-[#2D333B] transition hover:text-[#7E87E1]"
-          >
-            Find Doctors
-          </a>
+              <Link
+                to={ROUTES.FIND_DOCTORS}
+                className="text-[15px] font-semibold text-[#2D333B] transition hover:text-[#7E87E1]"
+              >
+                Find Doctors
+              </Link>
+            </>
+          )}
+
+          {!isPatient && (
+            <>
+              <a
+                href="#services"
+                className="text-[15px] font-semibold text-[#2D333B] transition hover:text-[#7E87E1]"
+              >
+                Services
+              </a>
+
+              <a
+                href="#doctors"
+                className="text-[15px] font-semibold text-[#2D333B] transition hover:text-[#7E87E1]"
+              >
+                Find Doctors
+              </a>
+            </>
+          )}
         </nav>
 
-        {/* Auth Buttons - Right */}
-        <div className="flex items-center gap-3">
-          <Link
-            to={ROUTES.REGISTER}
-            className="rounded-lg border-2 border-[#7E87E1] bg-white px-7 py-2.5 text-[15px] font-semibold leading-none text-[#7E87E1] shadow-[0_2px_4px_rgba(123,97,255,0.08)] transition hover:bg-[#F0F1FF]"
-          >
-            Register
-          </Link>
+        {isAuthenticated ? (
+          <div className="flex items-center gap-4">
+            <div className="hidden items-center gap-3 sm:flex">
+              <div className="h-10 w-10 overflow-hidden rounded-full bg-[#F0F1FF]">
+                {user?.personalInfo?.profileImage || user?.profileImage ? (
+                  <img
+                    src={user?.personalInfo?.profileImage || user?.profileImage}
+                    alt={user?.username || user?.email || "User"}
+                    className="h-full w-full object-cover"
+                  />
+                ) : (
+                  <div className="flex h-full w-full items-center justify-center text-sm font-bold text-[#9381FF]">
+                    {(user?.username || user?.email || "U")
+                      .charAt(0)
+                      .toUpperCase()}
+                  </div>
+                )}
+              </div>
 
-          <Link
-            to={ROUTES.LOGIN}
-            className="rounded-lg bg-[#7E87E1] px-8 py-3 text-[15px] font-bold leading-none text-white shadow-[0_8px_18px_rgba(126,135,225,0.28)] transition hover:bg-[#6f78db]"
-          >
-            Login
-          </Link>
-        </div>
+              <div>
+                <p className="text-sm font-bold text-[#111827]">
+                  {user?.username ||
+                    [user?.firstName, user?.lastName]
+                      .filter(Boolean)
+                      .join(" ") ||
+                    "User"}
+                </p>
+
+                <p className="text-xs capitalize text-[#6B7280]">
+                  {role}
+                </p>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={handleLogout}
+              className="rounded-lg border-2 border-[#7E87E1] bg-white px-5 py-2.5 text-[15px] font-semibold leading-none text-[#7E87E1] transition hover:bg-[#F0F1FF]"
+            >
+              Logout
+            </button>
+          </div>
+        ) : (
+          <div className="flex items-center gap-3">
+            <Link
+              to={ROUTES.REGISTER}
+              className="rounded-lg border-2 border-[#7E87E1] bg-white px-7 py-2.5 text-[15px] font-semibold leading-none text-[#7E87E1] shadow-[0_2px_4px_rgba(123,97,255,0.08)] transition hover:bg-[#F0F1FF]"
+            >
+              Register
+            </Link>
+
+            <Link
+              to={ROUTES.LOGIN}
+              className="rounded-lg bg-[#7E87E1] px-8 py-3 text-[15px] font-bold leading-none text-white shadow-[0_8px_18px_rgba(126,135,225,0.28)] transition hover:bg-[#6f78db]"
+            >
+              Login
+            </Link>
+          </div>
+        )}
       </div>
     </header>
   );

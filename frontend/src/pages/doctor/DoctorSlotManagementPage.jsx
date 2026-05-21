@@ -15,6 +15,7 @@ import toast from "react-hot-toast";
 
 import DashboardLayout from "../../components/layout/DashboardLayout";
 import Button from "../../components/ui/Button";
+import ConfirmModal from "../../components/ui/ConfirmModal";
 import { ROUTES } from "../../constants/routes";
 import { useAppDispatch, useAppSelector } from "../../app/hooks";
 
@@ -73,15 +74,43 @@ const formatTime = (time) => {
 };
 
 const timeToMinutes = (time) => {
+  if (!time) return 0;
+
   const [hours, minutes] = time.split(":").map(Number);
 
   return hours * 60 + minutes;
 };
 
+const getDurationMinutes = (startTime, endTime) => {
+  return timeToMinutes(endTime) - timeToMinutes(startTime);
+};
+
+const getSlotValidationMessage = (startTime, endTime) => {
+  if (!startTime || !endTime) {
+    return "Start time and end time are required";
+  }
+
+  const duration = getDurationMinutes(startTime, endTime);
+
+  if (duration <= 0) {
+    return "End time must be after start time";
+  }
+
+  if (duration < 15) {
+    return "Slot duration must be at least 15 minutes";
+  }
+
+  if (duration > 120) {
+    return "Slot duration cannot exceed 2 hours";
+  }
+
+  return "";
+};
+
 const getDurationLabel = (startTime, endTime) => {
   if (!startTime || !endTime) return "Invalid";
 
-  const duration = timeToMinutes(endTime) - timeToMinutes(startTime);
+  const duration = getDurationMinutes(startTime, endTime);
 
   if (duration <= 0) return "Invalid";
 
@@ -95,11 +124,7 @@ const getDurationLabel = (startTime, endTime) => {
 };
 
 const isValidSlotTime = (startTime, endTime) => {
-  if (!startTime || !endTime) return false;
-
-  const duration = timeToMinutes(endTime) - timeToMinutes(startTime);
-
-  return duration >= 15 && duration <= 120;
+  return getSlotValidationMessage(startTime, endTime) === "";
 };
 
 const getActiveSlots = (slotDay) => {
@@ -120,16 +145,21 @@ function DoctorSlotManagementPage() {
     days,
     isLoading,
     isMutating,
-    error,
     recurringResult,
   } = useAppSelector((state) => state.doctorSlots);
 
   const { user } = useAppSelector((state) => state.auth);
 
   const [recurringDays, setRecurringDays] = useState("0");
+
   const [slotModal, setSlotModal] = useState({
     open: false,
     mode: "add",
+    slot: null,
+  });
+
+  const [deleteModal, setDeleteModal] = useState({
+    open: false,
     slot: null,
   });
 
@@ -146,12 +176,6 @@ function DoctorSlotManagementPage() {
       })
     );
   }, [dispatch, startDate, days]);
-
-  useEffect(() => {
-    if (error) {
-      toast.error(error);
-    }
-  }, [error]);
 
   useEffect(() => {
     if (recurringResult) {
@@ -228,6 +252,20 @@ function DoctorSlotManagementPage() {
     });
   };
 
+  const openDeleteModal = (slot) => {
+    setDeleteModal({
+      open: true,
+      slot,
+    });
+  };
+
+  const closeDeleteModal = () => {
+    setDeleteModal({
+      open: false,
+      slot: null,
+    });
+  };
+
   const handleSlotFormChange = (event) => {
     const { name, value } = event.target;
 
@@ -243,8 +281,13 @@ function DoctorSlotManagementPage() {
       return;
     }
 
-    if (!isValidSlotTime(formValues.startTime, formValues.endTime)) {
-      toast.error("Slot duration must be between 15 minutes and 2 hours");
+    const validationMessage = getSlotValidationMessage(
+      formValues.startTime,
+      formValues.endTime
+    );
+
+    if (validationMessage) {
+      toast.error(validationMessage);
       return;
     }
 
@@ -280,24 +323,19 @@ function DoctorSlotManagementPage() {
     }
   };
 
-  const handleDeleteSlot = async (slot) => {
-    if (!selectedSlotDay) return;
-
-    const confirmed = window.confirm(
-      "Are you sure you want to delete this slot?"
-    );
-
-    if (!confirmed) return;
+  const handleConfirmDeleteSlot = async () => {
+    if (!selectedSlotDay || !deleteModal.slot) return;
 
     try {
       const result = await dispatch(
         deleteDoctorSlot({
           slotDayId: selectedSlotDay._id,
-          slotId: slot._id,
+          slotId: deleteModal.slot._id,
         })
       ).unwrap();
 
       toast.success(result.message || "Slot deleted successfully");
+      closeDeleteModal();
     } catch (err) {
       toast.error(err || "Failed to delete slot");
     }
@@ -435,7 +473,7 @@ function DoctorSlotManagementPage() {
                           key={slot._id}
                           slot={slot}
                           onEdit={() => openEditModal(slot)}
-                          onDelete={() => handleDeleteSlot(slot)}
+                          onDelete={() => openDeleteModal(slot)}
                           disabled={isMutating}
                         />
                       ))
@@ -472,6 +510,24 @@ function DoctorSlotManagementPage() {
           onSubmit={handleSubmitSlot}
         />
       )}
+
+      <ConfirmModal
+        open={deleteModal.open}
+        title="Delete Slot?"
+        description={
+          deleteModal.slot
+            ? `Are you sure you want to delete the slot ${formatTime(
+                deleteModal.slot.startTime
+              )} – ${formatTime(deleteModal.slot.endTime)}? This slot will no longer be available for patients.`
+            : "Are you sure you want to delete this slot?"
+        }
+        confirmText="Delete Slot"
+        cancelText="Cancel"
+        danger
+        loading={isMutating}
+        onConfirm={handleConfirmDeleteSlot}
+        onCancel={closeDeleteModal}
+      />
     </DashboardLayout>
   );
 }
@@ -577,7 +633,7 @@ function SlotCard({ slot, onEdit, onDelete, disabled }) {
         {formatTime(slot.startTime)} – {formatTime(slot.endTime)}
       </h3>
 
-      <div className="mt-4 flex items-center gap-2">
+      <div className="mt-4 flex flex-wrap items-center gap-2">
         <span className="inline-flex rounded-full bg-[#DCFCE7] px-3 py-1 text-xs font-medium tracking-[-0.5px] text-[#15803D]">
           Duration:{getDurationLabel(slot.startTime, slot.endTime)}
         </span>
@@ -629,7 +685,11 @@ function SlotModal({
   onSubmit,
 }) {
   const durationLabel = getDurationLabel(values.startTime, values.endTime);
-  const valid = isValidSlotTime(values.startTime, values.endTime);
+  const validationMessage = getSlotValidationMessage(
+    values.startTime,
+    values.endTime
+  );
+  const valid = validationMessage === "";
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 px-4">
@@ -702,7 +762,7 @@ function SlotModal({
 
             {!valid && (
               <p className="text-xs font-medium text-red-500">
-                End time must be after start time
+                {validationMessage}
               </p>
             )}
           </label>

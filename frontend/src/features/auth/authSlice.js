@@ -18,9 +18,9 @@ const VALID_ACCOUNT_TYPES = ["patient", "doctor", "admin"];
 // HELPERS
 // ==============================
 const getRoleHome = (role) => {
-  if (role === "admin") return ROUTES.ADMIN_PROFILE;
-  if (role === "doctor") return ROUTES.DOCTOR_SETTINGS;
-  return ROUTES.USER_SETTINGS;
+  if (role === "admin") return "/admin/profile";
+  if (role === "doctor") return "/doctor/settings";
+  return "/";
 };
 
 const getEmptyAuthState = () => ({

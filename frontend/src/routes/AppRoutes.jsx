@@ -24,6 +24,8 @@ import AdminDoctorDetailsPage from "../pages/admin/AdminDoctorDetailsPage";
 import AdminAddDoctorPage from "../pages/admin/AdminAddDoctorPage";
 import AdminEditDoctorFeePage from "../pages/admin/AdminEditDoctorFeePage";
 import DoctorSlotManagementPage from "../pages/doctor/DoctorSlotManagementPage";
+import FindDoctorsPage from "../pages/patient/FindDoctorsPage";
+import DoctorDetailsPage from "../pages/patient/DoctorDetailsPage";
 function AppRoutes() {
   return (
     <Routes>
@@ -31,9 +33,7 @@ function AppRoutes() {
       <Route
         path={ROUTES.HOME}
         element={
-          <PublicRoute>
             <HomePage />
-          </PublicRoute>
         }
       />
 
@@ -183,6 +183,25 @@ function AppRoutes() {
     </ProtectedRoute>
   }
 />
+
+<Route
+  path={ROUTES.FIND_DOCTORS}
+  element={
+    <ProtectedRoute allowedRoles={["patient"]}>
+      <FindDoctorsPage />
+    </ProtectedRoute>
+  }
+/>
+
+<Route
+  path={ROUTES.DOCTOR_DETAILS}
+  element={
+    <ProtectedRoute allowedRoles={["patient"]}>
+      <DoctorDetailsPage />
+    </ProtectedRoute>
+  }
+/>
+
       {/* Fallback */}
       <Route path="*" element={<Navigate to={ROUTES.HOME} replace />} />
     </Routes>

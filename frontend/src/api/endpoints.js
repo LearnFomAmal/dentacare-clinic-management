@@ -79,6 +79,12 @@ DOCTOR: {
   DELETE: (slotDayId, slotId) =>
     `/doctors/slots/${slotDayId}/slots/${slotId}`,
 },
+PUBLIC: {
+  GET_ALL: "/doctors/public",
+  GET_DETAILS: (doctorId) => `/doctors/public/${doctorId}`,
+  AVAILABLE_SLOTS: (doctorId) =>
+    `/doctors/public/${doctorId}/available-slots`,
+},
 },
 
   SPECIALTY: {
