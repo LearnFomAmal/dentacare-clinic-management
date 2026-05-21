@@ -23,7 +23,7 @@ import AdminDoctorsPage from "../pages/admin/AdminDoctorsPage";
 import AdminDoctorDetailsPage from "../pages/admin/AdminDoctorDetailsPage";
 import AdminAddDoctorPage from "../pages/admin/AdminAddDoctorPage";
 import AdminEditDoctorFeePage from "../pages/admin/AdminEditDoctorFeePage";
-
+import DoctorSlotManagementPage from "../pages/doctor/DoctorSlotManagementPage";
 function AppRoutes() {
   return (
     <Routes>
@@ -175,7 +175,14 @@ function AppRoutes() {
           </ProtectedRoute>
         }
       />
-
+       <Route
+   path={ROUTES.DOCTOR_SLOTS}
+   element={
+    <ProtectedRoute allowedRoles={["doctor"]}>
+      <DoctorSlotManagementPage />
+    </ProtectedRoute>
+  }
+/>
       {/* Fallback */}
       <Route path="*" element={<Navigate to={ROUTES.HOME} replace />} />
     </Routes>

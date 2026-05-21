@@ -9,7 +9,7 @@ export const ROUTES = {
   RESET_PASSWORD: "/reset-password",
 
   DOCTOR_VERIFY: "/doctor-verification",
-
+  DOCTOR_SLOTS: "/doctor/slots",
   USER_SETTINGS: "/settings",
   DOCTOR_SETTINGS: "/doctor/settings",
 

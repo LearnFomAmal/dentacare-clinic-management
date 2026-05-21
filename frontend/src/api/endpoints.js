@@ -69,6 +69,16 @@ DOCTOR: {
   ADMIN_UNBLOCK: (id) => `/doctors/${id}/unblock`,
   ADMIN_UPDATE_CONSULTATION_FEE: (id) =>
     `/doctors/${id}/consultation-fee`,
+
+  SLOTS: {
+  GET_ALL: "/doctors/slots",
+  ADD: "/doctors/slots",
+  APPLY_RECURRING: "/doctors/slots/recurring",
+  UPDATE: (slotDayId, slotId) =>
+    `/doctors/slots/${slotDayId}/slots/${slotId}`,
+  DELETE: (slotDayId, slotId) =>
+    `/doctors/slots/${slotDayId}/slots/${slotId}`,
+},
 },
 
   SPECIALTY: {
