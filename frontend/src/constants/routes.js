@@ -10,9 +10,11 @@ export const ROUTES = {
 
   DOCTOR_VERIFY: "/doctor-verification",
   DOCTOR_SLOTS: "/doctor/slots",
+  FIND_DOCTORS: "/doctors",
+  DOCTOR_DETAILS: "/doctors/:doctorId",
   USER_SETTINGS: "/settings",
   DOCTOR_SETTINGS: "/doctor/settings",
-
+  BOOK_APPOINTMENT: "/book-appointment/:doctorId",
   ADMIN_PROFILE: "/admin/profile",
   ADMIN_USERS: "/admin/users",
   ADMIN_USER_DETAILS: "/admin/users/:id",

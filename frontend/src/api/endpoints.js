@@ -79,6 +79,12 @@ DOCTOR: {
   DELETE: (slotDayId, slotId) =>
     `/doctors/slots/${slotDayId}/slots/${slotId}`,
 },
+PUBLIC: {
+  GET_ALL: "/doctors/public",
+  GET_DETAILS: (doctorId) => `/doctors/public/${doctorId}`,
+  AVAILABLE_SLOTS: (doctorId) =>
+    `/doctors/public/${doctorId}/available-slots`,
+},
 },
 
   SPECIALTY: {
@@ -88,6 +94,13 @@ DOCTOR: {
   UPDATE: (id) => `/specialties/${id}`,
   UPDATE_STATUS: (id) => `/specialties/${id}/status`,
   DELETE: (id) => `/specialties/${id}`,
+},
+
+
+REPORT: {
+  BOOKING_UPLOAD: "/reports/booking-upload",
+  DRAFTS: "/reports/drafts",
+  DELETE_DRAFT: (reportId) => `/reports/drafts/${reportId}`,
 },
 
 };

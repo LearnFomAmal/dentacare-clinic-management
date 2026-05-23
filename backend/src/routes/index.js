@@ -8,17 +8,25 @@ import doctorRoutes from "../modules/doctors/doctor.routes.js";
 import adminRoutes from "../modules/admin/admin.routes.js";
 import specialtyRoutes from "../modules/specialties/specialty.routes.js";
 import doctorSlotRoutes from "../modules/doctorSlots/doctorSlot.routes.js";
+import reportRoutes from "../modules/reports/report.routes.js";
+import publicDoctorRoutes from "../modules/publicDoctors/publicDoctor.routes.js";
+
 const router = Router();
 
 // ==========================================
 // MODULE ROUTES
+// IMPORTANT: specific doctor routes must come before "/doctors"
 // ==========================================
 router.use("/auth", authRoutes);
 router.use("/users", userRoutes);
+
+router.use("/doctors/public", publicDoctorRoutes);
 router.use("/doctors/slots", doctorSlotRoutes);
 router.use("/doctors", doctorRoutes);
+
 router.use("/admin", adminRoutes);
 router.use("/specialties", specialtyRoutes);
+router.use("/reports", reportRoutes);
 
 // ==========================================
 // HEALTH CHECK

@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import {
   BriefcaseBusiness,
-  CalendarDays,
+  
   GraduationCap,
   Phone,
   Stethoscope,
@@ -9,7 +9,7 @@ import {
   Wallet,
 } from "lucide-react";
 import ProfileImageUploader from "../../components/common/ProfileImageUploader";
-import { Link,useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import toast from "react-hot-toast";
@@ -465,35 +465,7 @@ dispatch(clearAuth("doctor"));
             title="Doctor Summary"
             description="Specialty and consultation details."
           >
-            <SettingsSection
-  title="Consultation Slots"
-  description="Manage your available consultation timings for appointment booking."
->
-  <Link
-    to={ROUTES.DOCTOR_SLOTS}
-    className="flex items-center justify-between rounded-2xl border border-[rgba(172,178,189,0.15)] bg-[#F8FAFC] p-5 transition hover:border-[#9381FF] hover:bg-[#F0F1FF] dark:border-slate-800 dark:bg-slate-950 dark:hover:border-[#B8B8FF] dark:hover:bg-slate-900"
-  >
-    <div className="flex items-center gap-4">
-      <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[#B8B8FF]/40 text-[#4C59A6] dark:bg-[#B8B8FF]/20 dark:text-[#B8B8FF]">
-        <CalendarDays size={21} />
-      </div>
 
-      <div>
-        <h3 className="font-semibold text-[#2D333B] dark:text-slate-100">
-          Manage Slots
-        </h3>
-
-        <p className="mt-1 text-sm text-[#595F69] dark:text-slate-400">
-          Add, edit, delete, and repeat consultation slots.
-        </p>
-      </div>
-    </div>
-
-    <span className="text-sm font-bold text-[#9381FF]">
-      Open
-    </span>
-  </Link>
-</SettingsSection>
             <div className="space-y-4 text-sm">
               <div className="flex justify-between border-b border-[rgba(172,178,189,0.15)] pb-3">
                 <span className="text-[#595F69]">Email</span>

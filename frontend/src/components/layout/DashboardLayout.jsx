@@ -1,5 +1,5 @@
-import { useEffect } from "react";
-import { Link, useLocation, useNavigate } from "react-router-dom";
+import { useRef, useState } from "react";
+import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
 import { LogOut, ShieldPlus } from "lucide-react";
 import toast from "react-hot-toast";
 
@@ -11,7 +11,7 @@ import {
   getAuthUser,
   saveAccountType,
 } from "../../utils/authStorage";
-import { useAppDispatch, useAppSelector } from "../../app/hooks";
+import { useAppDispatch } from "../../app/hooks";
 import { clearAuth } from "../../features/auth/authSlice";
 
 const getRoleFromPath = (pathname) => {
@@ -20,125 +20,166 @@ const getRoleFromPath = (pathname) => {
   return "patient";
 };
 
-const getRoleHome = (role) => {
-  if (role === "admin") return ROUTES.ADMIN_PROFILE;
-  if (role === "doctor") return ROUTES.DOCTOR_SETTINGS;
-  return ROUTES.USER_SETTINGS;
-};
-
 function DashboardLayout({ children, title = "Dashboard" }) {
   const navigate = useNavigate();
   const location = useLocation();
   const dispatch = useAppDispatch();
 
-  const { user: reduxUser, accountType: reduxAccountType } = useAppSelector(
-    (state) => state.auth
-  );
+  const logoutStartedRef = useRef(false);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
 
   const routeRole = getRoleFromPath(location.pathname);
+  const accountType = getAccountType() || routeRole;
 
-  useEffect(() => {
-    const activeAccountType = getAccountType();
+  if (accountType !== routeRole && !logoutStartedRef.current) {
+    saveAccountType(routeRole);
+  }
 
-    if (activeAccountType !== routeRole) {
-      saveAccountType(routeRole);
-    }
-  }, [routeRole]);
-
-  const storedUser = getAuthUser(routeRole);
-
-  const user =
-    reduxAccountType === routeRole && reduxUser
-      ? reduxUser
-      : storedUser;
+  const user = getAuthUser(routeRole);
 
   const handleLogout = async () => {
+    if (logoutStartedRef.current) return;
+
+    logoutStartedRef.current = true;
+    setIsLoggingOut(true);
+
+    const currentRole = routeRole;
+
     try {
-      // Try backend logout, but frontend logout must work even if backend fails.
-      await logoutApi(routeRole);
-    } catch {
-      // Ignore backend logout failure here.
-      // The local session should still be cleared.
-    } finally {
-      clearAuthStorage(routeRole);
-      dispatch(clearAuth(routeRole));
+      /**
+       * 1. Call backend first while cookie still exists.
+       * This lets backend clear the correct httpOnly cookie.
+       */
+      await logoutApi(currentRole);
+
+      /**
+       * 2. Clear frontend storage.
+       */
+      clearAuthStorage(currentRole);
+
+      /**
+       * 3. Clear Redux auth state.
+       * This is the important missing part.
+       */
+      dispatch(clearAuth(currentRole));
+
+      /**
+       * 4. Remove old unauthorized toasts.
+       */
+      toast.dismiss();
 
       toast.success("Logged out successfully");
+
+      /**
+       * 5. Navigate after state is cleared.
+       */
+      navigate(ROUTES.LOGIN, {
+        replace: true,
+      });
+    } catch {
+      /**
+       * Even if backend logout fails because token is already expired,
+       * frontend session must still be cleared.
+       */
+      clearAuthStorage(currentRole);
+      dispatch(clearAuth(currentRole));
+
+      toast.dismiss();
+      toast.success("Session cleared");
 
       navigate(ROUTES.LOGIN, {
         replace: true,
       });
+    } finally {
+      setIsLoggingOut(false);
     }
   };
 
+  const homeLink =
+    routeRole === "admin"
+      ? ROUTES.ADMIN_PROFILE
+      : routeRole === "doctor"
+        ? ROUTES.DOCTOR_SETTINGS
+        : ROUTES.HOME;
+
   return (
     <div className="min-h-screen bg-[#F8FAFC] dark:bg-slate-950">
-      <header className="border-b border-[rgba(172,178,189,0.2)] bg-white dark:border-slate-800 dark:bg-slate-900">
-        <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-4">
-          <Link
-            to={getRoleHome(routeRole)}
-            className="flex items-center gap-3"
-          >
-            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#4C59A6] text-white">
-              <ShieldPlus size={20} />
+      <header className="sticky top-0 z-50 border-b border-[#F1F2F8] bg-white/95 backdrop-blur-md dark:border-slate-800 dark:bg-slate-900/95">
+        <div className="mx-auto flex h-[78px] max-w-[1120px] items-center justify-between px-6">
+          <Link to={homeLink} className="flex items-center gap-3">
+            <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[#9381FF] text-white shadow-[0_10px_24px_rgba(147,129,255,0.28)]">
+              <ShieldPlus size={22} />
             </div>
 
             <div>
-              <h2 className="font-manrope text-lg font-extrabold text-[#4C59A6] dark:text-[#B8B8FF]">
+              <h2 className="text-[24px] font-extrabold leading-6 tracking-[-0.7px] text-[#111827] dark:text-white">
                 DentaCare
               </h2>
 
-              <p className="text-[10px] uppercase tracking-[1px] text-slate-500 dark:text-slate-400">
+              <p className="mt-1 text-[11px] font-bold uppercase tracking-[1px] text-[#6B7280] dark:text-slate-400">
                 {routeRole}
               </p>
             </div>
           </Link>
 
+          {routeRole === "patient" && (
+            <nav className="hidden items-center gap-10 md:flex">
+              <PatientNavLink to={ROUTES.HOME}>Home</PatientNavLink>
+              <PatientNavLink to={ROUTES.USER_SETTINGS}>
+                Dashboard
+              </PatientNavLink>
+              <PatientNavLink to={ROUTES.FIND_DOCTORS}>
+                Find Doctors
+              </PatientNavLink>
+            </nav>
+          )}
+
           {routeRole === "admin" && (
-            <nav className="hidden items-center gap-2 md:flex">
-              <Link
-                to={ROUTES.ADMIN_PROFILE}
-                className="rounded-2xl px-4 py-2 text-sm font-semibold text-[#595F69] transition hover:bg-[#F8FAFC] hover:text-[#4C59A6] dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-[#B8B8FF]"
-              >
+            <nav className="hidden items-center gap-7 md:flex">
+              <AdminDoctorNavLink to={ROUTES.ADMIN_PROFILE}>
                 Profile
-              </Link>
-
-              <Link
-                to={ROUTES.ADMIN_USERS}
-                className="rounded-2xl px-4 py-2 text-sm font-semibold text-[#595F69] transition hover:bg-[#F8FAFC] hover:text-[#4C59A6] dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-[#B8B8FF]"
-              >
+              </AdminDoctorNavLink>
+              <AdminDoctorNavLink to={ROUTES.ADMIN_USERS}>
                 Patients
-              </Link>
-
-              <Link
-                to={ROUTES.ADMIN_DOCTORS}
-                className="rounded-2xl px-4 py-2 text-sm font-semibold text-[#595F69] transition hover:bg-[#F8FAFC] hover:text-[#4C59A6] dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-[#B8B8FF]"
-              >
+              </AdminDoctorNavLink>
+              <AdminDoctorNavLink to={ROUTES.ADMIN_DOCTORS}>
                 Doctors
-              </Link>
+              </AdminDoctorNavLink>
+            </nav>
+          )}
+
+          {routeRole === "doctor" && (
+            <nav className="hidden items-center gap-7 md:flex">
+              <AdminDoctorNavLink to={ROUTES.DOCTOR_SETTINGS}>
+                Settings
+              </AdminDoctorNavLink>
+              <AdminDoctorNavLink to={ROUTES.DOCTOR_SLOTS}>
+                Slots
+              </AdminDoctorNavLink>
             </nav>
           )}
 
           <button
             type="button"
             onClick={handleLogout}
-            className="flex items-center gap-2 rounded-2xl border border-[rgba(172,178,189,0.2)] bg-white px-4 py-2 text-sm font-semibold text-[#595F69] transition hover:border-[#4C59A6] hover:text-[#4C59A6] dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:border-[#B8B8FF] dark:hover:text-[#B8B8FF]"
+            disabled={isLoggingOut}
+            className="inline-flex h-11 items-center gap-2 rounded-xl border border-[#E5E7EB] bg-white px-5 text-sm font-bold text-[#6B7280] transition hover:border-[#9381FF] hover:text-[#9381FF] disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300"
           >
-            <LogOut size={17} />
-            Logout
+            <LogOut size={16} />
+            {isLoggingOut ? "Logging out..." : "Logout"}
           </button>
         </div>
       </header>
 
-      <main className="mx-auto max-w-[1180px] px-6 py-8">
+      <main className="mx-auto max-w-[1120px] px-6 py-10">
         <div className="mb-8">
-          <h1 className="font-manrope text-3xl font-extrabold text-[#2D333B] dark:text-slate-100">
+          <h1 className="text-4xl font-extrabold tracking-[-1px] text-[#111827] dark:text-slate-100">
             {title}
           </h1>
 
-          <p className="mt-1 text-sm text-[#595F69] dark:text-slate-400">
+          <p className="mt-2 text-base text-[#6B7280] dark:text-slate-400">
             Welcome,{" "}
-            <span className="font-semibold text-[#4C59A6] dark:text-[#B8B8FF]">
+            <span className="font-bold text-[#4C59A6] dark:text-[#B8B8FF]">
               {user?.username ||
                 [user?.firstName, user?.lastName].filter(Boolean).join(" ") ||
                 user?.email ||
@@ -150,6 +191,40 @@ function DashboardLayout({ children, title = "Dashboard" }) {
         {children}
       </main>
     </div>
+  );
+}
+
+function PatientNavLink({ to, children }) {
+  return (
+    <NavLink
+      to={to}
+      className={({ isActive }) =>
+        `text-[16px] font-bold transition ${
+          isActive
+            ? "text-[#9381FF]"
+            : "text-[#2D333B] hover:text-[#9381FF] dark:text-slate-300 dark:hover:text-[#B8B8FF]"
+        }`
+      }
+    >
+      {children}
+    </NavLink>
+  );
+}
+
+function AdminDoctorNavLink({ to, children }) {
+  return (
+    <NavLink
+      to={to}
+      className={({ isActive }) =>
+        `text-sm font-bold transition ${
+          isActive
+            ? "text-[#9381FF]"
+            : "text-[#595F69] hover:text-[#9381FF] dark:text-slate-300 dark:hover:text-[#B8B8FF]"
+        }`
+      }
+    >
+      {children}
+    </NavLink>
   );
 }
 
