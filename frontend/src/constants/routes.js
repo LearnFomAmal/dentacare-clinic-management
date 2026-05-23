@@ -15,6 +15,7 @@ export const ROUTES = {
   USER_SETTINGS: "/settings",
   DOCTOR_SETTINGS: "/doctor/settings",
   BOOK_APPOINTMENT: "/book-appointment/:doctorId",
+  PAYMENT: "/payment/:appointmentId",
   ADMIN_PROFILE: "/admin/profile",
   ADMIN_USERS: "/admin/users",
   ADMIN_USER_DETAILS: "/admin/users/:id",

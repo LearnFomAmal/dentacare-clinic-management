@@ -4,6 +4,7 @@ import authReducer from "../features/auth/authSlice";
 import doctorSlotReducer from "../features/doctor/doctorSlotSlice";
 import publicDoctorReducer from "../features/doctor/publicDoctorSlice";
 import reportReducer from "../features/reports/reportSlice";
+import appointmentReducer from "../features/appointment/appointmentSlice";
 
 export const store = configureStore({
   reducer: {
@@ -11,5 +12,6 @@ export const store = configureStore({
     doctorSlots: doctorSlotReducer,
     publicDoctors: publicDoctorReducer,
     reports: reportReducer,
+    appointments: appointmentReducer,
   },
 });

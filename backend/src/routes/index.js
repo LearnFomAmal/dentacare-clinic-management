@@ -10,7 +10,7 @@ import specialtyRoutes from "../modules/specialties/specialty.routes.js";
 import doctorSlotRoutes from "../modules/doctorSlots/doctorSlot.routes.js";
 import reportRoutes from "../modules/reports/report.routes.js";
 import publicDoctorRoutes from "../modules/publicDoctors/publicDoctor.routes.js";
-
+import appointmentRoutes from "../modules/appointments/appointment.routes.js";
 const router = Router();
 
 // ==========================================
@@ -27,7 +27,7 @@ router.use("/doctors", doctorRoutes);
 router.use("/admin", adminRoutes);
 router.use("/specialties", specialtyRoutes);
 router.use("/reports", reportRoutes);
-
+router.use("/appointments", appointmentRoutes);
 // ==========================================
 // HEALTH CHECK
 // ==========================================

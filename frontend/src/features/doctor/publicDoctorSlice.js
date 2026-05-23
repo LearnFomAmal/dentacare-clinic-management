@@ -7,16 +7,13 @@ import {
   getPublicSpecialtiesApi,
 } from "./publicDoctorService";
 
-const getTodayDateString = () => {
-  return new Date().toISOString().split("T")[0];
-};
+import {
+  getLocalDateString,
+  isDateBeforeToday,
+} from "../../utils/dateUtils";
 
 const getErrorMessage = (error, fallback) => {
-  return (
-    error?.response?.data?.message ||
-    error?.message ||
-    fallback
-  );
+  return error?.response?.data?.message || error?.message || fallback;
 };
 
 export const fetchPublicSpecialties = createAsyncThunk(
@@ -24,7 +21,6 @@ export const fetchPublicSpecialties = createAsyncThunk(
   async (_, { rejectWithValue }) => {
     try {
       const response = await getPublicSpecialtiesApi();
-
       return response.data || [];
     } catch (error) {
       return rejectWithValue(
@@ -63,7 +59,6 @@ export const fetchPublicDoctorDetails = createAsyncThunk(
   async (doctorId, { rejectWithValue }) => {
     try {
       const response = await getPublicDoctorDetailsApi(doctorId);
-
       return response.data;
     } catch (error) {
       return rejectWithValue(
@@ -82,7 +77,22 @@ export const fetchDoctorAvailableSlots = createAsyncThunk(
         date,
       });
 
-      return response.data;
+      const data = response.data || {};
+
+      const slotDayId =
+        data.slotDayId ||
+        data._id ||
+        data.slotDay?._id ||
+        "";
+
+      return {
+        ...data,
+        slotDayId,
+        slots: (data.slots || []).map((slot) => ({
+          ...slot,
+          slotDayId,
+        })),
+      };
     } catch (error) {
       return rejectWithValue(
         getErrorMessage(error, "Failed to fetch available slots")
@@ -100,7 +110,7 @@ const publicDoctorSlice = createSlice({
     selectedDoctor: null,
     availableSlotData: null,
 
-    selectedDate: getTodayDateString(),
+    selectedDate: getLocalDateString(),
     selectedSlotsByDoctor: {},
 
     filters: {
@@ -150,7 +160,17 @@ const publicDoctorSlice = createSlice({
     },
 
     setSelectedDate: (state, action) => {
-      state.selectedDate = action.payload;
+      const nextDate = action.payload;
+
+      state.selectedDate = isDateBeforeToday(nextDate)
+        ? getLocalDateString()
+        : nextDate;
+
+      state.selectedSlotsByDoctor = {};
+    },
+
+    resetSelectedDateToToday: (state) => {
+      state.selectedDate = getLocalDateString();
       state.selectedSlotsByDoctor = {};
     },
 
@@ -194,8 +214,7 @@ const publicDoctorSlice = createSlice({
       .addCase(fetchPublicDoctors.fulfilled, (state, action) => {
         state.isLoadingDoctors = false;
         state.doctors = action.payload?.doctors || [];
-        state.pagination =
-          action.payload?.pagination || state.pagination;
+        state.pagination = action.payload?.pagination || state.pagination;
       })
 
       .addCase(fetchPublicDoctors.rejected, (state, action) => {
@@ -242,6 +261,7 @@ export const {
   resetDoctorFilters,
   setDoctorPage,
   setSelectedDate,
+  resetSelectedDateToToday,
   setSelectedDoctorSlot,
   clearSelectedDoctorSlot,
   clearPublicDoctorError,

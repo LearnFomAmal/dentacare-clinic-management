@@ -10,7 +10,7 @@ import {
   Trash2,
   Upload,
 } from "lucide-react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import toast from "react-hot-toast";
 
 import PatientLayout from "../../components/patient/PatientLayout";
@@ -18,15 +18,21 @@ import Button from "../../components/ui/Button";
 import { ROUTES } from "../../constants/routes";
 import { useAppDispatch, useAppSelector } from "../../app/hooks";
 
-import {
-  fetchPublicDoctorDetails,
-} from "../../features/doctor/publicDoctorSlice";
+import { getBookingDraft } from "../../utils/bookingDraftStorage";
+import { formatDateLong } from "../../utils/dateUtils";
+
+import { fetchPublicDoctorDetails } from "../../features/doctor/publicDoctorSlice";
 
 import {
   deleteDraftReport,
   fetchDraftReports,
   uploadBookingReport,
 } from "../../features/reports/reportSlice";
+
+import {
+  clearAppointmentError,
+  initiateAppointment,
+} from "../../features/appointment/appointmentSlice";
 
 const formatTime = (time) => {
   if (!time) return "";
@@ -41,21 +47,9 @@ const formatTime = (time) => {
   )} ${period}`;
 };
 
-const formatDate = (dateString) => {
-  if (!dateString) return "Not selected";
-
-  const date = new Date(`${dateString}T00:00:00`);
-
-  return date.toLocaleDateString("en-IN", {
-    day: "2-digit",
-    month: "long",
-    year: "numeric",
-    weekday: "long",
-  });
-};
-
 function BookAppointmentPage() {
   const { doctorId } = useParams();
+  const navigate = useNavigate();
   const dispatch = useAppDispatch();
 
   const {
@@ -70,10 +64,34 @@ function BookAppointmentPage() {
     isUploading,
     isLoading,
     isDeleting,
-    error,
+    error: reportError,
   } = useAppSelector((state) => state.reports);
 
-  const selectedSlot = selectedSlotsByDoctor[doctorId];
+  const {
+    isInitiating,
+    error: appointmentError,
+  } = useAppSelector((state) => state.appointments);
+
+  const bookingDraft = useMemo(() => {
+    return getBookingDraft(doctorId);
+  }, [doctorId]);
+
+  const selectedSlot =
+    selectedSlotsByDoctor[doctorId] ||
+    bookingDraft?.selectedSlot ||
+    null;
+
+  const finalSelectedDate =
+    bookingDraft?.selectedDate ||
+    selectedDate ||
+    "";
+
+  const slotDayId =
+  bookingDraft?.slotDayId ||
+  selectedSlot?.slotDayId ||
+  availableSlotData?.slotDayId ||
+  availableSlotData?._id ||
+  "";
 
   const [bookingReason, setBookingReason] = useState("");
 
@@ -97,10 +115,17 @@ function BookAppointmentPage() {
   }, [dispatch]);
 
   useEffect(() => {
-    if (error) {
-      toast.error(error);
+    if (reportError) {
+      toast.error(reportError);
     }
-  }, [error]);
+  }, [reportError]);
+
+  useEffect(() => {
+    if (!appointmentError) return;
+
+    toast.error(appointmentError);
+    dispatch(clearAppointmentError());
+  }, [appointmentError, dispatch]);
 
   useEffect(() => {
     return () => {
@@ -111,7 +136,6 @@ function BookAppointmentPage() {
   }, [localPreviewUrl]);
 
   const doctor = selectedDoctor;
-
   const consultationFee = doctor?.professionalInfo?.consultationFee || 0;
 
   const selectedReportIds = useMemo(() => {
@@ -207,7 +231,7 @@ function BookAppointmentPage() {
     }
   };
 
-  const handleContinueToPayment = () => {
+  const handleContinueToPayment = async () => {
     if (!doctor) {
       toast.error("Doctor details not found");
       return;
@@ -218,36 +242,44 @@ function BookAppointmentPage() {
       return;
     }
 
+    if (!slotDayId) {
+      toast.error("Slot day information missing. Please go back and select slot again.");
+      return;
+    }
+
+    if (!finalSelectedDate) {
+      toast.error("Appointment date is missing");
+      return;
+    }
+
     if (!bookingReason.trim()) {
       toast.error("Please enter reason for appointment");
       return;
     }
 
-    const bookingPayloadPreview = {
-      doctorId,
-      slotId: selectedSlot._id,
-      appointmentDate: selectedDate,
-      startTime: selectedSlot.startTime,
-      endTime: selectedSlot.endTime,
-      reason: bookingReason.trim(),
-      reportIds: selectedReportIds,
-      pricing: {
-        consultationFee,
-        totalDiscount: 0,
-        finalAmount: consultationFee,
-      },
-    };
+    try {
+      const result = await dispatch(
+        initiateAppointment({
+          doctorId,
+          slotDayId,
+          slotId: selectedSlot._id,
+          appointmentDate: finalSelectedDate,
+          reason: bookingReason.trim(),
+          reportIds: selectedReportIds,
+        })
+      ).unwrap();
 
-    console.log("Day 4 booking initiate payload:", bookingPayloadPreview);
+      toast.success(result.message || "Appointment initiated successfully");
 
-    toast.success(
-      "Booking details ready. Payment/initiate API will be connected in Day 4."
-    );
+      navigate(`/payment/${result.appointment._id}`);
+    } catch (err) {
+      toast.error(err || "Failed to initiate appointment");
+    }
   };
 
   return (
     <PatientLayout>
-      <main className="mx-auto max-w-[960px] px-6 py-10">
+      <main className="mx-auto max-w-[1040px] px-6 py-10">
         <Link
           to={`/doctors/${doctorId}`}
           className="inline-flex items-center gap-2 text-sm font-extrabold text-[#9381FF]"
@@ -265,7 +297,7 @@ function BookAppointmentPage() {
             Confirm Your Consultation
           </h1>
 
-          <p className="mt-3 max-w-[680px] text-base leading-7 text-[#6B7280]">
+          <p className="mt-3 max-w-[720px] text-base leading-7 text-[#6B7280]">
             Review doctor details, confirm the selected slot, add reason for
             booking, and upload previous medical reports if available.
           </p>
@@ -276,7 +308,7 @@ function BookAppointmentPage() {
             Loading booking details...
           </div>
         ) : (
-          <div className="mt-8 grid gap-6 lg:grid-cols-[1fr_340px]">
+          <div className="mt-8 grid gap-6 lg:grid-cols-[1fr_360px]">
             <section className="space-y-6">
               <DoctorSummaryCard doctor={doctor} />
 
@@ -309,7 +341,7 @@ function BookAppointmentPage() {
               <div className="mt-5 space-y-4">
                 <SummaryRow
                   label="Date"
-                  value={formatDate(selectedDate)}
+                  value={formatDateLong(finalSelectedDate)}
                 />
 
                 <SummaryRow
@@ -335,10 +367,7 @@ function BookAppointmentPage() {
                     strong
                   />
 
-                  <SummaryRow
-                    label="Discount"
-                    value="₹0"
-                  />
+                  <SummaryRow label="Discount" value="₹0" />
 
                   <SummaryRow
                     label="Payable Amount"
@@ -350,6 +379,8 @@ function BookAppointmentPage() {
 
               <Button
                 type="button"
+                loading={isInitiating}
+                disabled={isInitiating}
                 onClick={handleContinueToPayment}
                 className="mt-6"
               >
@@ -357,8 +388,8 @@ function BookAppointmentPage() {
               </Button>
 
               <p className="mt-3 text-xs leading-5 text-[#9CA3AF]">
-                Payment and appointment creation will be connected in the next
-                backend task.
+                Your appointment will be created as pending payment. Payment
+                confirmation will be connected in the next task.
               </p>
             </aside>
           </div>
@@ -590,7 +621,7 @@ function UploadedReportsCard({
           </h2>
 
           <p className="text-sm text-[#6B7280]">
-            These reports will be attached to your appointment in Day 4.
+            These reports will be attached to your appointment.
           </p>
         </div>
       </div>
@@ -620,7 +651,7 @@ function UploadedReportsCard({
                 </p>
 
                 <a
-                  href={report.file?.url}
+                  href={report.file?.url || report.fileUrl}
                   target="_blank"
                   rel="noreferrer"
                   className="mt-2 inline-block text-xs font-bold text-[#9381FF]"

@@ -103,5 +103,10 @@ REPORT: {
   DELETE_DRAFT: (reportId) => `/reports/drafts/${reportId}`,
 },
 
+APPOINTMENT: {
+  INITIATE: "/appointments/initiate",
+  DETAILS: (appointmentId) => `/appointments/${appointmentId}`,
+},
+
 };
 

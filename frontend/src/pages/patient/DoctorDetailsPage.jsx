@@ -1,9 +1,7 @@
 import { useEffect, useMemo } from "react";
-
 import {
   ArrowLeft,
   BriefcaseBusiness,
-  CalendarDays,
   IndianRupee,
   Phone,
   Star,
@@ -20,41 +18,19 @@ import {
   clearPublicDoctorError,
   fetchDoctorAvailableSlots,
   fetchPublicDoctorDetails,
+  resetSelectedDateToToday,
   setSelectedDate,
   setSelectedDoctorSlot,
 } from "../../features/doctor/publicDoctorSlice";
 
-const getTodayDateString = () => {
-  return new Date().toISOString().split("T")[0];
-};
+import { setBookingDraft } from "../../features/appointment/appointmentSlice";
+import { saveBookingDraft } from "../../utils/bookingDraftStorage";
 
-const addDays = (dateString, days) => {
-  const date = new Date(`${dateString}T00:00:00`);
-  date.setDate(date.getDate() + days);
-  return date.toISOString().split("T")[0];
-};
-
-const getNextSevenDays = () => {
-  const today = getTodayDateString();
-
-  return Array.from({ length: 7 }, (_, index) => {
-    const date = addDays(today, index);
-    const dateObject = new Date(`${date}T00:00:00`);
-
-    return {
-      date,
-      label: index === 0 ? "Today" : dateObject.toLocaleDateString("en-US", {
-        weekday: "short",
-      }),
-      day: dateObject.toLocaleDateString("en-US", {
-        day: "2-digit",
-      }),
-      month: dateObject.toLocaleDateString("en-US", {
-        month: "short",
-      }),
-    };
-  });
-};
+import {
+  getLocalDateString,
+  getNextSevenLocalDays,
+  isDateBeforeToday,
+} from "../../utils/dateUtils";
 
 const formatTime = (time) => {
   if (!time) return "";
@@ -91,7 +67,11 @@ function DoctorDetailsPage() {
 
   const selectedSlot = selectedSlotsByDoctor[doctorId];
 
-  const days = useMemo(() => getNextSevenDays(), []);
+  const days = useMemo(() => getNextSevenLocalDays(), []);
+
+  const safeSelectedDate = isDateBeforeToday(selectedDate)
+    ? getLocalDateString()
+    : selectedDate;
 
   const sortedSlots = useMemo(() => {
     const slots = availableSlotData?.slots || [];
@@ -100,6 +80,12 @@ function DoctorDetailsPage() {
       (a, b) => timeToMinutes(a.startTime) - timeToMinutes(b.startTime)
     );
   }, [availableSlotData]);
+
+  useEffect(() => {
+    if (isDateBeforeToday(selectedDate)) {
+      dispatch(resetSelectedDateToToday());
+    }
+  }, [dispatch, selectedDate]);
 
   useEffect(() => {
     if (doctorId) {
@@ -112,20 +98,25 @@ function DoctorDetailsPage() {
       dispatch(
         fetchDoctorAvailableSlots({
           doctorId,
-          date: selectedDate || getTodayDateString(),
+          date: safeSelectedDate,
         })
       );
     }
-  }, [dispatch, doctorId, selectedDate]);
+  }, [dispatch, doctorId, safeSelectedDate]);
 
- useEffect(() => {
-  if (!error) return;
+  useEffect(() => {
+    if (!error) return;
 
-  toast.error(error);
-  dispatch(clearPublicDoctorError());
-}, [error, dispatch]);
+    toast.error(error);
+    dispatch(clearPublicDoctorError());
+  }, [error, dispatch]);
 
   const handleDateSelect = (date) => {
+    if (isDateBeforeToday(date)) {
+      toast.error("You cannot select a past date");
+      return;
+    }
+
     dispatch(setSelectedDate(date));
   };
 
@@ -143,6 +134,28 @@ function DoctorDetailsPage() {
     toast.error("Please select a slot first");
     return;
   }
+
+  const slotDayId =
+    selectedSlot?.slotDayId ||
+    availableSlotData?.slotDayId ||
+    availableSlotData?._id;
+
+  if (!slotDayId) {
+    toast.error("Slot day information missing. Please reselect slot.");
+    return;
+  }
+
+  const bookingDraft = {
+    doctorId,
+    selectedDate,
+    slotDayId,
+    selectedSlot: {
+      ...selectedSlot,
+      slotDayId,
+    },
+  };
+
+  saveBookingDraft(bookingDraft);
 
   navigate(`/book-appointment/${doctorId}`);
 };
@@ -172,15 +185,15 @@ function DoctorDetailsPage() {
               </h2>
 
               <p className="mt-2 text-sm text-[#6B7280]">
-                Choose a date first, then select a consultation time.
+                Choose a valid date, then select a consultation time.
               </p>
 
-              <div className="mt-5 flex gap-4 overflow-x-auto pb-3">
+              <div className="mt-5 flex gap-4 overflow-x-auto pb-4">
                 {days.map((item) => (
                   <DateCard
                     key={item.date}
                     item={item}
-                    active={selectedDate === item.date}
+                    active={safeSelectedDate === item.date}
                     onClick={() => handleDateSelect(item.date)}
                   />
                 ))}
@@ -211,8 +224,7 @@ function DoctorDetailsPage() {
                               : "border-[#E5E7EB] bg-white text-[#374151] hover:border-[#9381FF] hover:bg-[#F0F1FF] hover:text-[#9381FF]"
                           }`}
                         >
-                          {formatTime(slot.startTime)} –{" "}
-                          {formatTime(slot.endTime)}
+                          {formatTime(slot.startTime)} – {formatTime(slot.endTime)}
                         </button>
                       );
                     })}
@@ -294,7 +306,7 @@ function DoctorProfileCard({ doctor }) {
 
               <ProfilePill
                 icon={Phone}
-                text={`No:${doctor.professionalInfo?.contactNumber || "Not available"}`}
+                text={`No: ${doctor.professionalInfo?.contactNumber || "Not available"}`}
               />
 
               <ProfilePill
@@ -345,7 +357,11 @@ function DateCard({ item, active, onClick }) {
         {item.label}
       </p>
 
-      {item.label !== "Today" && (
+      {item.label === "Today" || item.label === "Tomorrow" ? (
+        <p className="mt-3 text-sm font-bold opacity-90">
+          {item.day} {item.month}
+        </p>
+      ) : (
         <>
           <p className="mt-2 text-4xl font-extrabold leading-none">
             {item.day}
@@ -359,12 +375,6 @@ function DateCard({ item, active, onClick }) {
             {item.month}
           </p>
         </>
-      )}
-
-      {item.label === "Today" && (
-        <p className="mt-3 text-sm font-bold text-white/90">
-          Available today
-        </p>
       )}
     </button>
   );

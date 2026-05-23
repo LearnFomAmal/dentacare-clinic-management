@@ -61,6 +61,18 @@ const DEFAULT_SLOTS = [
   },
 ];
 
+// ==============================
+// DATE HELPERS
+// ==============================
+const getTodayDateString = () => {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Kolkata",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date());
+};
+
 const getDateObject = (dateString) => {
   return new Date(`${dateString}T00:00:00.000Z`);
 };
@@ -72,6 +84,17 @@ const getDayOfWeek = (dateString) => {
   });
 };
 
+const validateNotPastDate = (date) => {
+  const today = getTodayDateString();
+
+  if (date < today) {
+    throw new AppError("Cannot fetch slots for a past date", 400);
+  }
+};
+
+// ==============================
+// SLOT DAY HELPERS
+// ==============================
 const buildDefaultSlotDayPayload = (doctorId, date) => {
   const dayOfWeek = getDayOfWeek(date);
   const isHoliday = dayOfWeek === "Sunday";
@@ -112,14 +135,13 @@ const getBookableSlots = (slotDay) => {
     return [];
   }
 
+  const slotDayId = slotDay._id.toString();
+
   return slotDay.slots
-    .filter(
-      (slot) =>
-        !slot.isDeleted &&
-        slot.status === "available"
-    )
+    .filter((slot) => !slot.isDeleted && slot.status === "available")
     .map((slot) => ({
-      _id: slot._id,
+      _id: slot._id.toString(),
+      slotDayId,
       startTime: slot.startTime,
       endTime: slot.endTime,
       type: slot.type,
@@ -151,20 +173,16 @@ const formatDoctor = (doctor, availableSlotsToday = []) => {
     professionalInfo: {
       experience: doctor.professionalInfo?.experience ?? 0,
       education: doctor.professionalInfo?.education || "",
-      consultationFee:
-        doctor.professionalInfo?.consultationFee ?? 0,
-      contactNumber:
-        doctor.professionalInfo?.contactNumber || "",
-      profileImage:
-        doctor.professionalInfo?.profileImage || "",
+      consultationFee: doctor.professionalInfo?.consultationFee ?? 0,
+      contactNumber: doctor.professionalInfo?.contactNumber || "",
+      profileImage: doctor.professionalInfo?.profileImage || "",
     },
 
     stats: {
       averageRating: doctor.stats?.averageRating ?? 0,
       totalReviews: doctor.stats?.totalReviews ?? 0,
       totalPatients: doctor.stats?.totalPatients ?? 0,
-      totalAppointments:
-        doctor.stats?.totalAppointments ?? 0,
+      totalAppointments: doctor.stats?.totalAppointments ?? 0,
     },
 
     availableSlotsToday,
@@ -198,6 +216,9 @@ const getSortOption = (sort) => {
   };
 };
 
+// ==============================
+// SERVICES
+// ==============================
 export const getPublicDoctorsService = async (query) => {
   const {
     search = "",
@@ -210,16 +231,12 @@ export const getPublicDoctorsService = async (query) => {
 
   const activeSpecialties = await findActiveSpecialties();
 
-  const activeSpecialtyIds = activeSpecialties.map(
-    (item) => item._id
-  );
+  const activeSpecialtyIds = activeSpecialties.map((item) => item._id);
 
   if (specialtyId) {
     validateObjectId(specialtyId, "specialty id");
 
-    const activeSpecialty = await findActiveSpecialtyById(
-      specialtyId
-    );
+    const activeSpecialty = await findActiveSpecialtyById(specialtyId);
 
     if (!activeSpecialty) {
       throw new AppError("Specialty not found or inactive", 404);
@@ -241,21 +258,11 @@ export const getPublicDoctorsService = async (query) => {
     const regex = new RegExp(search.trim(), "i");
 
     filter.$or = [
-      {
-        firstName: regex,
-      },
-      {
-        lastName: regex,
-      },
-      {
-        email: regex,
-      },
-      {
-        "specialization.name": regex,
-      },
-      {
-        "specialization.displayName": regex,
-      },
+      { firstName: regex },
+      { lastName: regex },
+      { email: regex },
+      { "specialization.name": regex },
+      { "specialization.displayName": regex },
     ];
   }
 
@@ -277,11 +284,12 @@ export const getPublicDoctorsService = async (query) => {
     }),
   ]);
 
-  const today = new Date().toISOString().split("T")[0];
+  const today = getTodayDateString();
 
   const doctorsWithSlots = await Promise.all(
     doctors.map(async (doctor) => {
       const slotDay = await ensureSlotDay(doctor._id, today);
+
       const availableSlotsToday = getBookableSlots(slotDay).slice(0, 4);
 
       return formatDoctor(doctor, availableSlotsToday);
@@ -310,14 +318,9 @@ export const getPublicDoctorDetailsService = async (doctorId) => {
 
   const activeSpecialties = await findActiveSpecialties();
 
-  const activeSpecialtyIds = activeSpecialties.map(
-    (item) => item._id
-  );
+  const activeSpecialtyIds = activeSpecialties.map((item) => item._id);
 
-  const doctor = await findPublicDoctorById(
-    doctorId,
-    activeSpecialtyIds
-  );
+  const doctor = await findPublicDoctorById(doctorId, activeSpecialtyIds);
 
   if (!doctor) {
     throw new AppError("Doctor not found", 404);
@@ -332,22 +335,16 @@ export const getPublicDoctorAvailableSlotsService = async (
 ) => {
   validateObjectId(doctorId, "doctor id");
 
-  const date =
-    query.date ||
-    new Date().toISOString().split("T")[0];
+  const date = query.date || getTodayDateString();
 
   validateDateString(date);
+  validateNotPastDate(date);
 
   const activeSpecialties = await findActiveSpecialties();
 
-  const activeSpecialtyIds = activeSpecialties.map(
-    (item) => item._id
-  );
+  const activeSpecialtyIds = activeSpecialties.map((item) => item._id);
 
-  const doctor = await findPublicDoctorById(
-    doctorId,
-    activeSpecialtyIds
-  );
+  const doctor = await findPublicDoctorById(doctorId, activeSpecialtyIds);
 
   if (!doctor) {
     throw new AppError("Doctor not found", 404);
@@ -355,8 +352,12 @@ export const getPublicDoctorAvailableSlotsService = async (
 
   const slotDay = await ensureSlotDay(doctorId, date);
 
+  const slotDayId = slotDay._id.toString();
+
   return {
     doctorId,
+    slotDayId,
+    _id: slotDayId,
     date,
     dayOfWeek: slotDay.dayOfWeek,
     isHoliday: slotDay.isHoliday,

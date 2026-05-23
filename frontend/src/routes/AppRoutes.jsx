@@ -27,6 +27,7 @@ import DoctorSlotManagementPage from "../pages/doctor/DoctorSlotManagementPage";
 import BookAppointmentPage from "../pages/patient/BookAppointmentPage";
 import FindDoctorsPage from "../pages/patient/FindDoctorsPage";
 import DoctorDetailsPage from "../pages/patient/DoctorDetailsPage";
+import PaymentPage from "../pages/patient/PaymentPage";
 function AppRoutes() {
   return (
     <Routes>
@@ -202,14 +203,23 @@ function AppRoutes() {
     </ProtectedRoute>
   }
 />
-<Route
+  <Route
   path={ROUTES.BOOK_APPOINTMENT}
   element={
     <ProtectedRoute allowedRoles={["patient"]}>
       <BookAppointmentPage />
     </ProtectedRoute>
   }
-/>
+  />
+
+  <Route
+   path={ROUTES.PAYMENT}
+  element={
+     <ProtectedRoute allowedRoles={["patient"]}>
+      <PaymentPage />
+    </ProtectedRoute>
+  }
+ />
       {/* Fallback */}
       <Route path="*" element={<Navigate to={ROUTES.HOME} replace />} />
     </Routes>
