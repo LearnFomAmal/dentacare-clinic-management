@@ -19,6 +19,7 @@ import {
   Stethoscope,
   UsersRound,
   Gift,
+  WalletCards,
 } from "lucide-react";
 import toast from "react-hot-toast";
 
@@ -133,6 +134,11 @@ const getRoleLinks = (role) => {
     icon: CalendarCheck,
   },
   {
+    label: "Wallet",
+    to: ROUTES.WALLET,
+    icon: WalletCards,
+  },
+  {
     label: "Referrals",
     to: ROUTES.REFERRALS,
     icon: Gift,
@@ -158,6 +164,10 @@ const patientTopLinks = [
   {
     label: "Find Doctors",
     to: ROUTES.FIND_DOCTORS,
+  },
+  {
+    label: "Wallet",
+    to: ROUTES.WALLET,
   },
   {
     label: "Referrals",

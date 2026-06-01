@@ -10,13 +10,17 @@ import {
   saveAppointment,
   saveSlotDay,
   createCouponUsage,
- findCouponForPayment,
-countCompletedCouponUsageByUser,
-incrementCouponUsedCountSafely,
-findReferralForPayment,
-findActiveReferralConfigForPayment,
-markReferralDiscountUsedForPayment,
+  findCouponForPayment,
+  countCompletedCouponUsageByUser,
+  incrementCouponUsedCountSafely,
+  findReferralForPayment,
+  findActiveReferralConfigForPayment,
+  markReferralDiscountUsedForPayment,
 } from "./payment.repository.js";
+
+import {
+  processBookingWalletDebit,
+} from "../wallets/wallet.service.js";
 
 import {
   validatePaymentFailedInput,
@@ -68,6 +72,7 @@ export const markPaymentSuccessService = async ({ patientId, body }) => {
   try {
     let finalAppointment = null;
     let finalPayment = null;
+    let finalWalletTransaction = null;
 
     await session.withTransaction(async () => {
       const duplicatePayment = await findPaymentByTransactionId({
@@ -137,7 +142,10 @@ export const markPaymentSuccessService = async ({ patientId, body }) => {
         throw new AppError("Slot reservation mismatch", 400);
       }
 
-      if (!slot.reservedBy || slot.reservedBy.toString() !== patientId.toString()) {
+      if (
+        !slot.reservedBy ||
+        slot.reservedBy.toString() !== patientId.toString()
+      ) {
         throw new AppError("Slot is reserved by another patient", 400);
       }
 
@@ -149,13 +157,31 @@ export const markPaymentSuccessService = async ({ patientId, body }) => {
 
         appointment.reservation.releasedAt = new Date();
 
-        await saveSlotDay({ slotDay, session });
-        await saveAppointment({ appointment, session });
+        await saveSlotDay({
+          slotDay,
+          session,
+        });
+
+        await saveAppointment({
+          appointment,
+          session,
+        });
 
         throw new AppError(
           "Slot reservation expired. Please book again.",
           400
         );
+      }
+
+      if (paymentMethod === "wallet") {
+        const walletResult = await processBookingWalletDebit({
+          userId: patientId,
+          appointment,
+          amount: appointment.pricing.finalAmount,
+          session,
+        });
+
+        finalWalletTransaction = walletResult?.transaction || null;
       }
 
       const payment = await createPayment({
@@ -168,106 +194,104 @@ export const markPaymentSuccessService = async ({ patientId, body }) => {
         session,
       });
 
-   if (
-  appointment.pricing?.appliedCouponId &&
-  appointment.pricing?.couponDiscount > 0
-) {
-  const coupon = await findCouponForPayment({
-    couponId: appointment.pricing.appliedCouponId,
-    session,
-  });
+      if (
+        appointment.pricing?.appliedCouponId &&
+        appointment.pricing?.couponDiscount > 0
+      ) {
+        const coupon = await findCouponForPayment({
+          couponId: appointment.pricing.appliedCouponId,
+          session,
+        });
 
-  if (!coupon) {
-    throw new AppError("Applied coupon no longer exists", 400);
-  }
+        if (!coupon) {
+          throw new AppError("Applied coupon no longer exists", 400);
+        }
 
-  if (!coupon.isActive) {
-    throw new AppError("Applied coupon is no longer active", 400);
-  }
+        if (!coupon.isActive) {
+          throw new AppError("Applied coupon is no longer active", 400);
+        }
 
-  const now = new Date();
+        const now = new Date();
 
-  if (now > coupon.validTo) {
-    throw new AppError("Applied coupon has expired", 400);
-  }
+        if (now > coupon.validTo) {
+          throw new AppError("Applied coupon has expired", 400);
+        }
 
-  const userUsageCount = await countCompletedCouponUsageByUser({
-    userId: appointment.patientId,
-    couponId: coupon._id,
-    session,
-  });
+        const userUsageCount = await countCompletedCouponUsageByUser({
+          userId: appointment.patientId,
+          couponId: coupon._id,
+          session,
+        });
 
-  if (userUsageCount >= coupon.maxUsagePerUser) {
-    throw new AppError("Coupon usage limit reached for this user", 400);
-  }
+        if (userUsageCount >= coupon.maxUsagePerUser) {
+          throw new AppError("Coupon usage limit reached for this user", 400);
+        }
 
-  const incrementResult = await incrementCouponUsedCountSafely({
-    couponId: coupon._id,
-    session,
-  });
+        const incrementResult = await incrementCouponUsedCountSafely({
+          couponId: coupon._id,
+          session,
+        });
 
-  if (incrementResult.modifiedCount !== 1) {
-    throw new AppError("Coupon usage limit reached", 400);
-  }
+        if (incrementResult.modifiedCount !== 1) {
+          throw new AppError("Coupon usage limit reached", 400);
+        }
 
-  await createCouponUsage({
-    payload: {
-      userId: appointment.patientId,
-      couponId: coupon._id,
-      appointmentId: appointment._id,
-      paymentId: payment._id,
-      discountApplied: appointment.pricing.couponDiscount,
-      finalAmount: appointment.pricing.finalAmount,
-      status: "completed",
-      usedAt: new Date(),
-    },
-    session,
-  });
-}
-if (
-  appointment.pricing?.appliedReferralId &&
-  appointment.pricing?.referralDiscount > 0
-) {
-  const referral = await findReferralForPayment({
-    referralId: appointment.pricing.appliedReferralId,
-    referredUserId: appointment.patientId,
-    session,
-  });
+        await createCouponUsage({
+          payload: {
+            userId: appointment.patientId,
+            couponId: coupon._id,
+            appointmentId: appointment._id,
+            paymentId: payment._id,
+            discountApplied: appointment.pricing.couponDiscount,
+            finalAmount: appointment.pricing.finalAmount,
+            status: "completed",
+            usedAt: new Date(),
+          },
+          session,
+        });
+      }
 
-  if (!referral) {
-    throw new AppError(
-      "Referral discount is no longer available",
-      400
-    );
-  }
+      if (
+        appointment.pricing?.appliedReferralId &&
+        appointment.pricing?.referralDiscount > 0
+      ) {
+        const referral = await findReferralForPayment({
+          referralId: appointment.pricing.appliedReferralId,
+          referredUserId: appointment.patientId,
+          session,
+        });
 
-  const referralConfig = await findActiveReferralConfigForPayment({
-    session,
-  });
+        if (!referral) {
+          throw new AppError(
+            "Referral discount is no longer available",
+            400
+          );
+        }
 
-  if (!referralConfig) {
-    throw new AppError(
-      "Referral discount is no longer active",
-      400
-    );
-  }
+        const referralConfig = await findActiveReferralConfigForPayment({
+          session,
+        });
 
-  const updatedReferral = await markReferralDiscountUsedForPayment({
-    referralId: referral._id,
-    referredUserId: appointment.patientId,
-    appointmentId: appointment._id,
-    refereeDiscount: appointment.pricing.referralDiscount,
-    referrerReward: referralConfig.referrerReward || 0,
-    session,
-  });
+        if (!referralConfig) {
+          throw new AppError(
+            "Referral discount is no longer active",
+            400
+          );
+        }
 
-  if (!updatedReferral) {
-    throw new AppError(
-      "Referral discount was already used",
-      400
-    );
-  }
-}
+        const updatedReferral = await markReferralDiscountUsedForPayment({
+          referralId: referral._id,
+          referredUserId: appointment.patientId,
+          appointmentId: appointment._id,
+          refereeDiscount: appointment.pricing.referralDiscount,
+          referrerReward: referralConfig.referrerReward || 0,
+          session,
+        });
+
+        if (!updatedReferral) {
+          throw new AppError("Referral discount was already used", 400);
+        }
+      }
 
       slot.status = "booked";
       slot.reservedBy = null;
@@ -300,6 +324,7 @@ if (
     return {
       appointment: finalAppointment,
       payment: finalPayment,
+      walletTransaction: finalWalletTransaction,
     };
   } finally {
     await session.endSession();

@@ -14,13 +14,10 @@ import appointmentRoutes from "../modules/appointments/appointment.routes.js";
 import paymentRoutes from "../modules/payments/payment.routes.js";
 import couponRoutes from "../modules/coupons/coupon.routes.js";
 import referralRoutes from "../modules/referrals/referral.routes.js";
+import walletRoutes from "../modules/wallets/wallet.routes.js";
 
 const router = Router();
 
-// ==========================================
-// MODULE ROUTES
-// IMPORTANT: specific doctor routes must come before "/doctors"
-// ==========================================
 router.use("/auth", authRoutes);
 router.use("/users", userRoutes);
 
@@ -35,9 +32,8 @@ router.use("/appointments", appointmentRoutes);
 router.use("/payments", paymentRoutes);
 router.use("/coupons", couponRoutes);
 router.use("/referrals", referralRoutes);
-// ==========================================
-// HEALTH CHECK
-// ==========================================
+router.use("/wallets", walletRoutes);
+
 router.get("/health", (req, res) => {
   res.status(200).json({
     success: true,

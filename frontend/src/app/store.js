@@ -7,6 +7,7 @@ import reportReducer from "../features/reports/reportSlice";
 import appointmentReducer from "../features/appointment/appointmentSlice";
 import couponReducer from "../features/coupon/couponSlice";
 import referralReducer from "../features/referral/referralSlice";
+import walletReducer from "../features/wallet/walletSlice";
 
 export const store = configureStore({
   reducer: {
@@ -17,5 +18,6 @@ export const store = configureStore({
     appointments: appointmentReducer,
     coupons: couponReducer,
     referrals: referralReducer,
+    wallet: walletReducer,
   },
 });

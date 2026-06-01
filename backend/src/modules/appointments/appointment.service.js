@@ -3,6 +3,9 @@ import mongoose from "mongoose";
 import AppError from "../../shared/errors/AppError.js";
 import { findUserById } from "../users/user.repository.js";
 import {
+  refundAppointmentPaymentToWallet,
+} from "../wallets/wallet.service.js";
+import {
   validateCouponForAppointment,
 } from "../coupons/coupon.service.js";
 import {
@@ -498,6 +501,8 @@ export const rejectAppointmentByDoctorService = async ({
       ensurePendingAppointmentForDecision(appointment);
 
       appointment.status = "rejected";
+      appointment.paymentStatus = "refunded";
+
       appointment.rejection = {
         rejectedBy: "doctor",
         reasonType: body.reasonType,
@@ -512,6 +517,12 @@ export const rejectAppointmentByDoctorService = async ({
 
       await releaseBookedSlot({
         appointment,
+        session,
+      });
+
+      await refundAppointmentPaymentToWallet({
+        appointment,
+        reason: "Appointment rejected by doctor. Refund credited to wallet.",
         session,
       });
 
@@ -581,6 +592,8 @@ export const rejectAppointmentByAdminService = async ({
       ensurePendingAppointmentForDecision(appointment);
 
       appointment.status = "rejected";
+      appointment.paymentStatus = "refunded";
+
       appointment.rejection = {
         rejectedBy: "admin",
         reasonType: body.reasonType,
@@ -595,6 +608,12 @@ export const rejectAppointmentByAdminService = async ({
 
       await releaseBookedSlot({
         appointment,
+        session,
+      });
+
+      await refundAppointmentPaymentToWallet({
+        appointment,
+        reason: "Appointment rejected by admin. Refund credited to wallet.",
         session,
       });
 

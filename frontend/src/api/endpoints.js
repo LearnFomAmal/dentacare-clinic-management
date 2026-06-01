@@ -155,4 +155,9 @@ REFERRAL: {
   ADMIN_GET_ALL: "/referrals/admin",
   ADMIN_CONFIG: "/referrals/admin/config",
 },
+  WALLET: {
+    ME: "/wallets/me",
+    TRANSACTIONS: "/wallets/transactions",
+    TOPUP: "/wallets/topup",
+  },
 };

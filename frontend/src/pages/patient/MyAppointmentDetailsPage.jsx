@@ -183,6 +183,15 @@ function MyAppointmentDetailsPage() {
 />
 
 <SummaryRow
+  label="Refund Status"
+  value={
+    appointment.paymentStatus === "refunded"
+      ? "Refunded to wallet"
+      : "N/A"
+  }
+/>
+
+<SummaryRow
   label="Transaction"
   value={appointment.paymentSummary?.transactionId || "N/A"}
 />

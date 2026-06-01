@@ -24,6 +24,7 @@ export const ROUTES = {
   MY_APPOINTMENTS: "/my-appointments",
   MY_APPOINTMENT_DETAILS: "/my-appointments/:appointmentId",
   REFERRALS: "/referrals",
+  WALLET: "/wallet",
   // DOCTOR
   DOCTOR_DASHBOARD: "/doctor/dashboard",
   DOCTOR_SETTINGS: "/doctor/settings",

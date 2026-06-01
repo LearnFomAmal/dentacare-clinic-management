@@ -44,6 +44,7 @@ import AdminDashboardPage from "../pages/admin/AdminDashboardPage";
 import AdminLoginPage from "../pages/public/AdminLoginPage";
 import AdminCouponsPage from "../pages/admin/AdminCouponsPage";
 import AdminCouponFormPage from "../pages/admin/AdminCouponFormPage";
+import WalletPage from "../pages/patient/WalletPage";
 
 function AppRoutes() {
   return (
@@ -146,6 +147,17 @@ function AppRoutes() {
     </ProtectedRoute>
   }
  />
+
+ <Route
+  path={ROUTES.WALLET}
+  element={
+    <ProtectedRoute allowedRoles={["patient"]}>
+      <WalletPage />
+    </ProtectedRoute>
+  }
+/>
+
+
       <Route
         path={ROUTES.BOOK_APPOINTMENT}
         element={

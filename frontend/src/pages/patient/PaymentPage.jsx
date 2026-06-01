@@ -22,6 +22,9 @@ import {
   setSelectedPaymentMethod,
 } from "../../features/appointment/appointmentSlice";
 import {
+  fetchMyWallet,
+} from "../../features/wallet/walletSlice";
+import {
   formatAppointmentDate,
   formatAppointmentTime,
   generateTransactionId,
@@ -51,7 +54,7 @@ const paymentMethods = [
   {
     id: "wallet",
     title: "Wallet",
-    subtitle: "DentaCare wallet balance",
+    subtitle: "Pay using DentaCare wallet",
     icon: Wallet,
   },
 ];
@@ -69,10 +72,17 @@ function PaymentPage() {
     error,
   } = useAppSelector((state) => state.appointments);
 
+  const {
+    wallet,
+    isLoadingWallet,
+  } = useAppSelector((state) => state.wallet);
+
   useEffect(() => {
     if (appointmentId) {
       dispatch(fetchAppointmentDetails(appointmentId));
     }
+
+    dispatch(fetchMyWallet());
   }, [dispatch, appointmentId]);
 
   useEffect(() => {
@@ -83,10 +93,24 @@ function PaymentPage() {
   }, [error, dispatch]);
 
   const appointment = initiatedAppointment;
+  const finalAmount = appointment?.pricing?.finalAmount || 0;
+  const walletBalance = wallet?.balance || 0;
+  const isWalletPayment = selectedPaymentMethod === "wallet";
+  const isWalletInsufficient = isWalletPayment && walletBalance < finalAmount;
 
   const handleSuccessPayment = async () => {
     if (!appointment?._id) {
       toast.error("Appointment not found");
+      return;
+    }
+
+    if (appointment.status !== "pending_payment") {
+      toast.error("This appointment is not waiting for payment");
+      return;
+    }
+
+    if (isWalletInsufficient) {
+      toast.error("Insufficient wallet balance");
       return;
     }
 
@@ -100,6 +124,10 @@ function PaymentPage() {
       ).unwrap();
 
       toast.success(result.message || "Payment successful");
+
+      if (selectedPaymentMethod === "wallet") {
+        dispatch(fetchMyWallet());
+      }
 
       navigate(`/payment-success/${appointment._id}`, {
         replace: true,
@@ -160,8 +188,8 @@ function PaymentPage() {
           </h1>
 
           <p className="mt-2 text-sm leading-6 text-[#6B7280]">
-            This week uses a simulated payment flow. Click Payment to mark the
-            appointment as paid and send it for approval.
+            Complete payment before reservation expiry. Wallet payments debit
+            your DentaCare wallet instantly.
           </p>
 
           {isLoadingDetails ? (
@@ -195,10 +223,40 @@ function PaymentPage() {
                 </div>
               </section>
 
+              {isWalletPayment && (
+                <div
+                  className={`mt-5 rounded-2xl p-4 ${
+                    isWalletInsufficient
+                      ? "bg-red-50 text-red-700"
+                      : "bg-green-50 text-green-700"
+                  }`}
+                >
+                  <p className="text-sm font-extrabold">
+                    Wallet Balance:{" "}
+                    {isLoadingWallet ? "Loading..." : `₹${walletBalance}`}
+                  </p>
+
+                  <p className="mt-1 text-xs font-bold">
+                    {isWalletInsufficient
+                      ? "Your wallet balance is not enough for this payment."
+                      : "Your wallet has enough balance for this payment."}
+                  </p>
+
+                  {isWalletInsufficient && (
+                    <Link
+                      to={ROUTES.WALLET}
+                      className="mt-3 inline-flex text-xs font-extrabold underline"
+                    >
+                      Add money to wallet
+                    </Link>
+                  )}
+                </div>
+              )}
+
               <button
                 type="button"
                 onClick={handleSuccessPayment}
-                disabled={isPaying}
+                disabled={isPaying || isWalletInsufficient}
                 className="mt-6 h-12 w-full rounded-2xl bg-[#9381FF] text-sm font-extrabold text-white shadow-[0_14px_30px_rgba(147,129,255,0.26)] transition hover:bg-[#7E6EF2] disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {isPaying ? "Processing..." : "Payment"}
@@ -221,8 +279,6 @@ function PaymentPage() {
 }
 
 function AppointmentSummary({ appointment }) {
-  const totalAmount = appointment?.pricing?.finalAmount || 0;
-
   return (
     <section className="mt-6 rounded-3xl bg-[#F8FAFC] p-5">
       <p className="text-xs font-bold uppercase tracking-[0.7px] text-[#9CA3AF]">
@@ -261,54 +317,55 @@ function AppointmentSummary({ appointment }) {
         />
       </div>
 
-     <div className="mt-5 rounded-2xl bg-white p-4">
-  <SummaryPriceRow
-    label="Consultation Fee"
-    value={appointment.pricing?.consultationFee || 0}
-  />
+      <div className="mt-5 rounded-2xl bg-white p-4">
+        <SummaryPriceRow
+          label="Consultation Fee"
+          value={appointment.pricing?.consultationFee || 0}
+        />
 
-  <SummaryPriceRow
-    label="Coupon Discount"
-    value={appointment.pricing?.couponDiscount || 0}
-    discount
-  />
- 
- <SummaryPriceRow
-  label="Referral Discount"
-  value={appointment.pricing?.referralDiscount || 0}
-  discount
-/>
+        <SummaryPriceRow
+          label="Coupon Discount"
+          value={appointment.pricing?.couponDiscount || 0}
+          discount
+        />
 
-  <SummaryPriceRow
-    label="Total Discount"
-    value={appointment.pricing?.totalDiscount || 0}
-    discount
-  />
-  
-  
-  <div className="mt-3 border-t border-[#EEF0F6] pt-3">
-    <div className="flex items-center justify-between">
-      <p className="text-xs font-bold uppercase tracking-[0.7px] text-[#9CA3AF]">
-        Total to pay
-      </p>
+        <SummaryPriceRow
+          label="Referral Discount"
+          value={appointment.pricing?.referralDiscount || 0}
+          discount
+        />
 
-      <p className="flex items-center text-3xl font-extrabold text-[#111827]">
-        <IndianRupee size={26} />
-        {appointment.pricing?.finalAmount || 0}
-      </p>
-    </div>
-  </div>
+        <SummaryPriceRow
+          label="Total Discount"
+          value={appointment.pricing?.totalDiscount || 0}
+          discount
+        />
 
-  {appointment.reservation?.reservedUntil && (
-    <p className="mt-3 rounded-xl bg-orange-50 p-3 text-xs font-bold text-orange-600">
-      Complete payment before{" "}
-      {new Date(appointment.reservation.reservedUntil).toLocaleTimeString([], {
-        hour: "2-digit",
-        minute: "2-digit",
-      })}
-    </p>
-  )}
-</div>
+        <div className="mt-3 border-t border-[#EEF0F6] pt-3">
+          <div className="flex items-center justify-between">
+            <p className="text-xs font-bold uppercase tracking-[0.7px] text-[#9CA3AF]">
+              Total to pay
+            </p>
+
+            <p className="flex items-center text-3xl font-extrabold text-[#111827]">
+              <IndianRupee size={26} />
+              {appointment.pricing?.finalAmount || 0}
+            </p>
+          </div>
+        </div>
+
+        {appointment.reservation?.reservedUntil && (
+          <p className="mt-3 rounded-xl bg-orange-50 p-3 text-xs font-bold text-orange-600">
+            Complete payment before{" "}
+            {new Date(
+              appointment.reservation.reservedUntil
+            ).toLocaleTimeString([], {
+              hour: "2-digit",
+              minute: "2-digit",
+            })}
+          </p>
+        )}
+      </div>
     </section>
   );
 }
@@ -330,6 +387,7 @@ function SummaryBox({ label, value, icon: Icon }) {
     </div>
   );
 }
+
 function SummaryPriceRow({ label, value, discount = false }) {
   return (
     <div className="flex items-center justify-between py-1 text-sm">
@@ -346,6 +404,7 @@ function SummaryPriceRow({ label, value, discount = false }) {
     </div>
   );
 }
+
 function PaymentMethodCard({ method, active, onClick }) {
   const Icon = method.icon;
 
