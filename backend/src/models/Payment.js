@@ -29,6 +29,24 @@ const paymentSchema = new mongoose.Schema(
       min: 0,
     },
 
+    couponDiscount: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+
+    referralDiscount: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+
+    rewardDiscount: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+
     totalDiscount: {
       type: Number,
       default: 0,
@@ -41,9 +59,27 @@ const paymentSchema = new mongoose.Schema(
       min: 0,
     },
 
+    couponId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Coupon",
+      default: null,
+    },
+
+    referralId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Referral",
+      default: null,
+    },
+
+    rewardRuleId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "RewardRule",
+      default: null,
+    },
+
     paymentMethod: {
       type: String,
-      enum: ["google_pay", "phonepe", "upi", "wallet"],
+      enum: ["google_pay", "phonepe", "upi", "wallet", "razorpay"],
       required: true,
     },
 
