@@ -22,6 +22,7 @@ import {
    logoutService,
    logoutAllService,
    resendForgotPasswordOtpService,
+   googleLoginService,
 } from "./auth.service.js";
 
 export const registerRequestController = asyncHandler(async (req, res) => {
@@ -143,3 +144,26 @@ export const logoutAllController = asyncHandler(async (req, res) => {
   sendResponse(res, 200, true, "Logged out from all devices");
 });
 
+export const googleLoginController = asyncHandler(async (req, res) => {
+  const { credential } = req.body;
+
+  const userAgent = req.headers["user-agent"] || "";
+  const ipAddress = req.ip || req.connection.remoteAddress || "";
+
+  const { accessToken, refreshToken, userData } =
+    await googleLoginService({
+      credential,
+      userAgent,
+      ipAddress,
+    });
+
+  setAuthCookies(res, accessToken, refreshToken, "patient");
+
+  sendResponse(
+    res,
+    200,
+    true,
+    "Google login successful",
+    userData
+  );
+});

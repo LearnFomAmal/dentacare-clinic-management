@@ -70,9 +70,9 @@ export const getAllDoctors = async (filters, options) => {
   };
 
   // 🔍 SPECIALIZATION
-  if (filters.specialization) {
-    query.specialization = filters.specialization;
-  }
+ if (filters.specialization) {
+  query["specialization.specialtyId"] = filters.specialization;
+}
 
   // 🔍 EXPERIENCE (min experience filter)
   if (filters.experience) {

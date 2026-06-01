@@ -10,7 +10,8 @@ import {
 import {
   sendOtpMail,
 } from "../../config/mailer.js";
-
+import jwt from "jsonwebtoken";
+import { env } from "../../config/env.js";
 import {
   findAdminByEmail,
   findAdminByEmailWithPassword,
@@ -31,6 +32,8 @@ import {
   revokeAllSessionsByUserId,
   countActiveSessionsByUserId,
   revokeOldestSessionByUserId,
+  findSessionByRefreshToken,
+  updateSessionRefreshToken,
 } from "../auth/session.repository.js";
 
 
@@ -317,4 +320,71 @@ export const resendForgotOtpService = async (email) => {
   await otpRecord.save();
 
   await sendOtpMail(email, newOtp);
+};
+
+export const refreshAdminTokenService = async (refreshToken) => {
+  if (!refreshToken) {
+    throw new AppError("Refresh token missing", 401);
+  }
+
+  let decoded;
+
+  try {
+    decoded = jwt.verify(refreshToken, env.REFRESH_TOKEN_SECRET);
+  } catch {
+    throw new AppError("Invalid refresh token", 401);
+  }
+
+  if (decoded.role !== "admin") {
+    throw new AppError("Invalid token role", 403);
+  }
+
+  const session = await findSessionByRefreshToken(refreshToken);
+
+  if (!session) {
+    throw new AppError("Session expired", 401);
+  }
+
+  if (session.userType !== "admin") {
+    throw new AppError("Invalid session type", 401);
+  }
+
+  if (new Date() > session.expiresAt) {
+    throw new AppError("Session expired", 401);
+  }
+
+  const admin = await findAdminById(decoded.adminId);
+
+  if (!admin) {
+    throw new AppError("Admin not found", 404);
+  }
+
+  if (admin.accountStatus?.isBlocked) {
+    throw new AppError("Admin account blocked", 403);
+  }
+
+  if (admin.accountStatus?.isDeleted) {
+    throw new AppError("Admin account deleted", 403);
+  }
+
+  if (session.userId.toString() !== admin._id.toString()) {
+    throw new AppError("Session mismatch", 401);
+  }
+
+  const newAccessToken = generateAccessToken({
+    adminId: admin._id,
+    role: "admin",
+  });
+
+  const newRefreshToken = generateRefreshToken({
+    adminId: admin._id,
+    role: "admin",
+  });
+
+  await updateSessionRefreshToken(refreshToken, newRefreshToken);
+
+  return {
+    accessToken: newAccessToken,
+    refreshToken: newRefreshToken,
+  };
 };

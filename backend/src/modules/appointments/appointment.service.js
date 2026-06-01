@@ -1,20 +1,43 @@
 import mongoose from "mongoose";
 
 import AppError from "../../shared/errors/AppError.js";
-
+import { findUserById } from "../users/user.repository.js";
 import {
   createAppointment,
-  findAppointmentByIdForPatient,
+  findAdminAppointmentById,
+  findAdminAppointments,
+  findAppointmentForAdminAction,
+  findAppointmentForDoctorAction,
+  findDoctorAppointmentById,
+  findDoctorAppointments,
   findDoctorForBooking,
   findExistingPendingPaymentAppointment,
+  findAppointmentByIdForPatient,
+  findPatientAppointments,
   findPatientReportsByIds,
+  findSlotDayById,
   findSlotDayForBooking,
+  saveAppointment,
+  saveSlotDay,
 } from "./appointment.repository.js";
 
 import {
+  validateAppointmentStatusFilter,
   validateInitiateAppointmentInput,
   validateObjectId,
+  validateRejectAppointmentInput,
 } from "./appointment.validator.js";
+
+const isPatientProfileComplete = (user) => {
+  return Boolean(
+    user?.username &&
+      user?.email &&
+      user?.personalInfo?.dateOfBirth &&
+      user?.personalInfo?.gender &&
+      user?.personalInfo?.phoneNumber &&
+      user?.personalInfo?.bloodGroup
+  );
+};
 
 const getReportFileUrl = (report) => {
   return (
@@ -34,13 +57,74 @@ const normalizeAppointmentReport = (report) => {
   };
 };
 
+const ensurePendingAppointmentForDecision = (appointment) => {
+  if (!appointment) {
+    throw new AppError("Appointment not found", 404);
+  }
+
+  if (appointment.status !== "pending") {
+    throw new AppError(
+      "Only pending appointments can be approved or rejected",
+      400
+    );
+  }
+
+  if (appointment.paymentStatus !== "paid") {
+    throw new AppError(
+      "Only paid appointments can be approved or rejected",
+      400
+    );
+  }
+};
+
+const releaseBookedSlot = async ({
+  appointment,
+  session,
+}) => {
+  const slotDay = await findSlotDayById({
+    slotDayId: appointment.slotDayId,
+    doctorId: appointment.doctorId,
+    session,
+  });
+
+  if (!slotDay) {
+    return;
+  }
+
+  const slot = slotDay.slots.id(appointment.slotId);
+
+  if (!slot || slot.isDeleted) {
+    return;
+  }
+
+  if (slot.status === "booked") {
+    slot.status = "available";
+
+    await saveSlotDay({
+      slotDay,
+      session,
+    });
+  }
+};
+
 export const initiateAppointmentService = async ({
   patientId,
   body,
 }) => {
   validateObjectId(patientId, "patient id");
   validateInitiateAppointmentInput(body);
+  const patient = await findUserById(patientId);
 
+if (!patient || patient.accountStatus?.isDeleted) {
+  throw new AppError("Patient not found", 404);
+}
+
+if (!isPatientProfileComplete(patient)) {
+  throw new AppError(
+    "Please complete your profile before booking an appointment",
+    400
+  );
+}
   const {
     doctorId,
     slotDayId,
@@ -178,4 +262,253 @@ export const getPatientAppointmentDetailsService = async ({
   }
 
   return appointment;
+};
+
+export const getMyAppointmentsService = async ({
+  patientId,
+  query,
+}) => {
+  validateObjectId(patientId, "patient id");
+
+  const { status } = query;
+
+  validateAppointmentStatusFilter(status);
+
+  return findPatientAppointments({
+    patientId,
+    status,
+  });
+};
+
+export const getDoctorAppointmentsService = async ({
+  doctorId,
+  query,
+}) => {
+  validateObjectId(doctorId, "doctor id");
+
+  const { status } = query;
+
+  validateAppointmentStatusFilter(status);
+
+  return findDoctorAppointments({
+    doctorId,
+    status,
+  });
+};
+
+export const getDoctorAppointmentDetailsService = async ({
+  doctorId,
+  appointmentId,
+}) => {
+  validateObjectId(doctorId, "doctor id");
+  validateObjectId(appointmentId, "appointment id");
+
+  const appointment = await findDoctorAppointmentById({
+    doctorId,
+    appointmentId,
+  });
+
+  if (!appointment) {
+    throw new AppError("Appointment not found", 404);
+  }
+
+  return appointment;
+};
+
+export const getAdminAppointmentsService = async ({
+  query,
+}) => {
+  const { status } = query;
+
+  validateAppointmentStatusFilter(status);
+
+  return findAdminAppointments({
+    status,
+  });
+};
+
+export const getAdminAppointmentDetailsService = async ({
+  appointmentId,
+}) => {
+  validateObjectId(appointmentId, "appointment id");
+
+  const appointment = await findAdminAppointmentById(appointmentId);
+
+  if (!appointment) {
+    throw new AppError("Appointment not found", 404);
+  }
+
+  return appointment;
+};
+
+export const approveAppointmentByDoctorService = async ({
+  doctorId,
+  appointmentId,
+}) => {
+  validateObjectId(doctorId, "doctor id");
+  validateObjectId(appointmentId, "appointment id");
+
+  const appointment = await findAppointmentForDoctorAction({
+    doctorId,
+    appointmentId,
+  });
+
+  ensurePendingAppointmentForDecision(appointment);
+
+  appointment.status = "approved";
+  appointment.approval = {
+    approvedBy: "doctor",
+    approvedAt: new Date(),
+  };
+
+  appointment.rejection = {
+    rejectedBy: "",
+    reasonType: "",
+    reason: "",
+    rejectedAt: null,
+  };
+
+  await saveAppointment({
+    appointment,
+  });
+
+  return appointment;
+};
+
+export const rejectAppointmentByDoctorService = async ({
+  doctorId,
+  appointmentId,
+  body,
+}) => {
+  validateObjectId(doctorId, "doctor id");
+  validateObjectId(appointmentId, "appointment id");
+  validateRejectAppointmentInput(body);
+
+  const session = await mongoose.startSession();
+
+  try {
+    let updatedAppointment = null;
+
+    await session.withTransaction(async () => {
+      const appointment = await findAppointmentForDoctorAction({
+        doctorId,
+        appointmentId,
+        session,
+      });
+
+      ensurePendingAppointmentForDecision(appointment);
+
+      appointment.status = "rejected";
+      appointment.rejection = {
+        rejectedBy: "doctor",
+        reasonType: body.reasonType,
+        reason: body.reason.trim(),
+        rejectedAt: new Date(),
+      };
+
+      appointment.approval = {
+        approvedBy: "",
+        approvedAt: null,
+      };
+
+      await releaseBookedSlot({
+        appointment,
+        session,
+      });
+
+      await saveAppointment({
+        appointment,
+        session,
+      });
+
+      updatedAppointment = appointment;
+    });
+
+    return updatedAppointment;
+  } finally {
+    await session.endSession();
+  }
+};
+
+export const approveAppointmentByAdminService = async ({
+  appointmentId,
+}) => {
+  validateObjectId(appointmentId, "appointment id");
+
+  const appointment = await findAppointmentForAdminAction({
+    appointmentId,
+  });
+
+  ensurePendingAppointmentForDecision(appointment);
+
+  appointment.status = "approved";
+  appointment.approval = {
+    approvedBy: "admin",
+    approvedAt: new Date(),
+  };
+
+  appointment.rejection = {
+    rejectedBy: "",
+    reasonType: "",
+    reason: "",
+    rejectedAt: null,
+  };
+
+  await saveAppointment({
+    appointment,
+  });
+
+  return appointment;
+};
+
+export const rejectAppointmentByAdminService = async ({
+  appointmentId,
+  body,
+}) => {
+  validateObjectId(appointmentId, "appointment id");
+  validateRejectAppointmentInput(body);
+
+  const session = await mongoose.startSession();
+
+  try {
+    let updatedAppointment = null;
+
+    await session.withTransaction(async () => {
+      const appointment = await findAppointmentForAdminAction({
+        appointmentId,
+        session,
+      });
+
+      ensurePendingAppointmentForDecision(appointment);
+
+      appointment.status = "rejected";
+      appointment.rejection = {
+        rejectedBy: "admin",
+        reasonType: body.reasonType,
+        reason: body.reason.trim(),
+        rejectedAt: new Date(),
+      };
+
+      appointment.approval = {
+        approvedBy: "",
+        approvedAt: null,
+      };
+
+      await releaseBookedSlot({
+        appointment,
+        session,
+      });
+
+      await saveAppointment({
+        appointment,
+        session,
+      });
+
+      updatedAppointment = appointment;
+    });
+
+    return updatedAppointment;
+  } finally {
+    await session.endSession();
+  }
 };

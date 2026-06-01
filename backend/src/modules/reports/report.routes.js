@@ -1,8 +1,7 @@
 import express from "express";
-import multer from "multer";
 
-import AppError from "../../shared/errors/AppError.js";
 import { protect } from "../../middlewares/auth.middleware.js";
+import { uploadBookingReport } from "../../middlewares/upload.middleware.js";
 
 import {
   deleteDraftReportController,
@@ -12,41 +11,10 @@ import {
 
 const router = express.Router();
 
-const storage = multer.memoryStorage();
-
-const fileFilter = (req, file, cb) => {
-  const allowedMimeTypes = [
-    "image/jpeg",
-    "image/png",
-    "image/webp",
-    "application/pdf",
-  ];
-
-  if (!allowedMimeTypes.includes(file.mimetype)) {
-    cb(
-      new AppError(
-        "Only JPG, PNG, WEBP and PDF files are allowed",
-        400
-      )
-    );
-    return;
-  }
-
-  cb(null, true);
-};
-
-const upload = multer({
-  storage,
-  fileFilter,
-  limits: {
-    fileSize: 5 * 1024 * 1024,
-  },
-});
-
 router.post(
   "/booking-upload",
   protect,
-  upload.single("file"),
+  uploadBookingReport,
   uploadBookingReportController
 );
 

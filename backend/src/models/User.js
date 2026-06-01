@@ -18,8 +18,23 @@ const userSchema = new mongoose.Schema(
 
     password: {
       type: String,
-      required: true,
+      required: function () {
+        return this.authProvider === "local";
+      },
       select: false,
+    },
+
+    authProvider: {
+      type: String,
+      enum: ["local", "google"],
+      default: "local",
+    },
+
+    googleId: {
+      type: String,
+      unique: true,
+      sparse: true,
+      trim: true,
     },
 
     role: {
@@ -31,22 +46,25 @@ const userSchema = new mongoose.Schema(
     personalInfo: {
       dateOfBirth: {
         type: Date,
+        default: null,
       },
 
       gender: {
         type: String,
-        enum: ["male", "female", "other"],
+        enum: ["male", "female", "other", ""],
+        default: "",
       },
 
       phoneNumber: {
         type: String,
-        required: true,
         trim: true,
+        default: "",
       },
 
       bloodGroup: {
         type: String,
-        enum: ["A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-"],
+        enum: ["A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-", ""],
+        default: "",
       },
 
       profileImage: {

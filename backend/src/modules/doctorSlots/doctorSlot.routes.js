@@ -8,26 +8,29 @@ import {
   deleteDoctorSlotController,
   editDoctorSlotController,
   getDoctorSlotsController,
+  markSlotDayHolidayController,
+  undoSlotDayHolidayController,
+  restoreDefaultSlotsController,
 } from "./doctorSlot.controller.js";
 
 const router = express.Router();
 
-router.get(
-  "/",
+router.get("/", protectDoctor, getDoctorSlotsController);
+
+router.post("/", protectDoctor, addDoctorSlotController);
+
+router.post("/recurring", protectDoctor, applyRecurringSlotsController);
+
+router.patch(
+  "/:slotDayId/holiday",
   protectDoctor,
-  getDoctorSlotsController
+  markSlotDayHolidayController
 );
 
-router.post(
-  "/",
+router.patch(
+  "/:slotDayId/undo-holiday",
   protectDoctor,
-  addDoctorSlotController
-);
-
-router.post(
-  "/recurring",
-  protectDoctor,
-  applyRecurringSlotsController
+  undoSlotDayHolidayController
 );
 
 router.patch(
@@ -40,6 +43,12 @@ router.delete(
   "/:slotDayId/slots/:slotId",
   protectDoctor,
   deleteDoctorSlotController
+);
+
+router.patch(
+  "/:slotDayId/restore-defaults",
+  protectDoctor,
+  restoreDefaultSlotsController
 );
 
 export default router;

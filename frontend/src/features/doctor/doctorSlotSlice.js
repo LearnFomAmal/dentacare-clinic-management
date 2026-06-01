@@ -6,6 +6,9 @@ import {
   deleteDoctorSlotApi,
   editDoctorSlotApi,
   getDoctorSlotsApi,
+  markSlotDayHolidayApi,
+  restoreDefaultSlotsApi,
+  undoSlotDayHolidayApi,
 } from "./doctorSlotService";
 
 const getTodayDateString = () => {
@@ -95,6 +98,42 @@ export const deleteDoctorSlot = createAsyncThunk(
   }
 );
 
+export const markSlotDayHoliday = createAsyncThunk(
+  "doctorSlots/markSlotDayHoliday",
+  async (slotDayId, { rejectWithValue }) => {
+    try {
+      const response = await markSlotDayHolidayApi(slotDayId);
+
+      return {
+        slotDay: response.data,
+        message: response.message || "Date marked as holiday successfully",
+      };
+    } catch (error) {
+      return rejectWithValue(
+        getErrorMessage(error, "Failed to mark date as holiday")
+      );
+    }
+  }
+);
+
+export const undoSlotDayHoliday = createAsyncThunk(
+  "doctorSlots/undoSlotDayHoliday",
+  async (slotDayId, { rejectWithValue }) => {
+    try {
+      const response = await undoSlotDayHolidayApi(slotDayId);
+
+      return {
+        slotDay: response.data,
+        message: response.message || "Holiday removed successfully",
+      };
+    } catch (error) {
+      return rejectWithValue(
+        getErrorMessage(error, "Failed to remove holiday")
+      );
+    }
+  }
+);
+
 export const applyRecurringSlots = createAsyncThunk(
   "doctorSlots/applyRecurringSlots",
   async (payload, { rejectWithValue }) => {
@@ -112,7 +151,23 @@ export const applyRecurringSlots = createAsyncThunk(
     }
   }
 );
+export const restoreDefaultSlots = createAsyncThunk(
+  "doctorSlots/restoreDefaultSlots",
+  async (slotDayId, { rejectWithValue }) => {
+    try {
+      const response = await restoreDefaultSlotsApi(slotDayId);
 
+      return {
+        slotDay: response.data,
+        message: response.message || "Default slots restored successfully",
+      };
+    } catch (error) {
+      return rejectWithValue(
+        getErrorMessage(error, "Failed to restore default slots")
+      );
+    }
+  }
+);
 const doctorSlotSlice = createSlice({
   name: "doctorSlots",
   initialState: {
@@ -250,6 +305,76 @@ const doctorSlotSlice = createSlice({
         state.error = null;
         state.recurringResult = null;
       })
+   
+
+      .addCase(markSlotDayHoliday.pending, (state) => {
+  state.isMutating = true;
+  state.error = null;
+})
+
+.addCase(markSlotDayHoliday.fulfilled, (state, action) => {
+  state.isMutating = false;
+
+  const updatedSlotDay = action.payload.slotDay;
+
+  state.slotDays = state.slotDays.map((slotDay) =>
+    slotDay._id === updatedSlotDay._id ? updatedSlotDay : slotDay
+  );
+
+  state.selectedDate = updatedSlotDay.date;
+  state.error = null;
+})
+
+.addCase(markSlotDayHoliday.rejected, (state, action) => {
+  state.isMutating = false;
+  state.error = action.payload;
+})
+
+.addCase(undoSlotDayHoliday.pending, (state) => {
+  state.isMutating = true;
+  state.error = null;
+})
+
+.addCase(undoSlotDayHoliday.fulfilled, (state, action) => {
+  state.isMutating = false;
+
+  const updatedSlotDay = action.payload.slotDay;
+
+  state.slotDays = state.slotDays.map((slotDay) =>
+    slotDay._id === updatedSlotDay._id ? updatedSlotDay : slotDay
+  );
+
+  state.selectedDate = updatedSlotDay.date;
+  state.error = null;
+})
+
+.addCase(undoSlotDayHoliday.rejected, (state, action) => {
+  state.isMutating = false;
+  state.error = action.payload;
+})
+ 
+.addCase(restoreDefaultSlots.pending, (state) => {
+  state.isMutating = true;
+  state.error = null;
+})
+
+.addCase(restoreDefaultSlots.fulfilled, (state, action) => {
+  state.isMutating = false;
+
+  const updatedSlotDay = action.payload.slotDay;
+
+  state.slotDays = state.slotDays.map((slotDay) =>
+    slotDay._id === updatedSlotDay._id ? updatedSlotDay : slotDay
+  );
+
+  state.selectedDate = updatedSlotDay.date;
+  state.error = null;
+})
+
+.addCase(restoreDefaultSlots.rejected, (state, action) => {
+  state.isMutating = false;
+  state.error = action.payload;
+})
 
       .addCase(applyRecurringSlots.fulfilled, (state, action) => {
         state.isMutating = false;

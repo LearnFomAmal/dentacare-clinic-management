@@ -6,6 +6,7 @@ import {
   findSpecialtyById,
   getAllSpecialties,
   updateSpecialtyById,
+  syncDoctorSpecialtySnapshot,
   getAllActiveSpecialties,
   deleteSpecialtyById,
 } from "./specialty.repository.js";
@@ -70,80 +71,34 @@ export const getAllSpecialtiesService =
 
 
 // UPDATE SPECIALTY
-export const updateSpecialtyService =
-  async (id, payload) => {
+const normalizeSpecialtyName = (name) => {
+  return name.trim().toLowerCase();
+};
 
-    const specialty =
-      await findSpecialtyById(id);
+export const updateSpecialtyService = async (specialtyId, body) => {
+  const specialty = await findSpecialtyById(specialtyId);
 
-    if (!specialty) {
-      throw new AppError(
-        "Specialty not found",
-        404
-      );
-    }
+  if (!specialty) {
+    throw new AppError("Specialty not found", 404);
+  }
 
-    const updatePayload = {};
+  const displayName = body.name.trim();
+  const name = normalizeSpecialtyName(body.name);
 
-    if (payload.name !== undefined) {
+  const updatedSpecialty = await updateSpecialtyById(specialtyId, {
+    name,
+    displayName,
+    description: body.description || "",
+  });
 
-      const normalizedName =
-        payload.name
-          .trim()
-          .toLowerCase();
+  await syncDoctorSpecialtySnapshot({
+    specialtyId: updatedSpecialty._id,
+    name: updatedSpecialty.name,
+    displayName: updatedSpecialty.displayName,
+  });
 
-      const existingSpecialty =
-        await findSpecialtyByName(
-          normalizedName
-        );
-
-      if (
-        existingSpecialty &&
-        existingSpecialty._id.toString() !==
-          id
-      ) {
-        throw new AppError(
-          "Specialty already exists",
-          400
-        );
-      }
-
-      updatePayload.name =
-        normalizedName;
-
-      updatePayload.displayName =
-        payload.name.trim();
-    }
-
-    if (
-      payload.description !== undefined
-    ) {
-      updatePayload.description =
-        payload.description.trim();
-    }
-
-    try {
-
-      const updatedSpecialty =
-        await updateSpecialtyById(
-          id,
-          updatePayload
-        );
-
-      return updatedSpecialty;
-
-    } catch (error) {
-
-      if (error.code === 11000) {
-        throw new AppError(
-          "Specialty already exists",
-          400
-        );
-      }
-
-      throw error;
-    }
-  };
+  return updatedSpecialty;
+};
 
 // UPDATE SPECIALTY STATUS
 export const updateSpecialtyStatusService =

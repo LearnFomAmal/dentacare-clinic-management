@@ -10,6 +10,7 @@ const requiredEnvVariables = [
   "FRONTEND_URL",
   "EMAIL_USER",
   "EMAIL_PASS",
+  "GOOGLE_CLIENT_ID",
 ];
 
 requiredEnvVariables.forEach((key) => {
@@ -53,6 +54,8 @@ CLOUDINARY_API_SECRET: process.env.CLOUDINARY_API_SECRET,
 
   RAZORPAY_KEY_SECRET:
     process.env.RAZORPAY_KEY_SECRET,
+
+    GOOGLE_CLIENT_ID: process.env.GOOGLE_CLIENT_ID,
 
   FRONTEND_URL:
     process.env.FRONTEND_URL,

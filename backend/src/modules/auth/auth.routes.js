@@ -10,6 +10,7 @@ import {
   refreshTokenController,
  logoutController,
  logoutAllController,
+ googleLoginController,
  
 } from "./auth.controller.js";
 import { protect } from "../../middlewares/auth.middleware.js";
@@ -19,6 +20,7 @@ router.post("/register", registerRequestController);
 router.post("/register/resend-otp", resendRegisterOtpController);
 router.post("/register/verify-otp", verifyRegisterOtpController);
 router.post("/login", loginController);
+router.post("/google-login", googleLoginController);
 router.post("/forgot-password", forgotPasswordRequestController);
 router.post("/forgot-password/verify-otp", forgotPasswordVerifyOtpController);
 router.post("/forgot-password/resend-otp", resendForgotPasswordOtpController);

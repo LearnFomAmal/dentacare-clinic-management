@@ -22,7 +22,20 @@ import {
  
 } from "../auth/session.repository.js";
 
+const isPatientProfileComplete = (user) => {
+  return Boolean(
+    user?.username &&
+      user?.email &&
+      user?.personalInfo?.dateOfBirth &&
+      user?.personalInfo?.gender &&
+      user?.personalInfo?.phoneNumber &&
+      user?.personalInfo?.bloodGroup
+  );
+};
+
 const sanitizeUserResponse = (user) => {
+  const profileImage = user.personalInfo?.profileImage || "";
+
   return {
     _id: user._id,
 
@@ -30,12 +43,16 @@ const sanitizeUserResponse = (user) => {
     email: user.email,
     role: user.role,
 
+    authProvider: user.authProvider || "local",
+    profileImage,
+    isProfileComplete: isPatientProfileComplete(user),
+
     personalInfo: {
       dateOfBirth: user.personalInfo?.dateOfBirth || null,
       gender: user.personalInfo?.gender || "",
       phoneNumber: user.personalInfo?.phoneNumber || "",
       bloodGroup: user.personalInfo?.bloodGroup || "",
-      profileImage: user.personalInfo?.profileImage || "",
+      profileImage,
     },
 
     settings: {
@@ -104,21 +121,47 @@ export const updateMyProfileService = async (userId, payload) => {
 };
 
 // CHANGE PASSWORD
-export const changePasswordService = async (userId, currentPassword, newPassword) => {
+export const changePasswordService = async (
+  userId,
+  currentPassword,
+  newPassword
+) => {
   const user = await findUserById(userId).select("+password");
 
   if (!user || user.accountStatus.isDeleted) {
     throw new AppError("User not found", 404);
   }
-const isSamePassword = await comparePassword(newPassword, user.password);
 
-if (isSamePassword) {
-  throw new AppError(
-    "New password must be different from current password",
-    400
+  if (user.authProvider === "google" && !user.password) {
+    throw new AppError(
+      "Password change is not available for Google login accounts",
+      400
+    );
+  }
+
+  if (!user.password) {
+    throw new AppError(
+      "Password is not set for this account",
+      400
+    );
+  }
+
+  const isSamePassword = await comparePassword(
+    newPassword,
+    user.password
   );
-}
-  const isMatch = await comparePassword(currentPassword, user.password);
+
+  if (isSamePassword) {
+    throw new AppError(
+      "New password must be different from current password",
+      400
+    );
+  }
+
+  const isMatch = await comparePassword(
+    currentPassword,
+    user.password
+  );
 
   if (!isMatch) {
     throw new AppError("Current password is incorrect", 400);
@@ -126,12 +169,12 @@ if (isSamePassword) {
 
   const hashedPassword = await hashPassword(newPassword);
 
-  await updateUserById(userId, { password: hashedPassword });
+  await updateUserById(userId, {
+    password: hashedPassword,
+    authProvider: "local",
+  });
 
-  await revokeAllSessionsByUserId(
-  user._id,
-  "user"
-);
+  await revokeAllSessionsByUserId(user._id, "user");
 };
 
 // DELETE ACCOUNT
@@ -301,9 +344,13 @@ export const updatePatientProfileImageService = async (
     publicId: `patient_${user._id}`,
   });
 
+  const cacheVersion = uploadResult.version || Date.now();
+
+  const finalImageUrl = `${uploadResult.secure_url}?v=${cacheVersion}`;
+
   const updatedUser = await updateUserProfileImageById(
     user._id,
-    uploadResult.secure_url
+    finalImageUrl
   );
 
   return sanitizeUserResponse(updatedUser);

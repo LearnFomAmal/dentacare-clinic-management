@@ -1,4 +1,5 @@
 import AppError from "../../shared/errors/AppError.js";
+import { OAuth2Client } from "google-auth-library";
 import  generateOtp  from "../../shared/utils/otpGenerator.js";
 import { hashPassword, comparePassword } from "../../shared/utils/passwordHash.js";
 import {compareOtp } from "../../shared/utils/hashOtp.js";
@@ -12,6 +13,18 @@ import jwt from "jsonwebtoken";
 import { env } from "../../config/env.js";
 
 import {
+  findUserByEmail,
+  findUserByReferralCode,
+  createUser,
+  findUserByEmailWithPassword,
+  updateUserPasswordByEmail,
+  findUserById,
+  findUserByGoogleId,
+  findActiveUserByEmail,
+  updateUserById,
+} from "../users/user.repository.js";
+
+import {
   findSessionByRefreshToken,
   revokeSessionByRefreshToken,
   revokeAllSessionsByUserId,
@@ -22,22 +35,48 @@ import {
 } from "./session.repository.js";
 
 import {
-  findUserByEmail,
-  findUserByReferralCode,
-  createUser,
-  findUserByEmailWithPassword,
-  updateUserPasswordByEmail,
-  findUserById,
-} from "../users/user.repository.js";
-import {
   findOtpRecord,
   createOtpRecord,
   deleteOldOtps,
-  updateOtpRecord,
 } from "./auth.repository.js";
 
 import { hashOtp } from "../../shared/utils/hashOtp.js";
+const googleClient = new OAuth2Client(env.GOOGLE_CLIENT_ID);
 
+const generateReferralCode = () => {
+  return `DENTA${Math.floor(1000 + Math.random() * 9000)}`;
+};
+
+const isPatientProfileComplete = (user) => {
+  return Boolean(
+    user?.username &&
+      user?.email &&
+      user?.personalInfo?.dateOfBirth &&
+      user?.personalInfo?.gender &&
+      user?.personalInfo?.phoneNumber &&
+      user?.personalInfo?.bloodGroup
+  );
+};
+
+const buildUserData = (user) => {
+  return {
+    _id: user._id,
+    username: user.username,
+    email: user.email,
+    role: "patient",
+    authProvider: user.authProvider || "local",
+    profileImage: user.personalInfo?.profileImage || "",
+    theme: user.settings?.theme || "light",
+    isProfileComplete: isPatientProfileComplete(user),
+    personalInfo: {
+      dateOfBirth: user.personalInfo?.dateOfBirth || null,
+      gender: user.personalInfo?.gender || "",
+      phoneNumber: user.personalInfo?.phoneNumber || "",
+      bloodGroup: user.personalInfo?.bloodGroup || "",
+      profileImage: user.personalInfo?.profileImage || "",
+    },
+  };
+};
 export const registerRequestService = async (data) => {
   const {
     username,
@@ -190,6 +229,13 @@ export const loginService = async (email, password, userAgent, ipAddress) => {
     throw new AppError("Invalid email or password", 400);
   }
 
+  if (user.authProvider === "google" && !user.password) {
+  throw new AppError(
+    "This account uses Google login. Please continue with Google.",
+    400
+  );
+}
+
   if (user.accountStatus.isBlocked) {
     throw new AppError("Your account has been blocked by admin", 403);
   }
@@ -236,14 +282,7 @@ if (activeSessions >= 5) {
     expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
   });
 
- const userData = {
-  _id: user._id,
-  username: user.username,
-  email: user.email,
-  role: "patient",
-  profileImage: user.personalInfo?.profileImage || "",
-  theme: user.settings?.theme || "light",
-};
+const userData = buildUserData(user);
 
   return { accessToken, refreshToken, userData };
 };
@@ -354,7 +393,7 @@ const isOtpMatched = await compareOtp(
   }
   otpRecord.isUsed = true;
  await otpRecord.save();
-   const user = await findUserByEmail(email);
+   const user = await findUserByEmailWithPassword(email);
   const isSamePassword =
   await comparePassword(
     newPassword,
@@ -421,7 +460,7 @@ if (new Date() > session.expiresAt) {
   throw new AppError("Session expired. Please login again.", 401);
 }
 
-if (session.userId.toString() !== decoded.userId) {
+if (session.userId.toString() !== decoded.userId.toString()) {
   throw new AppError("Session mismatch", 401);
 }
   const newAccessToken = generateAccessToken({
@@ -449,4 +488,133 @@ export const logoutService = async (refreshToken) => {
 
 export const logoutAllService = async (userId) => {
   await revokeAllSessionsByUserId(userId, "user");
+};
+
+export const googleLoginService = async ({
+  credential,
+  userAgent,
+  ipAddress,
+}) => {
+  if (!credential) {
+    throw new AppError("Google credential is required", 400);
+  }
+
+  let ticket;
+
+  try {
+    ticket = await googleClient.verifyIdToken({
+      idToken: credential,
+      audience: env.GOOGLE_CLIENT_ID,
+    });
+  } catch {
+    throw new AppError("Invalid Google credential", 401);
+  }
+
+  const payload = ticket.getPayload();
+
+  if (!payload?.email) {
+    throw new AppError("Google email not found", 400);
+  }
+
+  const googleId = payload.sub;
+  const email = payload.email.toLowerCase();
+  const username =
+    payload.name ||
+    email.split("@")[0];
+
+  let user =
+    (await findUserByGoogleId(googleId)) ||
+    (await findActiveUserByEmail(email));
+
+  if (user) {
+    if (user.accountStatus?.isBlocked) {
+      throw new AppError("Your account has been blocked by admin", 403);
+    }
+
+    if (user.accountStatus?.isDeleted) {
+      throw new AppError("This account has been deleted", 403);
+    }
+
+    const updatePayload = {};
+
+    if (!user.googleId) {
+      updatePayload.googleId = googleId;
+    }
+if (!user.googleId) {
+  updatePayload.googleId = googleId;
+}
+
+if (!user.authProvider) {
+  updatePayload.authProvider = user.password ? "local" : "google";
+}
+
+    if (!user.personalInfo?.profileImage && payload.picture) {
+      updatePayload["personalInfo.profileImage"] = payload.picture;
+    }
+
+    if (Object.keys(updatePayload).length > 0) {
+      user = await updateUserById(user._id, updatePayload);
+    }
+  } else {
+    user = await createUser({
+      username,
+      email,
+      authProvider: "google",
+      googleId,
+      role: "patient",
+
+      personalInfo: {
+        dateOfBirth: null,
+        gender: "",
+        phoneNumber: "",
+        bloodGroup: "",
+        profileImage: payload.picture || "",
+      },
+
+      referral: {
+        referralCode: generateReferralCode(),
+        referredBy: null,
+      },
+
+      accountStatus: {
+        isVerified: true,
+        isBlocked: false,
+        isDeleted: false,
+      },
+    });
+  }
+
+  const accessToken = generateAccessToken({
+    userId: user._id,
+    role: "patient",
+  });
+
+  const refreshToken = generateRefreshToken({
+    userId: user._id,
+    role: "patient",
+  });
+
+  const activeSessions = await countActiveSessionsByUserId(
+    user._id,
+    "user"
+  );
+
+  if (activeSessions >= 5) {
+    await revokeOldestSessionByUserId(user._id, "user");
+  }
+
+  await createSession({
+    userId: user._id,
+    userType: "user",
+    refreshToken,
+    userAgent,
+    ipAddress,
+    expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+  });
+
+  return {
+    accessToken,
+    refreshToken,
+    userData: buildUserData(user),
+  };
 };

@@ -12,7 +12,12 @@ export const uploadBufferToCloudinary = ({
         folder,
         public_id: publicId,
         resource_type: "image",
+
+        // Important when replacing the same profile image again
         overwrite: true,
+        invalidate: true,
+        unique_filename: false,
+
         transformation: [
           {
             width: 500,
@@ -25,7 +30,7 @@ export const uploadBufferToCloudinary = ({
         ],
       },
       (error, result) => {
-        if (error) {
+        if (error || !result?.secure_url) {
           reject(
             new AppError(
               "Failed to upload image. Please try again.",

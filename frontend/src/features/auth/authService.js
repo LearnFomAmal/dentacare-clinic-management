@@ -215,3 +215,14 @@ export const logoutApi = async (accountType) => {
 
   return response.data;
 };
+
+export const googleLoginApi = async (credential) => {
+  const response = await axiosInstance.post(
+    API_ENDPOINTS.AUTH.GOOGLE_LOGIN,
+    {
+      credential,
+    }
+  );
+
+  return response.data;
+};

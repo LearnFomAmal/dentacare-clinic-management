@@ -2,7 +2,7 @@ import AppError from "../../shared/errors/AppError.js";
 
 import {
   createDoctorSlotDay,
-  findDoctorslotDayByDoctorAndDate,
+  findSlotDayByDoctorAndDate,
   findSlotDaysByDoctorAndDateRange,
   findSlotDayByIdAndDoctor,
   saveSlotDay,
@@ -122,7 +122,7 @@ const hasTimeConflict = (
     if (slot.status === "blocked") return false;
 
     if (
-      ignoredSlotId &&
+      ignoredSlotId &&  
       slot._id.toString() === ignoredSlotId.toString()
     ) {
       return false;
@@ -133,6 +133,15 @@ const hasTimeConflict = (
 
     return newStart < existingEnd && newEnd > existingStart;
   });
+};
+const buildFreshDefaultSlots = () => {
+  return DEFAULT_SLOTS.map((slot) => ({
+    startTime: slot.startTime,
+    endTime: slot.endTime,
+    type: "default",
+    status: "available",
+    isDeleted: false,
+  }));
 };
 
 const validateSlotDuration = (startTime, endTime) => {
@@ -184,7 +193,7 @@ const buildDefaultSlotDayPayload = (doctorId, date) => {
     date,
     dayOfWeek,
     isHoliday: holiday,
-    slots: holiday ? [] : DEFAULT_SLOTS,
+    slots: holiday ? [] : buildFreshDefaultSlots(),
   };
 };
 
@@ -218,7 +227,12 @@ export const getDoctorSlotsService = async (
     query.startDate ||
     new Date().toISOString().split("T")[0];
 
-  const days = Number(query.days) || 7;
+const days =
+  query.days === undefined ? 7 : Number(query.days);
+
+if (!Number.isInteger(days) || days < 1 || days > 14) {
+  throw new AppError("Days must be between 1 and 14", 400);
+}
 
   validateDateString(startDate);
 
@@ -410,6 +424,20 @@ export const deleteDoctorSlotService = async (
     throw new AppError("Slot day not found", 404);
   }
 
+  if (isSunday(slotDay.date)) {
+    throw new AppError(
+      "Sunday is a fixed holiday. Slots cannot be deleted.",
+      400
+    );
+  }
+
+  if (slotDay.isHoliday) {
+    throw new AppError(
+      "Cannot delete slots from a holiday date",
+      400
+    );
+  }
+
   const slot = slotDay.slots.id(slotId);
 
   if (!slot || slot.isDeleted) {
@@ -423,8 +451,22 @@ export const deleteDoctorSlotService = async (
     );
   }
 
+  // Default and extra slots can both be deleted now.
   slot.isDeleted = true;
   slot.status = "blocked";
+
+  const remainingActiveSlots = slotDay.slots.filter(
+    (item) =>
+      !item.isDeleted &&
+      item.status !== "blocked"
+  );
+
+  // If doctor deleted the last active slot,
+  // automatically make this date unavailable.
+  if (remainingActiveSlots.length === 0) {
+    slotDay.isHoliday = true;
+    slotDay.slots = [];
+  }
 
   await saveSlotDay(slotDay);
 
@@ -510,4 +552,124 @@ export const applyRecurringSlotsService = async (
     copiedDates,
     skippedDates,
   };
+};
+
+export const markSlotDayHolidayService = async (
+  doctorId,
+  slotDayId
+) => {
+  validateObjectId(slotDayId, "slot day id");
+
+  const slotDay = await findSlotDayByIdAndDoctor(
+    slotDayId,
+    doctorId
+  );
+
+  if (!slotDay) {
+    throw new AppError("Slot day not found", 404);
+  }
+
+  if (isSunday(slotDay.date)) {
+    throw new AppError(
+      "Sunday is already a fixed holiday",
+      400
+    );
+  }
+
+  if (slotDay.isHoliday) {
+    throw new AppError(
+      "This date is already marked as holiday",
+      400
+    );
+  }
+
+  if (hasBookedSlot(slotDay)) {
+    throw new AppError(
+      "Cannot mark this date as holiday because it has booked slots",
+      400
+    );
+  }
+
+  slotDay.isHoliday = true;
+  slotDay.slots = [];
+
+  await saveSlotDay(slotDay);
+
+  return slotDay;
+};
+
+export const undoSlotDayHolidayService = async (
+  doctorId,
+  slotDayId
+) => {
+  validateObjectId(slotDayId, "slot day id");
+
+  const slotDay = await findSlotDayByIdAndDoctor(
+    slotDayId,
+    doctorId
+  );
+
+  if (!slotDay) {
+    throw new AppError("Slot day not found", 404);
+  }
+
+  if (isSunday(slotDay.date)) {
+    throw new AppError(
+      "Sunday holiday cannot be changed",
+      400
+    );
+  }
+
+  if (!slotDay.isHoliday) {
+    throw new AppError(
+      "This date is not marked as holiday",
+      400
+    );
+  }
+
+  slotDay.isHoliday = false;
+  slotDay.dayOfWeek = getDayOfWeek(slotDay.date);
+  slotDay.slots = buildFreshDefaultSlots();
+
+  await saveSlotDay(slotDay);
+
+  return slotDay;
+};
+
+export const restoreDefaultSlotsService = async (
+  doctorId,
+  slotDayId
+) => {
+  validateObjectId(slotDayId, "slot day id");
+
+  const slotDay = await findSlotDayByIdAndDoctor(
+    slotDayId,
+    doctorId
+  );
+
+  if (!slotDay) {
+    throw new AppError("Slot day not found", 404);
+  }
+
+  if (isSunday(slotDay.date)) {
+    throw new AppError(
+      "Sunday is a fixed holiday. Default slots cannot be restored on Sunday.",
+      400
+    );
+  }
+
+  if (hasBookedSlot(slotDay)) {
+    throw new AppError(
+      "Cannot restore defaults because this date has booked slots",
+      400
+    );
+  }
+
+  slotDay.isHoliday = false;
+  slotDay.dayOfWeek = getDayOfWeek(slotDay.date);
+  slotDay.slots = buildFreshDefaultSlots();
+
+  await saveSlotDay(slotDay);
+
+  return slotDay;
 };

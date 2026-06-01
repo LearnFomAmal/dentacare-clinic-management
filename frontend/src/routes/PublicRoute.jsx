@@ -5,9 +5,9 @@ import { ROUTES } from "../constants/routes";
 import { getAccountType, getAuthUser } from "../utils/authStorage";
 
 const getRoleHome = (role) => {
-  if (role === "admin") return ROUTES.ADMIN_PROFILE;
-  if (role === "doctor") return ROUTES.DOCTOR_SETTINGS;
-  return ROUTES.USER_SETTINGS;
+  if (role === "admin") return ROUTES.ADMIN_DASHBOARD;
+  if (role === "doctor") return ROUTES.DOCTOR_DASHBOARD;
+  return ROUTES.PATIENT_DASHBOARD;
 };
 
 function PublicRoute({ children }) {

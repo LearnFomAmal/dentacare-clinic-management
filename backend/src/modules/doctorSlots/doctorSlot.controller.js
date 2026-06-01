@@ -7,6 +7,9 @@ import {
   deleteDoctorSlotService,
   editDoctorSlotService,
   getDoctorSlotsService,
+  markSlotDayHolidayService,
+  undoSlotDayHolidayService,
+  restoreDefaultSlotsService,
 } from "./doctorSlot.service.js";
 
 export const getDoctorSlotsController = asyncHandler(
@@ -105,6 +108,66 @@ export const applyRecurringSlotsController = asyncHandler(
       true,
       "Recurring slots applied successfully",
       result
+    );
+  }
+);
+
+export const markSlotDayHolidayController = asyncHandler(
+  async (req, res) => {
+    const doctorId = req.doctor.doctorId;
+    const { slotDayId } = req.params;
+
+    const slotDay = await markSlotDayHolidayService(
+      doctorId,
+      slotDayId
+    );
+
+    sendResponse(
+      res,
+      200,
+      true,
+      "Date marked as holiday successfully",
+      slotDay
+    );
+  }
+);
+
+export const undoSlotDayHolidayController = asyncHandler(
+  async (req, res) => {
+    const doctorId = req.doctor.doctorId;
+    const { slotDayId } = req.params;
+
+    const slotDay = await undoSlotDayHolidayService(
+      doctorId,
+      slotDayId
+    );
+
+    sendResponse(
+      res,
+      200,
+      true,
+      "Holiday removed successfully",
+      slotDay
+    );
+  }
+);
+
+export const restoreDefaultSlotsController = asyncHandler(
+  async (req, res) => {
+    const doctorId = req.doctor.doctorId;
+    const { slotDayId } = req.params;
+
+    const slotDay = await restoreDefaultSlotsService(
+      doctorId,
+      slotDayId
+    );
+
+    sendResponse(
+      res,
+      200,
+      true,
+      "Default slots restored successfully",
+      slotDay
     );
   }
 );

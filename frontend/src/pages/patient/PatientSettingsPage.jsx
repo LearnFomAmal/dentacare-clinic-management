@@ -39,6 +39,7 @@ import {
 import { ROUTES } from "../../constants/routes";
 
 function PatientSettingsPage() {
+  
   const navigate = useNavigate();
   const dispatch = useAppDispatch();
   const [profile, setProfile] = useState(null);
@@ -114,46 +115,55 @@ function PatientSettingsPage() {
     return date.toISOString().split("T")[0];
   };
 
-  const normalizeUser = (user) => {
-    return {
-      ...user,
+ const normalizeUser = (user) => {
+  const profileImage =
+    user?.profileImage ||
+    user?.personalInfo?.profileImage ||
+    "";
 
-      role: user?.role || "patient",
-      accountType: "patient",
+  return {
+    ...user,
 
-      accountStatus: {
-        isVerified: Boolean(user?.accountStatus?.isVerified),
-        isBlocked: Boolean(user?.accountStatus?.isBlocked),
-        isDeleted: Boolean(user?.accountStatus?.isDeleted),
-      },
+    role: user?.role || "patient",
+    accountType: "patient",
 
-      walletSummary: {
-        balance: user?.walletSummary?.balance ?? 0,
-        totalEarned: user?.walletSummary?.totalEarned ?? 0,
-        totalSpent: user?.walletSummary?.totalSpent ?? 0,
-      },
+    authProvider: user?.authProvider || "local",
+    profileImage,
+    isProfileComplete: Boolean(user?.isProfileComplete),
 
-      referral: {
-        referralCode: user?.referral?.referralCode || "",
-        referredBy: user?.referral?.referredBy || null,
-        hasCompletedFirstAppointment: Boolean(
-          user?.referral?.hasCompletedFirstAppointment
-        ),
-      },
+    accountStatus: {
+      isVerified: Boolean(user?.accountStatus?.isVerified),
+      isBlocked: Boolean(user?.accountStatus?.isBlocked),
+      isDeleted: Boolean(user?.accountStatus?.isDeleted),
+    },
 
-      settings: {
-        theme: user?.settings?.theme || user?.theme || "light",
-      },
+    walletSummary: {
+      balance: user?.walletSummary?.balance ?? 0,
+      totalEarned: user?.walletSummary?.totalEarned ?? 0,
+      totalSpent: user?.walletSummary?.totalSpent ?? 0,
+    },
 
-      personalInfo: {
-        dateOfBirth: user?.personalInfo?.dateOfBirth || "",
-        gender: user?.personalInfo?.gender || "",
-        phoneNumber: user?.personalInfo?.phoneNumber || "",
-        bloodGroup: user?.personalInfo?.bloodGroup || "",
-        profileImage: user?.personalInfo?.profileImage || user?.profileImage || "",
-      },
-    };
+    referral: {
+      referralCode: user?.referral?.referralCode || "",
+      referredBy: user?.referral?.referredBy || null,
+      hasCompletedFirstAppointment: Boolean(
+        user?.referral?.hasCompletedFirstAppointment
+      ),
+    },
+
+    settings: {
+      theme: user?.settings?.theme || user?.theme || "light",
+    },
+
+    personalInfo: {
+      dateOfBirth: user?.personalInfo?.dateOfBirth || "",
+      gender: user?.personalInfo?.gender || "",
+      phoneNumber: user?.personalInfo?.phoneNumber || "",
+      bloodGroup: user?.personalInfo?.bloodGroup || "",
+      profileImage,
+    },
   };
+};
 
   const syncFormsWithUser = (user) => {
     resetProfileForm({
@@ -229,36 +239,39 @@ const handleUnauthorized = (error) => {
   }, []);
 
   const handleProfileImageUpload = async (file) => {
-    try {
-      setIsUploadingImage(true);
+  try {
+    setIsUploadingImage(true);
 
-      const response = await updateUserProfileImageApi(file);
+    const response = await updateUserProfileImageApi(file);
 
-      const updatedUser = normalizeUser(response.data);
+    const updatedUser = normalizeUser(response.data);
 
-      setProfile(updatedUser);
-      saveAuthUser(updatedUser, "patient");
-      dispatch(
-  setAuthUser({
-    user: updatedUser,
-    accountType: "patient",
-  })
-);
-      syncFormsWithUser(updatedUser);
+    setProfile(updatedUser);
 
-      toast.success(response.message || "Profile image updated successfully");
-    } catch (error) {
-      const message =
-        error?.response?.data?.message ||
-        error?.message ||
-        "Failed to upload profile image";
+    saveAuthUser(updatedUser, "patient");
 
-      toast.error(message);
-      handleUnauthorized(error);
-    } finally {
-      setIsUploadingImage(false);
-    }
-  };
+    dispatch(
+      setAuthUser({
+        user: updatedUser,
+        accountType: "patient",
+      })
+    );
+
+    syncFormsWithUser(updatedUser);
+
+    toast.success(response.message || "Profile image updated successfully");
+  } catch (error) {
+    const message =
+      error?.response?.data?.message ||
+      error?.message ||
+      "Failed to upload profile image";
+
+    toast.error(message);
+    handleUnauthorized(error);
+  } finally {
+    setIsUploadingImage(false);
+  }
+};
 
   const onProfileSubmit = async (data) => {
     try {
@@ -402,9 +415,24 @@ const handleUnauthorized = (error) => {
       </DashboardLayout>
     );
   }
+  const profileIncomplete = !(
+  profile?.username &&
+  profile?.email &&
+  profile?.personalInfo?.dateOfBirth &&
+  profile?.personalInfo?.gender &&
+  profile?.personalInfo?.phoneNumber &&
+  profile?.personalInfo?.bloodGroup
+);
 
+const isGoogleAccount = profile?.authProvider === "google";
   return (
     <DashboardLayout title="Patient Settings">
+      {profileIncomplete && (
+  <div className="mb-6 rounded-3xl border border-orange-100 bg-orange-50 p-5 text-sm font-semibold text-orange-700">
+    Complete your profile to book appointments. Date of birth, gender,
+    phone number, and blood group are required before booking.
+  </div>
+)}
       <div className="grid gap-6 xl:grid-cols-[1.4fr_0.9fr]">
         <SettingsSection
           title="Profile Information"
@@ -561,53 +589,71 @@ const handleUnauthorized = (error) => {
           </SettingsSection>
         </div>
 
-        <SettingsSection
-          title="Change Password"
-          description="Changing your password will log you out from all devices."
+       {isGoogleAccount ? (
+  <SettingsSection
+    title="Password"
+    description="This account uses Google sign-in."
+  >
+    <div className="rounded-3xl border border-[#EEF0F6] bg-[#F8FAFC] p-6 dark:border-slate-800 dark:bg-slate-950">
+      <p className="text-sm font-semibold text-[#2D333B] dark:text-slate-100">
+        Password change is not available for Google login accounts.
+      </p>
+
+      <p className="mt-2 text-sm leading-6 text-[#595F69] dark:text-slate-400">
+        You signed in using Google, so your password is managed by your Google
+        account. Continue using the Google login option on the login page.
+      </p>
+    </div>
+  </SettingsSection>
+) : (
+  <SettingsSection
+    title="Change Password"
+    description="Changing your password will log you out from all devices."
+  >
+    <form
+      onSubmit={handlePasswordSubmit(onPasswordSubmit)}
+      className="grid gap-5 md:grid-cols-3"
+    >
+      <Input
+        label="Current Password"
+        type="password"
+        name="currentPassword"
+        placeholder="••••••••"
+        register={registerPassword}
+        error={passwordErrors.currentPassword}
+      />
+
+      <Input
+        label="New Password"
+        type="password"
+        name="newPassword"
+        placeholder="••••••••"
+        register={registerPassword}
+        error={passwordErrors.newPassword}
+      />
+
+      <Input
+        label="Confirm Password"
+        type="password"
+        name="confirmPassword"
+        placeholder="••••••••"
+        register={registerPassword}
+        error={passwordErrors.confirmPassword}
+      />
+
+      <div className="md:col-span-3">
+        <Button
+          type="submit"
+          loading={isPasswordSubmitting}
+          fullWidth={false}
+          className="min-w-[190px]"
         >
-          <form
-            onSubmit={handlePasswordSubmit(onPasswordSubmit)}
-            className="grid gap-5 md:grid-cols-3"
-          >
-            <Input
-              label="Current Password"
-              type="password"
-              name="currentPassword"
-              placeholder="••••••••"
-              register={registerPassword}
-              error={passwordErrors.currentPassword}
-            />
-
-            <Input
-              label="New Password"
-              type="password"
-              name="newPassword"
-              placeholder="••••••••"
-              register={registerPassword}
-              error={passwordErrors.newPassword}
-            />
-
-            <Input
-              label="Confirm Password"
-              type="password"
-              name="confirmPassword"
-              placeholder="••••••••"
-              register={registerPassword}
-              error={passwordErrors.confirmPassword}
-            />
-
-            <div className="md:col-span-3">
-              <Button
-                type="submit"
-                loading={isPasswordSubmitting}
-                fullWidth={false}
-                className="min-w-[190px]"
-              >
-                Change Password
-              </Button>
-            </div>
-          </form>
-        </SettingsSection>
+          Change Password
+        </Button>
+      </div>
+    </form>
+  </SettingsSection>
+)}
 
         <SettingsSection
           title="Danger Zone"

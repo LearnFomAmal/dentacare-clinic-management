@@ -1,5 +1,23 @@
 import mongoose from "mongoose";
+
 import AppError from "../../shared/errors/AppError.js";
+
+const VALID_STATUS_FILTERS = [
+  "pending_payment",
+  "pending",
+  "approved",
+  "rejected",
+  "cancelled",
+  "completed",
+];
+
+const VALID_REJECTION_REASON_TYPES = [
+  "invalid_booking",
+  "policy_violation",
+  "duplicate_appointment",
+  "doctor_unavailable",
+  "other",
+];
 
 const isValidObjectId = (id) => mongoose.Types.ObjectId.isValid(id);
 
@@ -63,4 +81,38 @@ export const validateInitiateAppointmentInput = (body) => {
   reportIds.forEach((reportId) => {
     validateObjectId(reportId, "report id");
   });
+};
+
+export const validateAppointmentStatusFilter = (status) => {
+  if (!status) return;
+
+  if (!VALID_STATUS_FILTERS.includes(status)) {
+    throw new AppError("Invalid appointment status filter", 400);
+  }
+};
+
+export const validateRejectAppointmentInput = (body) => {
+  const { reasonType, reason } = body;
+
+  if (!reasonType || !VALID_REJECTION_REASON_TYPES.includes(reasonType)) {
+    throw new AppError("Invalid rejection reason type", 400);
+  }
+
+  if (!reason || !reason.trim()) {
+    throw new AppError("Rejection reason is required", 400);
+  }
+
+  if (reason.trim().length < 5) {
+    throw new AppError(
+      "Rejection reason must be at least 5 characters",
+      400
+    );
+  }
+
+  if (reason.trim().length > 300) {
+    throw new AppError(
+      "Rejection reason cannot exceed 300 characters",
+      400
+    );
+  }
 };

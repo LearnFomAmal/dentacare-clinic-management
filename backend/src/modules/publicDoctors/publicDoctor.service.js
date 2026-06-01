@@ -350,17 +350,21 @@ export const getPublicDoctorAvailableSlotsService = async (
     throw new AppError("Doctor not found", 404);
   }
 
-  const slotDay = await ensureSlotDay(doctorId, date);
+ const slotDay = await ensureSlotDay(doctorId, date);
 
-  const slotDayId = slotDay._id.toString();
+const slotDayId = slotDay._id.toString();
+const bookableSlots = getBookableSlots(slotDay);
 
-  return {
-    doctorId,
-    slotDayId,
-    _id: slotDayId,
-    date,
-    dayOfWeek: slotDay.dayOfWeek,
-    isHoliday: slotDay.isHoliday,
-    slots: getBookableSlots(slotDay),
-  };
+const isUnavailable =
+  slotDay.isHoliday || bookableSlots.length === 0;
+
+return {
+  doctorId,
+  slotDayId,
+  _id: slotDayId,
+  date,
+  dayOfWeek: slotDay.dayOfWeek,
+  isHoliday: isUnavailable,
+  slots: isUnavailable ? [] : bookableSlots,
+};
 };

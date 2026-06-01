@@ -1,52 +1,43 @@
 import Specialty from "../../models/Specialty.js";
+import Doctor from "../../models/Doctor.js";
 
-
+// ==============================
 // CREATE SPECIALTY
+// ==============================
 export const createSpecialty = (payload) => {
   return Specialty.create(payload);
 };
 
-
-// FIND BY NAME
+// ==============================
+// FIND SPECIALTY BY NAME
+// ==============================
 export const findSpecialtyByName = (name) => {
   return Specialty.findOne({
-    name: name.trim().toLowerCase(),
+    name,
   });
 };
 
-// FIND BY ID
-export const findSpecialtyById = (id) => {
-  return Specialty.findById(id);
+// ==============================
+// FIND SPECIALTY BY ID
+// ==============================
+export const findSpecialtyById = (specialtyId) => {
+  return Specialty.findById(specialtyId);
 };
 
-
+// ==============================
 // GET ALL SPECIALTIES
+// ==============================
 export const getAllSpecialties = () => {
   return Specialty.find()
-    .select(
-      "_id displayName name description status createdAt"
-    )
     .sort({
-      displayName: 1,
-    });
+      createdAt: -1,
+    })
+    .lean();
 };
 
-// UPDATE SPECIALTY
-export const updateSpecialtyById = (
-  id,
-  payload
-) => {
-
-  return Specialty.findByIdAndUpdate(
-    id,
-    payload,
-    {
-      new: true,
-      runValidators: true,
-    }
-  );
-};
-
+// ==============================
+// GET ALL ACTIVE SPECIALTIES
+// ==============================
 export const getAllActiveSpecialties = () => {
   return Specialty.find({
     status: "active",
@@ -54,9 +45,45 @@ export const getAllActiveSpecialties = () => {
     .sort({
       displayName: 1,
     })
-    .select("_id displayName name description status");
+    .lean();
 };
 
-export const deleteSpecialtyById = (id) => {
-  return Specialty.findByIdAndDelete(id);
+// ==============================
+// UPDATE SPECIALTY
+// ==============================
+export const updateSpecialtyById = (specialtyId, payload) => {
+  return Specialty.findByIdAndUpdate(specialtyId, payload, {
+    new: true,
+    runValidators: true,
+  });
+};
+
+// ==============================
+// DELETE SPECIALTY
+// ==============================
+export const deleteSpecialtyById = (specialtyId) => {
+  return Specialty.findByIdAndDelete(specialtyId);
+};
+
+// ==============================
+// SYNC DOCTOR SPECIALTY SNAPSHOT
+// Important because doctors store embedded specialty name/displayName
+// ==============================
+export const syncDoctorSpecialtySnapshot = ({
+  specialtyId,
+  name,
+  displayName,
+}) => {
+  return Doctor.updateMany(
+    {
+      "specialization.specialtyId": specialtyId,
+      "accountStatus.isDeleted": false,
+    },
+    {
+      $set: {
+        "specialization.name": name,
+        "specialization.displayName": displayName,
+      },
+    }
+  );
 };

@@ -4,7 +4,7 @@ export const createDoctorSlotDay=(payload)=>{
     return DoctorSlot.create(payload)
 }
 
-export const findDoctorslotDayByDoctorAndDate=(doctorId,date)=>{
+export const findSlotDayByDoctorAndDate=(doctorId,date)=>{
     return DoctorSlot.findOne({
         doctorId,
         date

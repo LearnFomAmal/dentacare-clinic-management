@@ -19,6 +19,7 @@ import {
   verifyForgotOtpService,
   resetAdminPasswordService,
   resendForgotOtpService,
+  refreshAdminTokenService,
 } from "./admin.service.js";
 
 
@@ -200,3 +201,23 @@ export const resendForgotOtpController =
       "OTP resent successfully"
     );
   });
+
+  export const refreshAdminTokenController = asyncHandler(async (req, res) => {
+  const refreshToken = req.cookies?.adminRefreshToken;
+
+  const data = await refreshAdminTokenService(refreshToken);
+
+  setAuthCookies(
+    res,
+    data.accessToken,
+    data.refreshToken,
+    "admin"
+  );
+
+  sendResponse(
+    res,
+    200,
+    true,
+    "Admin token refreshed successfully"
+  );
+});

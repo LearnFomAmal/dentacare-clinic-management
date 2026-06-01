@@ -2,6 +2,8 @@ export const ROUTES = {
   HOME: "/",
 
   LOGIN: "/login",
+  ADMIN_LOGIN: "/admin/login",
+
   REGISTER: "/register",
   VERIFY_OTP: "/verify-otp",
 
@@ -9,13 +11,28 @@ export const ROUTES = {
   RESET_PASSWORD: "/reset-password",
 
   DOCTOR_VERIFY: "/doctor-verification",
-  DOCTOR_SLOTS: "/doctor/slots",
+
+  // PATIENT
+  PATIENT_DASHBOARD: "/dashboard",
+  USER_SETTINGS: "/settings",
   FIND_DOCTORS: "/doctors",
   DOCTOR_DETAILS: "/doctors/:doctorId",
-  USER_SETTINGS: "/settings",
-  DOCTOR_SETTINGS: "/doctor/settings",
   BOOK_APPOINTMENT: "/book-appointment/:doctorId",
   PAYMENT: "/payment/:appointmentId",
+  PAYMENT_SUCCESS: "/payment-success/:appointmentId",
+  PAYMENT_FAILED: "/payment-failed/:appointmentId",
+  MY_APPOINTMENTS: "/my-appointments",
+  MY_APPOINTMENT_DETAILS: "/my-appointments/:appointmentId",
+
+  // DOCTOR
+  DOCTOR_DASHBOARD: "/doctor/dashboard",
+  DOCTOR_SETTINGS: "/doctor/settings",
+  DOCTOR_SLOTS: "/doctor/slots",
+  DOCTOR_APPOINTMENTS: "/doctor/appointments",
+  DOCTOR_APPOINTMENT_DETAILS: "/doctor/appointments/:appointmentId",
+
+  // ADMIN
+  ADMIN_DASHBOARD: "/admin/dashboard",
   ADMIN_PROFILE: "/admin/profile",
   ADMIN_USERS: "/admin/users",
   ADMIN_USER_DETAILS: "/admin/users/:id",
@@ -26,4 +43,6 @@ export const ROUTES = {
   ADMIN_EDIT_DOCTOR_FEE: "/admin/doctors/:id/edit-fee",
 
   ADMIN_SPECIALTIES: "/admin/specialties",
+  ADMIN_APPOINTMENTS: "/admin/appointments",
+  ADMIN_APPOINTMENT_DETAILS: "/admin/appointments/:appointmentId",
 };

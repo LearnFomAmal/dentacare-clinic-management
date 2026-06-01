@@ -57,3 +57,27 @@ export const applyRecurringSlotsApi = async (payload) => {
 
   return response.data;
 };
+
+export const markSlotDayHolidayApi = async (slotDayId) => {
+  const response = await axiosInstance.patch(
+    API_ENDPOINTS.DOCTOR.SLOTS.MARK_HOLIDAY(slotDayId)
+  );
+
+  return response.data;
+};
+
+export const undoSlotDayHolidayApi = async (slotDayId) => {
+  const response = await axiosInstance.patch(
+    API_ENDPOINTS.DOCTOR.SLOTS.UNDO_HOLIDAY(slotDayId)
+  );
+
+  return response.data;
+};
+
+export const restoreDefaultSlotsApi = async (slotDayId) => {
+  const response = await axiosInstance.patch(
+    API_ENDPOINTS.DOCTOR.SLOTS.RESTORE_DEFAULTS(slotDayId)
+  );
+
+  return response.data;
+};

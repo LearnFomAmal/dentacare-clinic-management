@@ -1,5 +1,5 @@
 import { createAsyncThunk, createSlice } from "@reduxjs/toolkit";
-import { loginApi, logoutApi } from "./authService";
+import { loginApi, logoutApi, googleLoginApi } from "./authService";
 import {
   clearAuthStorage,
   getAccountType,
@@ -18,9 +18,9 @@ const VALID_ACCOUNT_TYPES = ["patient", "doctor", "admin"];
 // HELPERS
 // ==============================
 const getRoleHome = (role) => {
-  if (role === "admin") return "/admin/profile";
-  if (role === "doctor") return "/doctor/settings";
-  return "/";
+  if (role === "admin") return ROUTES.ADMIN_DASHBOARD;
+  if (role === "doctor") return ROUTES.DOCTOR_DASHBOARD;
+  return ROUTES.PATIENT_DASHBOARD;
 };
 
 const getEmptyAuthState = () => ({
@@ -125,7 +125,45 @@ export const loginUser = createAsyncThunk(
     }
   }
 );
+export const googleLoginUser = createAsyncThunk(
+  "auth/googleLoginUser",
+  async (credential, { rejectWithValue }) => {
+    try {
+      clearAuthStorage("patient");
 
+      const response = await googleLoginApi(credential);
+
+      const backendUser = response.data || {};
+
+      const normalizedUser = normalizeUser({
+        backendUser,
+        email: backendUser.email,
+        accountType: "patient",
+      });
+
+      saveAccountType("patient");
+      saveAuthUser(normalizedUser, "patient");
+
+      return {
+        user: normalizedUser,
+        accountType: "patient",
+        role: "patient",
+        message: response.message || "Google login successful",
+        redirectTo: getRoleHome("patient"),
+      };
+    } catch (error) {
+      const message =
+        error?.response?.data?.message ||
+        error?.message ||
+        "Google login failed";
+
+      return rejectWithValue({
+        message,
+        accountType: "patient",
+      });
+    }
+  }
+);
 export const logoutUser = createAsyncThunk(
   "auth/logoutUser",
   async (accountType, { getState, rejectWithValue }) => {
@@ -249,6 +287,29 @@ const authSlice = createSlice({
         state.isAuthenticated = false;
         state.error = action.payload?.message || "Login failed";
       })
+     
+      .addCase(googleLoginUser.pending, (state) => {
+  state.isLoading = true;
+  state.error = null;
+})
+
+.addCase(googleLoginUser.fulfilled, (state, action) => {
+  state.isLoading = false;
+  state.user = action.payload.user;
+  state.accountType = action.payload.accountType;
+  state.role = action.payload.role;
+  state.isAuthenticated = true;
+  state.error = null;
+})
+
+.addCase(googleLoginUser.rejected, (state, action) => {
+  state.isLoading = false;
+  state.user = null;
+  state.accountType = null;
+  state.role = null;
+  state.isAuthenticated = false;
+  state.error = action.payload?.message || "Google login failed";
+})
 
       // LOGOUT
       .addCase(logoutUser.pending, (state) => {
@@ -285,3 +346,4 @@ export const {
 } = authSlice.actions;
 
 export default authSlice.reducer;
+

@@ -2,29 +2,38 @@ import { useEffect } from "react";
 import {
   ArrowLeft,
   CalendarDays,
-  
   IndianRupee,
   Landmark,
   ShieldCheck,
   Smartphone,
   Wallet,
 } from "lucide-react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import toast from "react-hot-toast";
 
 import PatientLayout from "../../components/patient/PatientLayout";
 import { useAppDispatch, useAppSelector } from "../../app/hooks";
+import { ROUTES } from "../../constants/routes";
 import {
   clearAppointmentError,
+  confirmPaymentFailed,
+  confirmPaymentSuccess,
   fetchAppointmentDetails,
   setSelectedPaymentMethod,
 } from "../../features/appointment/appointmentSlice";
+import {
+  formatAppointmentDate,
+  formatAppointmentTime,
+  generateTransactionId,
+  getDoctorName,
+  getSpecialtyName,
+} from "../../utils/appointmentUi";
 
 const paymentMethods = [
   {
     id: "google_pay",
     title: "Google Pay",
-    subtitle: "Recommended fast payment",
+    subtitle: "Fast payment simulation",
     icon: Smartphone,
   },
   {
@@ -47,41 +56,18 @@ const paymentMethods = [
   },
 ];
 
-const formatDate = (dateString) => {
-  if (!dateString) return "Not available";
-
-  const date = new Date(`${dateString}T00:00:00`);
-
-  return date.toLocaleDateString("en-IN", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-  });
-};
-
-const formatTime = (time) => {
-  if (!time) return "";
-
-  const [hourValue, minute] = time.split(":").map(Number);
-  const period = hourValue >= 12 ? "PM" : "AM";
-  const hour = hourValue % 12 || 12;
-
-  return `${String(hour).padStart(2, "0")}:${String(minute).padStart(
-    2,
-    "0"
-  )} ${period}`;
-};
-
 function PaymentPage() {
   const { appointmentId } = useParams();
+  const navigate = useNavigate();
   const dispatch = useAppDispatch();
 
   const {
-  initiatedAppointment,
-  selectedPaymentMethod,
-  isLoadingDetails,
-  error,
- } = useAppSelector((state) => state.appointments);
+    initiatedAppointment,
+    selectedPaymentMethod,
+    isLoadingDetails,
+    isPaying,
+    error,
+  } = useAppSelector((state) => state.appointments);
 
   useEffect(() => {
     if (appointmentId) {
@@ -98,65 +84,84 @@ function PaymentPage() {
 
   const appointment = initiatedAppointment;
 
-  const doctor =
-    typeof appointment?.doctorId === "object"
-      ? appointment.doctorId
-      : null;
+  const handleSuccessPayment = async () => {
+    if (!appointment?._id) {
+      toast.error("Appointment not found");
+      return;
+    }
 
-  const doctorName =
-    doctor
-      ? [doctor.firstName, doctor.lastName].filter(Boolean).join(" ")
-      : "Doctor";
+    try {
+      const result = await dispatch(
+        confirmPaymentSuccess({
+          appointmentId: appointment._id,
+          paymentMethod: selectedPaymentMethod,
+          transactionId: generateTransactionId(),
+        })
+      ).unwrap();
 
-  const specialty =
-    doctor?.specialization?.displayName ||
-    doctor?.specialization?.name ||
-    "Dental Specialist";
+      toast.success(result.message || "Payment successful");
 
-  const totalAmount = appointment?.pricing?.finalAmount || 0;
-  const walletBalance = 0;
-
-  const handleMockSuccessPayment = () => {
-    toast.success(
-      "Mock payment success. Real payment success API will be connected in Day 5."
-    );
+      navigate(`/payment-success/${appointment._id}`, {
+        replace: true,
+      });
+    } catch (err) {
+      toast.error(err || "Payment failed");
+    }
   };
 
-  const handleMockFailedPayment = () => {
-    toast.error(
-      "Mock payment failed. Failed payment API/page will be connected in Day 5."
-    );
+  const handleFailedPayment = async () => {
+    if (!appointment?._id) {
+      toast.error("Appointment not found");
+      return;
+    }
+
+    try {
+      const result = await dispatch(
+        confirmPaymentFailed({
+          appointmentId: appointment._id,
+          paymentMethod: selectedPaymentMethod,
+          transactionId: generateTransactionId(),
+          failureReason: "Payment cancelled by patient",
+        })
+      ).unwrap();
+
+      toast.error(result.message || "Payment failed");
+
+      navigate(`/payment-failed/${appointment._id}`, {
+        replace: true,
+      });
+    } catch (err) {
+      toast.error(err || "Failed to record payment failure");
+    }
   };
 
   return (
     <PatientLayout>
-      <main className="mx-auto max-w-[560px] px-6 py-10">
-        <div className="mb-6 flex items-center justify-between">
-          <Link
-            to={ROUTES_SAFE_BACK}
-            className="inline-flex items-center gap-2 rounded-full bg-white px-4 py-2 text-sm font-bold text-[#6B7280] shadow-[0_8px_24px_rgba(17,24,39,0.05)] transition hover:text-[#9381FF]"
-          >
-            <ArrowLeft size={16} />
-            Back to appointment
-          </Link>
-        </div>
+      <main className="mx-auto max-w-[620px] px-6 py-10">
+        <Link
+          to={ROUTES.FIND_DOCTORS}
+          className="inline-flex items-center gap-2 rounded-full bg-white px-4 py-2 text-sm font-bold text-[#6B7280] shadow-[0_8px_24px_rgba(17,24,39,0.05)] transition hover:text-[#9381FF]"
+        >
+          <ArrowLeft size={16} />
+          Back to doctors
+        </Link>
 
-        <section className="rounded-3xl border border-[#EEF0F6] bg-white p-7 shadow-[0_24px_64px_rgba(17,24,39,0.08)]">
+        <section className="mt-6 rounded-3xl border border-[#EEF0F6] bg-white p-7 shadow-[0_24px_64px_rgba(17,24,39,0.08)]">
           <div className="mb-6 flex h-12 w-12 items-center justify-center rounded-2xl bg-[#F0F1FF] text-[#9381FF]">
             <ShieldCheck size={24} />
           </div>
 
           <p className="text-xs font-bold uppercase tracking-[1px] text-[#9381FF]">
-            Mock payment flow
+            Payment
           </p>
 
           <h1 className="mt-2 text-3xl font-extrabold tracking-[-0.7px] text-[#111827]">
-            Secure Payment Gateway
+            Confirm Your Payment
           </h1>
 
           <p className="mt-2 text-sm leading-6 text-[#6B7280]">
-            Review your appointment details and simulate a successful or failed
-            payment in this prototype flow.
+            This week uses a simulated payment flow. Click Payment to mark the
+            appointment as paid and send it for approval.
           </p>
 
           {isLoadingDetails ? (
@@ -169,13 +174,7 @@ function PaymentPage() {
             </div>
           ) : (
             <>
-              <AppointmentSummaryCard
-                doctorName={doctorName}
-                specialty={specialty}
-                appointment={appointment}
-                totalAmount={totalAmount}
-                walletBalance={walletBalance}
-              />
+              <AppointmentSummary appointment={appointment} />
 
               <section className="mt-6">
                 <h2 className="text-sm font-extrabold text-[#111827]">
@@ -195,28 +194,24 @@ function PaymentPage() {
                   ))}
                 </div>
               </section>
-              
 
               <button
                 type="button"
-                onClick={handleMockSuccessPayment}
-                className="mt-4 h-12 w-full rounded-2xl bg-green-50 text-sm font-extrabold text-green-700 transition hover:bg-green-100"
+                onClick={handleSuccessPayment}
+                disabled={isPaying}
+                className="mt-6 h-12 w-full rounded-2xl bg-[#9381FF] text-sm font-extrabold text-white shadow-[0_14px_30px_rgba(147,129,255,0.26)] transition hover:bg-[#7E6EF2] disabled:cursor-not-allowed disabled:opacity-60"
               >
-                Payment
+                {isPaying ? "Processing..." : "Payment"}
               </button>
 
               <button
                 type="button"
-                onClick={handleMockFailedPayment}
-                className="mt-3 h-12 w-full rounded-2xl bg-red-50 text-sm font-extrabold text-red-600 transition hover:bg-red-100"
+                onClick={handleFailedPayment}
+                disabled={isPaying}
+                className="mt-3 h-12 w-full rounded-2xl bg-red-50 text-sm font-extrabold text-red-600 transition hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 Cancel
               </button>
-
-              <p className="mt-4 text-center text-xs leading-5 text-[#9CA3AF]">
-                This is a UI-only mock payment gateway for appointment booking.
-                No real payment will be processed.
-              </p>
             </>
           )}
         </section>
@@ -225,51 +220,37 @@ function PaymentPage() {
   );
 }
 
-const ROUTES_SAFE_BACK = "/doctors";
+function AppointmentSummary({ appointment }) {
+  const totalAmount = appointment?.pricing?.finalAmount || 0;
 
-function AppointmentSummaryCard({
-  doctorName,
-  specialty,
-  appointment,
-  totalAmount,
-  walletBalance,
-}) {
   return (
     <section className="mt-6 rounded-3xl bg-[#F8FAFC] p-5">
-      <div className="mb-4 flex items-center justify-between">
-        <div>
-          <p className="text-xs font-bold uppercase tracking-[0.7px] text-[#9CA3AF]">
-            Appointment summary
-          </p>
+      <p className="text-xs font-bold uppercase tracking-[0.7px] text-[#9CA3AF]">
+        Appointment summary
+      </p>
 
-          <h2 className="mt-1 text-lg font-extrabold text-[#111827]">
-            Appointment with Dr. {doctorName}
-          </h2>
-        </div>
+      <h2 className="mt-1 text-lg font-extrabold text-[#111827]">
+        Appointment with Dr. {getDoctorName(appointment)}
+      </h2>
 
-        <span className="rounded-full bg-[#F3EFFF] px-3 py-1 text-xs font-extrabold text-[#9381FF]">
-          Confirmed Slot
-        </span>
-      </div>
-
-      <div className="grid gap-3 sm:grid-cols-2">
+      <div className="mt-4 grid gap-3 sm:grid-cols-2">
         <SummaryBox
           label="Date"
-          value={formatDate(appointment.appointmentDate)}
+          value={formatAppointmentDate(appointment.appointmentDate)}
           icon={CalendarDays}
         />
 
         <SummaryBox
           label="Time"
-          value={`${formatTime(appointment.startTime)} – ${formatTime(
-            appointment.endTime
-          )}`}
+          value={`${formatAppointmentTime(
+            appointment.startTime
+          )} – ${formatAppointmentTime(appointment.endTime)}`}
           icon={CalendarDays}
         />
 
         <SummaryBox
           label="Specialty"
-          value={specialty}
+          value={getSpecialtyName(appointment)}
           icon={ShieldCheck}
         />
 
@@ -289,16 +270,6 @@ function AppointmentSummaryCard({
           <p className="mt-1 flex items-center text-3xl font-extrabold text-[#111827]">
             <IndianRupee size={26} />
             {totalAmount}
-          </p>
-        </div>
-
-        <div className="rounded-2xl bg-[#F0F1FF] px-4 py-3 text-right">
-          <p className="text-xs font-bold text-[#9381FF]">
-            Wallet Balance
-          </p>
-
-          <p className="mt-1 font-extrabold text-[#111827]">
-            ₹{walletBalance}
           </p>
         </div>
       </div>

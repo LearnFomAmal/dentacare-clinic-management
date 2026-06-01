@@ -1,11 +1,17 @@
-import AppRoutes from "./routes/AppRoutes";
+import { useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 
+import AppRoutes from "./routes/AppRoutes";
+import { setNavigator } from "./utils/navigation";
 
 function App() {
-return (
-  <AppRoutes />
-)
+  const navigate = useNavigate();
 
+  useEffect(() => {
+    setNavigator(navigate);
+  }, [navigate]);
+
+  return <AppRoutes />;
 }
 
 export default App;

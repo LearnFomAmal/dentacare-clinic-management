@@ -149,6 +149,19 @@ const appointmentSchema = new mongoose.Schema(
       },
     },
 
+    approval: {
+      approvedBy: {
+        type: String,
+        enum: ["doctor", "admin", ""],
+        default: "",
+      },
+
+      approvedAt: {
+        type: Date,
+        default: null,
+      },
+    },
+
     rejection: {
       rejectedBy: {
         type: String,
@@ -159,11 +172,13 @@ const appointmentSchema = new mongoose.Schema(
       reasonType: {
         type: String,
         default: "",
+        trim: true,
       },
 
       reason: {
         type: String,
         default: "",
+        trim: true,
       },
 
       rejectedAt: {
@@ -182,11 +197,13 @@ const appointmentSchema = new mongoose.Schema(
       reasonType: {
         type: String,
         default: "",
+        trim: true,
       },
 
       reason: {
         type: String,
         default: "",
+        trim: true,
       },
 
       cancelledAt: {

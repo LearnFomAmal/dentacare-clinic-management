@@ -90,7 +90,7 @@ function AdminAddDoctorPage() {
       };
 
       const response = await createDoctorApi(payload);
-
+      
       toast.success(
         response.message ||
           "Doctor created successfully. Verification email sent."
@@ -221,7 +221,7 @@ function AdminAddDoctorPage() {
           <div className="rounded-2xl border border-[rgba(172,178,189,0.15)] bg-[#F8FAFC] p-5">
          {doctor?.profileImage ? (
   <img
-    src={doctor.profileImage}
+    src={doctor?.profileImage}
     alt={doctor?.name || "Doctor"}
     className="h-16 w-16 rounded-3xl object-cover"
   />

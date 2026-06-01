@@ -1,21 +1,24 @@
 import { Link, useNavigate } from "react-router-dom";
-import { Mail, UserRound, Stethoscope, ShieldCheck } from "lucide-react";
+import { Mail, UserRound, Stethoscope } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import toast from "react-hot-toast";
+import { GoogleLogin } from "@react-oauth/google";
 import PasswordInput from "../../components/ui/PasswordInput";
 import AuthLayout from "../../components/layout/AuthLayout";
 import Card from "../../components/ui/Card";
 import Input from "../../components/ui/Input";
 import Button from "../../components/ui/Button";
 import { useAppDispatch } from "../../app/hooks";
-import { loginUser } from "../../features/auth/authSlice";
+import { loginUser, googleLoginUser } from "../../features/auth/authSlice";
 import { loginSchema } from "../../schemas/auth.schema";
 import { ROUTES } from "../../constants/routes";
 import { applyTheme } from "../../utils/themeStorage";
+
 function LoginPage() {
   const navigate = useNavigate();
   const dispatch = useAppDispatch();
+
   const {
     register,
     handleSubmit,
@@ -29,12 +32,16 @@ function LoginPage() {
       password: "",
     },
   });
-
-  const selectedAccountType = watch("accountType");
-
-const onSubmit = async (data) => {
+ const handleGoogleSuccess = async (credentialResponse) => {
   try {
-    const result = await dispatch(loginUser(data)).unwrap();
+    if (!credentialResponse?.credential) {
+      toast.error("Google login failed");
+      return;
+    }
+
+    const result = await dispatch(
+      googleLoginUser(credentialResponse.credential)
+    ).unwrap();
 
     applyTheme(
       result?.user?.theme ||
@@ -42,39 +49,64 @@ const onSubmit = async (data) => {
         "light"
     );
 
-    toast.success(result.message || "Login successful");
+    toast.success(result.message || "Google login successful");
 
-    navigate(result.redirectTo, { replace: true });
+    navigate(result.redirectTo, {
+      replace: true,
+    });
   } catch (error) {
-    const message =
-      error?.message ||
-      "Login failed";
-
-    if (
-      data.accountType === "doctor" &&
-      message.toLowerCase().includes("verify")
-    ) {
-      toast.error("Please verify your doctor account first");
-
-      navigate(ROUTES.DOCTOR_VERIFY, {
-        replace: true,
-        state: {
-          email: data.email,
-        },
-      });
-
-      return;
-    }
-
-    toast.error(message);
+    toast.error(error?.message || "Google login failed");
   }
 };
+
+const handleGoogleError = () => {
+  toast.error("Google login failed. Please try again.");
+};
+
+  const selectedAccountType = watch("accountType");
+
+  const onSubmit = async (data) => {
+    try {
+      const result = await dispatch(loginUser(data)).unwrap();
+
+      applyTheme(
+        result?.user?.theme ||
+          result?.user?.settings?.theme ||
+          "light"
+      );
+
+      toast.success(result.message || "Login successful");
+
+      navigate(result.redirectTo, {
+        replace: true,
+      });
+    } catch (error) {
+      const message = error?.message || "Login failed";
+
+      if (
+        data.accountType === "doctor" &&
+        message.toLowerCase().includes("verify")
+      ) {
+        toast.error("Please verify your doctor account first");
+
+        navigate(ROUTES.DOCTOR_VERIFY, {
+          replace: true,
+          state: {
+            email: data.email,
+          },
+        });
+
+        return;
+      }
+
+      toast.error(message);
+    }
+  };
 
   return (
     <AuthLayout>
       <Card className="mx-auto">
         <div className="space-y-10">
-          {/* Header */}
           <div className="space-y-2 text-center">
             <h1 className="font-manrope text-[30px] font-extrabold leading-9 tracking-[-0.75px] text-[#2D333B]">
               Login to Your Account
@@ -85,8 +117,7 @@ const onSubmit = async (data) => {
             </p>
           </div>
 
-          {/* Account Type */}
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-2 gap-3">
             <label
               className={`flex cursor-pointer flex-col items-center justify-center gap-2 rounded-2xl border px-3 py-3 text-xs font-semibold transition-all ${
                 selectedAccountType === "patient"
@@ -100,6 +131,7 @@ const onSubmit = async (data) => {
                 className="hidden"
                 {...register("accountType")}
               />
+
               <UserRound size={18} />
               Patient
             </label>
@@ -117,25 +149,9 @@ const onSubmit = async (data) => {
                 className="hidden"
                 {...register("accountType")}
               />
+
               <Stethoscope size={18} />
               Doctor
-            </label>
-
-            <label
-              className={`flex cursor-pointer flex-col items-center justify-center gap-2 rounded-2xl border px-3 py-3 text-xs font-semibold transition-all ${
-                selectedAccountType === "admin"
-                  ? "border-[#4C59A6] bg-[#B8B8FF]/30 text-[#4C59A6]"
-                  : "border-[rgba(172,178,189,0.2)] bg-white text-[#595F69]"
-              }`}
-            >
-              <input
-                type="radio"
-                value="admin"
-                className="hidden"
-                {...register("accountType")}
-              />
-              <ShieldCheck size={18} />
-              Admin
             </label>
           </div>
 
@@ -144,12 +160,29 @@ const onSubmit = async (data) => {
               {errors.accountType.message}
             </p>
           )}
+          {selectedAccountType === "patient" && (
+  <div className="space-y-4">
+    <div className="flex justify-center">
+      <GoogleLogin
+        onSuccess={handleGoogleSuccess}
+        onError={handleGoogleError}
+        theme="outline"
+        size="large"
+        text="continue_with"
+        shape="pill"
+      />
+    </div>
 
-          {/* Form */}
-          <form
-            onSubmit={handleSubmit(onSubmit)}
-            className="space-y-6"
-          >
+    <div className="flex items-center gap-3">
+      <div className="h-px flex-1 bg-[#EEF0F6]" />
+      <span className="text-xs font-bold uppercase tracking-[0.8px] text-[#9CA3AF]">
+        or login with email
+      </span>
+      <div className="h-px flex-1 bg-[#EEF0F6]" />
+    </div>
+  </div>
+)}
+          <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
             <Input
               label="Email ID"
               type="email"
@@ -178,28 +211,22 @@ const onSubmit = async (data) => {
               </div>
 
               <PasswordInput
-            //  label="Password"
-            name="password"
-            placeholder="••••••••"
-            register={register}
-             error={errors.password}
-              /> 
+                name="password"
+                placeholder="••••••••"
+                register={register}
+                error={errors.password}
+              />
             </div>
 
-            <Button
-              type="submit"
-              loading={isSubmitting}
-              className="mt-2"
-            >
+            <Button type="submit" loading={isSubmitting} className="mt-2">
               Login
             </Button>
           </form>
 
-          {/* Footer */}
           {selectedAccountType === "patient" && (
             <div className="flex justify-center gap-1 text-sm">
               <span className="text-[#595F69]">
-                Don't have an account?
+                Don&apos;t have an account?
               </span>
 
               <Link

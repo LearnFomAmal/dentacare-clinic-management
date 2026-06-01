@@ -29,7 +29,10 @@ export const updateUserPasswordByEmail = (email, hashedPassword) => {
 };
 
 export const updateUserById = (id, payload) => {
-  return User.findByIdAndUpdate(id, payload, { new: true });
+  return User.findByIdAndUpdate(id, payload, {
+    new: true,
+    runValidators: true,
+  });
 };
 
 export const softDeleteUserById = (id) => {
@@ -157,4 +160,18 @@ export const updateUserProfileImageById = (
       runValidators: true,
     }
   );
+};
+
+export const findUserByGoogleId = (googleId) => {
+  return User.findOne({
+    googleId,
+    "accountStatus.isDeleted": false,
+  });
+};
+
+export const findActiveUserByEmail = (email) => {
+  return User.findOne({
+    email,
+    "accountStatus.isDeleted": false,
+  });
 };

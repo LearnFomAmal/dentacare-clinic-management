@@ -14,7 +14,19 @@ import ResetPasswordPage from "../pages/public/ResetPasswordPage";
 import DoctorVerificationPendingPage from "../pages/public/DoctorVerificationPendingPage";
 
 import PatientSettingsPage from "../pages/patient/PatientSettingsPage";
+import FindDoctorsPage from "../pages/patient/FindDoctorsPage";
+import DoctorDetailsPage from "../pages/patient/DoctorDetailsPage";
+import BookAppointmentPage from "../pages/patient/BookAppointmentPage";
+import PaymentPage from "../pages/patient/PaymentPage";
+import PaymentSuccessPage from "../pages/patient/PaymentSuccessPage";
+import PaymentFailedPage from "../pages/patient/PaymentFailedPage";
+import MyAppointmentsPage from "../pages/patient/MyAppointmentsPage";
+import MyAppointmentDetailsPage from "../pages/patient/MyAppointmentDetailsPage";
+
 import DoctorSettingsPage from "../pages/doctor/DoctorSettingsPage";
+import DoctorSlotManagementPage from "../pages/doctor/DoctorSlotManagementPage";
+import DoctorAppointmentsPage from "../pages/doctor/DoctorAppointmentsPage";
+import DoctorAppointmentDetailsPage from "../pages/doctor/DoctorAppointmentDetailsPage";
 
 import AdminProfilePage from "../pages/admin/AdminProfilePage";
 import AdminUsersPage from "../pages/admin/AdminUsersPage";
@@ -23,24 +35,18 @@ import AdminDoctorsPage from "../pages/admin/AdminDoctorsPage";
 import AdminDoctorDetailsPage from "../pages/admin/AdminDoctorDetailsPage";
 import AdminAddDoctorPage from "../pages/admin/AdminAddDoctorPage";
 import AdminEditDoctorFeePage from "../pages/admin/AdminEditDoctorFeePage";
-import DoctorSlotManagementPage from "../pages/doctor/DoctorSlotManagementPage";
-import BookAppointmentPage from "../pages/patient/BookAppointmentPage";
-import FindDoctorsPage from "../pages/patient/FindDoctorsPage";
-import DoctorDetailsPage from "../pages/patient/DoctorDetailsPage";
-import PaymentPage from "../pages/patient/PaymentPage";
+import AdminAppointmentsPage from "../pages/admin/AdminAppointmentsPage";
+import AdminAppointmentDetailsPage from "../pages/admin/AdminAppointmentDetailsPage";
+import PatientDashboardPage from "../pages/patient/PatientDashboardPage";
+import DoctorDashboardPage from "../pages/doctor/DoctorDashboardPage";
+import AdminDashboardPage from "../pages/admin/AdminDashboardPage";
+import AdminLoginPage from "../pages/public/AdminLoginPage";
+
 function AppRoutes() {
   return (
     <Routes>
-      {/* Public Landing Page */}
-      <Route
-        path={ROUTES.HOME}
-        element={
-          
-            <HomePage />
-        }
-      />
+      <Route path={ROUTES.HOME} element={<HomePage />} />
 
-      {/* Public Auth Routes */}
       <Route
         path={ROUTES.LOGIN}
         element={
@@ -49,7 +55,14 @@ function AppRoutes() {
           </PublicRoute>
         }
       />
-
+  <Route
+  path={ROUTES.ADMIN_LOGIN}
+  element={
+    <PublicRoute>
+      <AdminLoginPage />
+    </PublicRoute>
+  }
+/>
       <Route
         path={ROUTES.REGISTER}
         element={
@@ -95,7 +108,7 @@ function AppRoutes() {
         }
       />
 
-      {/* Patient Routes */}
+      {/* PATIENT */}
       <Route
         path={ROUTES.USER_SETTINGS}
         element={
@@ -104,25 +117,80 @@ function AppRoutes() {
           </ProtectedRoute>
         }
       />
+
       <Route
-  path={ROUTES.FIND_DOCTORS}
-  element={
-    <ProtectedRoute allowedRoles={["patient"]}>
-      <FindDoctorsPage />
-    </ProtectedRoute>
-  }
-/>
+        path={ROUTES.FIND_DOCTORS}
+        element={
+          <ProtectedRoute allowedRoles={["patient"]}>
+            <FindDoctorsPage />
+          </ProtectedRoute>
+        }
+      />
 
-<Route
-  path={ROUTES.DOCTOR_DETAILS}
-  element={
-    <ProtectedRoute allowedRoles={["patient"]}>
-      <DoctorDetailsPage />
-    </ProtectedRoute>
-  }
-/>
+      <Route
+        path={ROUTES.DOCTOR_DETAILS}
+        element={
+          <ProtectedRoute allowedRoles={["patient"]}>
+            <DoctorDetailsPage />
+          </ProtectedRoute>
+        }
+      />
 
-      {/* Doctor Routes */}
+      <Route
+        path={ROUTES.BOOK_APPOINTMENT}
+        element={
+          <ProtectedRoute allowedRoles={["patient"]}>
+            <BookAppointmentPage />
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path={ROUTES.PAYMENT}
+        element={
+          <ProtectedRoute allowedRoles={["patient"]}>
+            <PaymentPage />
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path={ROUTES.PAYMENT_SUCCESS}
+        element={
+          <ProtectedRoute allowedRoles={["patient"]}>
+            <PaymentSuccessPage />
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path={ROUTES.PAYMENT_FAILED}
+        element={
+          <ProtectedRoute allowedRoles={["patient"]}>
+            <PaymentFailedPage />
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path={ROUTES.MY_APPOINTMENTS}
+        element={
+          <ProtectedRoute allowedRoles={["patient"]}>
+            <MyAppointmentsPage />
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path={ROUTES.MY_APPOINTMENT_DETAILS}
+        element={
+          <ProtectedRoute allowedRoles={["patient"]}>
+            <MyAppointmentDetailsPage />
+          </ProtectedRoute>
+        }
+      />
+
+      {/* DOCTOR */}
       <Route
         path={ROUTES.DOCTOR_SETTINGS}
         element={
@@ -132,7 +200,34 @@ function AppRoutes() {
         }
       />
 
-      {/* Admin Routes */}
+      <Route
+        path={ROUTES.DOCTOR_SLOTS}
+        element={
+          <ProtectedRoute allowedRoles={["doctor"]}>
+            <DoctorSlotManagementPage />
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path={ROUTES.DOCTOR_APPOINTMENTS}
+        element={
+          <ProtectedRoute allowedRoles={["doctor"]}>
+            <DoctorAppointmentsPage />
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path={ROUTES.DOCTOR_APPOINTMENT_DETAILS}
+        element={
+          <ProtectedRoute allowedRoles={["doctor"]}>
+            <DoctorAppointmentDetailsPage />
+          </ProtectedRoute>
+        }
+      />
+
+      {/* ADMIN */}
       <Route
         path={ROUTES.ADMIN_PROFILE}
         element={
@@ -195,32 +290,52 @@ function AppRoutes() {
           </ProtectedRoute>
         }
       />
-       <Route
-   path={ROUTES.DOCTOR_SLOTS}
-   element={
-    <ProtectedRoute allowedRoles={["doctor"]}>
-      <DoctorSlotManagementPage />
+
+      <Route
+        path={ROUTES.ADMIN_APPOINTMENTS}
+        element={
+          <ProtectedRoute allowedRoles={["admin"]}>
+            <AdminAppointmentsPage />
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path={ROUTES.ADMIN_APPOINTMENT_DETAILS}
+        element={
+          <ProtectedRoute allowedRoles={["admin"]}>
+            <AdminAppointmentDetailsPage />
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+  path={ROUTES.PATIENT_DASHBOARD}
+  element={
+    <ProtectedRoute allowedRoles={["patient"]}>
+      <PatientDashboardPage />
     </ProtectedRoute>
   }
 />
-  <Route
-  path={ROUTES.BOOK_APPOINTMENT}
-  element={
-    <ProtectedRoute allowedRoles={["patient"]}>
-      <BookAppointmentPage />
-    </ProtectedRoute>
-  }
-  />
 
-  <Route
-   path={ROUTES.PAYMENT}
+<Route
+  path={ROUTES.DOCTOR_DASHBOARD}
   element={
-     <ProtectedRoute allowedRoles={["patient"]}>
-      <PaymentPage />
+    <ProtectedRoute allowedRoles={["doctor"]}>
+      <DoctorDashboardPage />
     </ProtectedRoute>
   }
- />
-      {/* Fallback */}
+/>
+
+<Route
+  path={ROUTES.ADMIN_DASHBOARD}
+  element={
+    <ProtectedRoute allowedRoles={["admin"]}>
+      <AdminDashboardPage />
+    </ProtectedRoute>
+  }
+/>
+
       <Route path="*" element={<Navigate to={ROUTES.HOME} replace />} />
     </Routes>
   );

@@ -555,120 +555,72 @@ export const verifyDoctorAccountService = async (
   await deleteOldOtps(email, "doctor_verify");
 };
 
-export const refreshDoctorTokenService =
-  async (refreshToken) => {
-    if (!refreshToken) {
-      throw new AppError(
-        "Refresh token missing",
-        401
-      );
-    }
+export const refreshDoctorTokenService = async (refreshToken) => {
+  if (!refreshToken) {
+    throw new AppError("Refresh token missing", 401);
+  }
 
-    let decoded;
+  let decoded;
 
-    try {
-      decoded = jwt.verify(
-        refreshToken,
-        env.REFRESH_TOKEN_SECRET
-      );
-    } catch {
-      throw new AppError(
-        "Invalid refresh token",
-        401
-      );
-    }
+  try {
+    decoded = jwt.verify(refreshToken, env.REFRESH_TOKEN_SECRET);
+  } catch {
+    throw new AppError("Invalid refresh token", 401);
+  }
 
-    if (decoded.role !== "doctor") {
-      throw new AppError(
-        "Invalid token role",
-        403
-      );
-    }
-       if (session.userType !== "doctor") {
-  throw new AppError("Invalid session type", 401);
-}
-    const session =
-      await findSessionByRefreshToken(
-        refreshToken
-      );
+  if (decoded.role !== "doctor") {
+    throw new AppError("Invalid token role", 403);
+  }
 
-    if (!session) {
-      throw new AppError(
-        "Session expired",
-        401
-      );
-    }
-   if (new Date() > session.expiresAt) {
-  throw new AppError(
-    "Session expired",
-    401
-  );
-}
+  const session = await findSessionByRefreshToken(refreshToken);
 
+  if (!session) {
+    throw new AppError("Session expired", 401);
+  }
 
-    const doctor =
-      await findDoctorById(
-        decoded.doctorId
-      );
+  if (session.userType !== "doctor") {
+    throw new AppError("Invalid session type", 401);
+  }
 
-    if (!doctor) {
-      throw new AppError(
-        "Doctor not found",
-        404
-      );
-    }
+  if (new Date() > session.expiresAt) {
+    throw new AppError("Session expired", 401);
+  }
 
-    if (
-      doctor.accountStatus.isBlocked
-    ) {
-      throw new AppError(
-        "Doctor blocked",
-        403
-      );
-    }
+  const doctor = await findDoctorById(decoded.doctorId);
 
-    if (
-      doctor.accountStatus.isDeleted
-    ) {
-      throw new AppError(
-        "Doctor deleted",
-        403
-      );
-    }
- if (
-  session.userId.toString() !==
-  doctor._id.toString()
-) {
-  throw new AppError(
-    "Session mismatch",
-    401
-  );
-}
-    const newAccessToken =
-      generateAccessToken({
-        doctorId: doctor._id,
-        role: "doctor",
-      });
+  if (!doctor) {
+    throw new AppError("Doctor not found", 404);
+  }
 
-    const newRefreshToken =
-      generateRefreshToken({
-        doctorId: doctor._id,
-        role: "doctor",
-      });
+  if (doctor.accountStatus.isBlocked) {
+    throw new AppError("Doctor blocked", 403);
+  }
 
-    await updateSessionRefreshToken(
-      refreshToken,
-      newRefreshToken
-    );
+  if (doctor.accountStatus.isDeleted) {
+    throw new AppError("Doctor deleted", 403);
+  }
 
-    return {
-      accessToken:
-        newAccessToken,
+  if (session.userId.toString() !== doctor._id.toString()) {
+    throw new AppError("Session mismatch", 401);
+  }
 
-      refreshToken:
-        newRefreshToken,
-    };
+  const newAccessToken = generateAccessToken({
+    doctorId: doctor._id,
+    role: "doctor",
+  });
+
+  const newRefreshToken = generateRefreshToken({
+    doctorId: doctor._id,
+    role: "doctor",
+  });
+
+  await updateSessionRefreshToken(refreshToken, newRefreshToken);
+
+  return {
+    accessToken: newAccessToken,
+    refreshToken: newRefreshToken,
   };
+};
 
   export const resendDoctorVerificationOtpService =
   async (email) => {

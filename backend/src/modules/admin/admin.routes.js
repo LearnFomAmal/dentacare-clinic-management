@@ -8,6 +8,7 @@ import {
   verifyForgotOtpController,
   resetAdminPasswordController,
   resendForgotOtpController,
+  refreshAdminTokenController,
 } from "./admin.controller.js";
 
 import {
@@ -24,6 +25,7 @@ router.post(
   "/login",
   adminLoginController
 );
+router.post("/refresh-token", refreshAdminTokenController);
 
 router.post(
   "/logout",

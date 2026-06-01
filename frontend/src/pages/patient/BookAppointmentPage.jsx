@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import {
   ArrowLeft,
   CalendarDays,
+  Crop,
   FileText,
   IndianRupee,
   Paperclip,
@@ -9,10 +10,11 @@ import {
   Stethoscope,
   Trash2,
   Upload,
+  X,
 } from "lucide-react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import toast from "react-hot-toast";
-
+import ImageCropperModal from "../../components/common/ImageCropperModal";
 import PatientLayout from "../../components/patient/PatientLayout";
 import Button from "../../components/ui/Button";
 import { ROUTES } from "../../constants/routes";
@@ -47,11 +49,36 @@ const formatTime = (time) => {
   )} ${period}`;
 };
 
+const MAX_REPORT_FILE_SIZE = 5 * 1024 * 1024;
+
+const ALLOWED_REPORT_TYPES = [
+  "image/jpeg",
+  "image/jpg",
+  "image/png",
+  "image/webp",
+  "application/pdf",
+];
+
+const isImageFile = (file) => {
+  return file?.type?.startsWith("image/");
+};
+const isPatientProfileComplete = (user) => {
+  return Boolean(
+    user?.username &&
+      user?.email &&
+      user?.personalInfo?.dateOfBirth &&
+      user?.personalInfo?.gender &&
+      user?.personalInfo?.phoneNumber &&
+      user?.personalInfo?.bloodGroup
+  );
+};
 function BookAppointmentPage() {
   const { doctorId } = useParams();
   const navigate = useNavigate();
   const dispatch = useAppDispatch();
-
+const { user } = useAppSelector((state) => state.auth);
+const [cropSourceUrl, setCropSourceUrl] = useState("");
+const [isReportCropOpen, setIsReportCropOpen] = useState(false);
   const {
     selectedDoctor,
     selectedDate,
@@ -86,11 +113,9 @@ function BookAppointmentPage() {
     selectedDate ||
     "";
 
-  const slotDayId =
+ const slotDayId =
   bookingDraft?.slotDayId ||
   selectedSlot?.slotDayId ||
-  availableSlotData?.slotDayId ||
-  availableSlotData?._id ||
   "";
 
   const [bookingReason, setBookingReason] = useState("");
@@ -127,13 +152,17 @@ function BookAppointmentPage() {
     dispatch(clearAppointmentError());
   }, [appointmentError, dispatch]);
 
-  useEffect(() => {
-    return () => {
-      if (localPreviewUrl) {
-        URL.revokeObjectURL(localPreviewUrl);
-      }
-    };
-  }, [localPreviewUrl]);
+useEffect(() => {
+  return () => {
+    if (localPreviewUrl) {
+      URL.revokeObjectURL(localPreviewUrl);
+    }
+
+    if (cropSourceUrl) {
+      URL.revokeObjectURL(cropSourceUrl);
+    }
+  };
+}, [localPreviewUrl, cropSourceUrl]);
 
   const doctor = selectedDoctor;
   const consultationFee = doctor?.professionalInfo?.consultationFee || 0;
@@ -142,43 +171,126 @@ function BookAppointmentPage() {
     return draftReports.map((report) => report._id);
   }, [draftReports]);
 
-  const handleReportFormChange = (event) => {
-    const { name, value, files } = event.target;
+const handleReportFormChange = (event) => {
+  const { name, value, files } = event.target;
 
-    if (name === "file") {
-      const file = files?.[0];
+  if (name === "file") {
+    const file = files?.[0];
 
-      setReportForm((prev) => ({
-        ...prev,
-        file: file || null,
-      }));
+    if (!file) return;
 
-      if (localPreviewUrl) {
-        URL.revokeObjectURL(localPreviewUrl);
-      }
+    if (!ALLOWED_REPORT_TYPES.includes(file.type)) {
+      toast.error("Only JPG, JPEG, PNG, WEBP and PDF files are allowed");
+      event.target.value = "";
+      return;
+    }
 
-      if (file && file.type.startsWith("image/")) {
-        setLocalPreviewUrl(URL.createObjectURL(file));
-      } else {
-        setLocalPreviewUrl("");
-      }
-
+    if (file.size > MAX_REPORT_FILE_SIZE) {
+      toast.error("Report file size must be less than 5MB");
+      event.target.value = "";
       return;
     }
 
     setReportForm((prev) => ({
       ...prev,
-      [name]: value,
+      file,
     }));
-  };
+
+    if (localPreviewUrl) {
+      URL.revokeObjectURL(localPreviewUrl);
+    }
+
+    if (cropSourceUrl) {
+      URL.revokeObjectURL(cropSourceUrl);
+    }
+
+    if (isImageFile(file)) {
+      const objectUrl = URL.createObjectURL(file);
+
+      setLocalPreviewUrl(objectUrl);
+      setCropSourceUrl(objectUrl);
+      setIsReportCropOpen(true);
+    } else {
+      setLocalPreviewUrl("");
+      setCropSourceUrl("");
+      setIsReportCropOpen(false);
+    }
+
+    return;
+  }
+
+  setReportForm((prev) => ({
+    ...prev,
+    [name]: value,
+  }));
+};
+
+const handleReportCropComplete = (croppedFile) => {
+  if (localPreviewUrl) {
+    URL.revokeObjectURL(localPreviewUrl);
+  }
+
+  const finalFile = new File(
+    [croppedFile],
+    reportForm.file?.name || "cropped-report.jpg",
+    {
+      type: croppedFile.type,
+      lastModified: Date.now(),
+    }
+  );
+
+  const preview = URL.createObjectURL(finalFile);
+
+  setReportForm((prev) => ({
+    ...prev,
+    file: finalFile,
+  }));
+
+  setLocalPreviewUrl(preview);
+  setCropSourceUrl(preview);
+  setIsReportCropOpen(false);
+};
+
+const handleCancelReportCrop = () => {
+  setIsReportCropOpen(false);
+};
+
+const handleRemoveReportFile = () => {
+  if (localPreviewUrl) {
+    URL.revokeObjectURL(localPreviewUrl);
+  }
+
+  if (cropSourceUrl && cropSourceUrl !== localPreviewUrl) {
+    URL.revokeObjectURL(cropSourceUrl);
+  }
+
+  setLocalPreviewUrl("");
+  setCropSourceUrl("");
+
+  setReportForm((prev) => ({
+    ...prev,
+    file: null,
+  }));
+
+  const fileInput = document.getElementById("report-file-input");
+
+  if (fileInput) {
+    fileInput.value = "";
+  }
+};
 
   const resetReportForm = () => {
     if (localPreviewUrl) {
       URL.revokeObjectURL(localPreviewUrl);
     }
-
+      if (cropSourceUrl) {
+  URL.revokeObjectURL(cropSourceUrl);
+}
     setLocalPreviewUrl("");
 
+
+setCropSourceUrl("");
+setIsReportCropOpen(false);
     setReportForm({
       title: "",
       reportType: "other",
@@ -256,8 +368,19 @@ function BookAppointmentPage() {
       toast.error("Please enter reason for appointment");
       return;
     }
+  if (!isPatientProfileComplete(user)) {
+  toast.error("Please complete your profile before booking");
 
+  navigate(ROUTES.USER_SETTINGS, {
+    state: {
+      reason: "complete_profile_before_booking",
+    },
+  });
+
+  return;
+} 
     try {
+
       const result = await dispatch(
         initiateAppointment({
           doctorId,
@@ -317,13 +440,15 @@ function BookAppointmentPage() {
                 onChange={(value) => setBookingReason(value)}
               />
 
-              <ReportUploadCard
-                reportForm={reportForm}
-                localPreviewUrl={localPreviewUrl}
-                isUploading={isUploading}
-                onChange={handleReportFormChange}
-                onUpload={handleUploadReport}
-              />
+             <ReportUploadCard
+      reportForm={reportForm}
+        localPreviewUrl={localPreviewUrl}
+      isUploading={isUploading}
+     onChange={handleReportFormChange}
+     onUpload={handleUploadReport}
+     onCrop={() => setIsReportCropOpen(true)}
+     onRemoveFile={handleRemoveReportFile}
+/>
 
               <UploadedReportsCard
                 reports={draftReports}
@@ -395,6 +520,17 @@ function BookAppointmentPage() {
           </div>
         )}
       </main>
+      <ImageCropperModal
+  open={isReportCropOpen}
+  imageSrc={cropSourceUrl}
+  fileName={reportForm.file?.name || "cropped-report.jpg"}
+  aspect={4 / 3}
+  cropShape="rect"
+  title="Crop Report Image"
+  description="Crop the uploaded report image before attaching it to your appointment."
+  onCancel={handleCancelReportCrop}
+  onCropComplete={handleReportCropComplete}
+/>
     </PatientLayout>
   );
 }
@@ -497,7 +633,11 @@ function ReportUploadCard({
   isUploading,
   onChange,
   onUpload,
+  onCrop,
+  onRemoveFile,
 }) {
+  const fileIsImage = isImageFile(reportForm.file);
+
   return (
     <div className="rounded-3xl border border-[#EEF0F6] bg-white p-7 shadow-[0_18px_48px_rgba(17,24,39,0.05)]">
       <div className="mb-5 flex items-center gap-3">
@@ -561,17 +701,41 @@ function ReportUploadCard({
 
         {reportForm.file && (
           <div className="mt-4 rounded-2xl bg-white p-4">
-            <div className="flex items-center gap-3">
-              <Paperclip size={18} className="text-[#9381FF]" />
+            <div className="flex items-start justify-between gap-4">
+              <div className="flex min-w-0 items-center gap-3">
+                <Paperclip size={18} className="shrink-0 text-[#9381FF]" />
 
-              <div>
-                <p className="text-sm font-bold text-[#111827]">
-                  {reportForm.file.name}
-                </p>
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-bold text-[#111827]">
+                    {reportForm.file.name}
+                  </p>
 
-                <p className="text-xs text-[#6B7280]">
-                  {(reportForm.file.size / 1024 / 1024).toFixed(2)} MB
-                </p>
+                  <p className="text-xs text-[#6B7280]">
+                    {(reportForm.file.size / 1024 / 1024).toFixed(2)} MB
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex shrink-0 gap-2">
+                {fileIsImage && (
+                  <button
+                    type="button"
+                    onClick={onCrop}
+                    className="inline-flex h-9 items-center gap-1 rounded-xl bg-[#F0F1FF] px-3 text-xs font-extrabold text-[#9381FF] transition hover:bg-[#E5E2FF]"
+                  >
+                    <Crop size={14} />
+                    Crop
+                  </button>
+                )}
+
+                <button
+                  type="button"
+                  onClick={onRemoveFile}
+                  className="inline-flex h-9 items-center gap-1 rounded-xl bg-red-50 px-3 text-xs font-extrabold text-red-500 transition hover:bg-red-100"
+                >
+                  <X size={14} />
+                  Remove
+                </button>
               </div>
             </div>
 
@@ -579,8 +743,14 @@ function ReportUploadCard({
               <img
                 src={localPreviewUrl}
                 alt="Report preview"
-                className="mt-4 h-40 w-full rounded-2xl object-cover"
+                className="mt-4 h-48 w-full rounded-2xl object-cover"
               />
+            )}
+
+            {!fileIsImage && (
+              <div className="mt-4 rounded-2xl border border-[#EEF0F6] bg-[#F8FAFC] p-4 text-sm font-semibold text-[#6B7280]">
+                PDF selected. Cropping is only available for image reports.
+              </div>
             )}
           </div>
         )}

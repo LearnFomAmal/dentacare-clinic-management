@@ -205,10 +205,12 @@ function DoctorDetailsPage() {
                     Loading available slots...
                   </div>
                 ) : availableSlotData?.isHoliday ? (
-                  <div className="rounded-2xl bg-orange-50 p-6 text-sm font-bold text-orange-600">
-                    Sunday holiday. No slots available.
-                  </div>
-                ) : sortedSlots.length > 0 ? (
+  <div className="rounded-2xl bg-orange-50 p-6 text-sm font-bold text-orange-600">
+    {availableSlotData?.dayOfWeek === "Sunday"
+      ? "Sunday holiday. No slots available."
+      : "Doctor is not available on this date. Please select another date."}
+  </div>
+): sortedSlots.length > 0 ? (
                   <div className="grid gap-4 md:grid-cols-2">
                     {sortedSlots.map((slot) => {
                       const active = selectedSlot?._id === slot._id;
