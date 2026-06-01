@@ -112,7 +112,7 @@ const ensureSlotDay = async (doctorId, date) => {
   let slotDay = await findSlotDayByDoctorAndDate(doctorId, date);
 
   if (slotDay) {
-    return slotDay;
+    return clearExpiredReservations(slotDay);
   }
 
   try {
@@ -123,7 +123,8 @@ const ensureSlotDay = async (doctorId, date) => {
     return slotDay;
   } catch (error) {
     if (error.code === 11000) {
-      return findSlotDayByDoctorAndDate(doctorId, date);
+      const existingSlotDay = await findSlotDayByDoctorAndDate(doctorId, date);
+      return clearExpiredReservations(existingSlotDay);
     }
 
     throw error;
@@ -215,7 +216,35 @@ const getSortOption = (sort) => {
     createdAt: -1,
   };
 };
+const clearExpiredReservations = async (slotDay) => {
+  if (!slotDay || slotDay.isHoliday) {
+    return slotDay;
+  }
 
+  const now = new Date();
+  let changed = false;
+
+  slotDay.slots.forEach((slot) => {
+    const isExpiredReservation =
+      slot.status === "reserved" &&
+      slot.reservedUntil &&
+      slot.reservedUntil < now;
+
+    if (isExpiredReservation) {
+      slot.status = "available";
+      slot.reservedBy = null;
+      slot.reservedAppointmentId = null;
+      slot.reservedUntil = null;
+      changed = true;
+    }
+  });
+
+  if (changed) {
+    await slotDay.save();
+  }
+
+  return slotDay;
+};
 // ==============================
 // SERVICES
 // ==============================
@@ -350,13 +379,12 @@ export const getPublicDoctorAvailableSlotsService = async (
     throw new AppError("Doctor not found", 404);
   }
 
- const slotDay = await ensureSlotDay(doctorId, date);
+const slotDay = await ensureSlotDay(doctorId, date);
 
 const slotDayId = slotDay._id.toString();
 const bookableSlots = getBookableSlots(slotDay);
 
-const isUnavailable =
-  slotDay.isHoliday || bookableSlots.length === 0;
+const isUnavailable = slotDay.isHoliday || bookableSlots.length === 0;
 
 return {
   doctorId,
@@ -364,7 +392,8 @@ return {
   _id: slotDayId,
   date,
   dayOfWeek: slotDay.dayOfWeek,
-  isHoliday: isUnavailable,
+  isHoliday: slotDay.isHoliday,
+  isUnavailable,
   slots: isUnavailable ? [] : bookableSlots,
 };
 };

@@ -54,8 +54,9 @@ export const findPatientReportsByIds = ({ patientId, reportIds }) => {
   });
 };
 
-export const createAppointment = (payload) => {
-  return Appointment.create(payload);
+export const createAppointment = async ({ payload, session = null }) => {
+  const appointments = await Appointment.create([payload], { session });
+  return appointments[0];
 };
 
 export const findAppointmentByIdForPatient = ({
@@ -194,3 +195,33 @@ export const saveSlotDay = ({
 }) => {
   return slotDay.save({ session });
 };
+
+export const findSlotDayForBookingWithSession = ({
+  slotDayId,
+  doctorId,
+  session = null,
+}) => {
+  return DoctorSlot.findOne({
+    _id: slotDayId,
+    doctorId,
+  }).session(session);
+};
+
+export const updateReportsAsAttached = ({
+  reportIds,
+  appointmentId,
+  doctorId,
+  session = null,
+}) => {
+  return Report.updateMany(
+    {
+      _id: { $in: reportIds },
+    },
+    {
+      appointmentId,
+      doctorId,
+      status: "attached",
+    }
+  ).session(session);
+};
+

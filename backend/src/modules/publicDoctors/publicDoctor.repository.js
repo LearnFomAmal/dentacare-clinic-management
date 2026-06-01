@@ -19,12 +19,7 @@ export const countPublicDoctors = (filter) => {
   return Doctor.countDocuments(filter);
 };
 
-export const findPublicDoctors = ({
-  filter,
-  skip,
-  limit,
-  sort,
-}) => {
+export const findPublicDoctors = ({ filter, skip, limit, sort }) => {
   return Doctor.find(filter)
     .select(
       "_id firstName lastName email specialization professionalInfo settings stats accountStatus createdAt"

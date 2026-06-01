@@ -106,25 +106,68 @@ const appointmentSchema = new mongoose.Schema(
       index: true,
     },
 
-    pricing: {
-      consultationFee: {
-        type: Number,
-        required: true,
-        min: 0,
-      },
+   pricing: {
+  consultationFee: {
+    type: Number,
+    required: true,
+    min: 0,
+  },
 
-      totalDiscount: {
-        type: Number,
-        default: 0,
-        min: 0,
-      },
+  couponDiscount: {
+    type: Number,
+    default: 0,
+    min: 0,
+  },
 
-      finalAmount: {
-        type: Number,
-        required: true,
-        min: 0,
-      },
-    },
+  referralDiscount: {
+    type: Number,
+    default: 0,
+    min: 0,
+  },
+
+  rewardDiscount: {
+    type: Number,
+    default: 0,
+    min: 0,
+  },
+
+  totalDiscount: {
+    type: Number,
+    default: 0,
+    min: 0,
+  },
+
+  finalAmount: {
+    type: Number,
+    required: true,
+    min: 0,
+  },
+
+  appliedCouponId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "Coupon",
+    default: null,
+  },
+
+  appliedCouponCode: {
+    type: String,
+    default: "",
+    trim: true,
+    uppercase: true,
+  },
+
+  appliedReferralId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "Referral",
+    default: null,
+  },
+
+  appliedRewardRuleId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "RewardRule",
+    default: null,
+  },
+},
 
     paymentSummary: {
       paymentId: {
@@ -148,7 +191,19 @@ const appointmentSchema = new mongoose.Schema(
         default: null,
       },
     },
+      
+   reservation: {
+  reservedUntil: {
+    type: Date,
+    default: null,
+  },
 
+  releasedAt: {
+    type: Date,
+    default: null,
+  },
+},
+ 
     approval: {
       approvedBy: {
         type: String,

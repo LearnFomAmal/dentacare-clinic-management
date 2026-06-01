@@ -9,6 +9,10 @@ import {
   findSlotDayById,
   saveAppointment,
   saveSlotDay,
+  createCouponUsage,
+ findCouponForPayment,
+countCompletedCouponUsageByUser,
+incrementCouponUsedCountSafely,
 } from "./payment.repository.js";
 
 import {
@@ -33,8 +37,15 @@ const buildPaymentPayload = ({
     doctorId: appointment.doctorId,
 
     consultationFee: appointment.pricing.consultationFee,
+    couponDiscount: appointment.pricing.couponDiscount || 0,
+    referralDiscount: appointment.pricing.referralDiscount || 0,
+    rewardDiscount: appointment.pricing.rewardDiscount || 0,
     totalDiscount: appointment.pricing.totalDiscount || 0,
     finalAmount: appointment.pricing.finalAmount,
+
+    couponId: appointment.pricing.appliedCouponId || null,
+    referralId: appointment.pricing.appliedReferralId || null,
+    rewardRuleId: appointment.pricing.appliedRewardRuleId || null,
 
     paymentMethod,
     transactionId: transactionId.trim(),
@@ -44,17 +55,10 @@ const buildPaymentPayload = ({
   };
 };
 
-export const markPaymentSuccessService = async ({
-  patientId,
-  body,
-}) => {
+export const markPaymentSuccessService = async ({ patientId, body }) => {
   validatePaymentSuccessInput(body);
 
-  const {
-    appointmentId,
-    paymentMethod,
-    transactionId,
-  } = body;
+  const { appointmentId, paymentMethod, transactionId } = body;
 
   const session = await mongoose.startSession();
 
@@ -93,6 +97,16 @@ export const markPaymentSuccessService = async ({
         throw new AppError("Appointment already paid", 400);
       }
 
+      if (
+        appointment.reservation?.reservedUntil &&
+        appointment.reservation.reservedUntil < new Date()
+      ) {
+        throw new AppError(
+          "Payment time expired. Please select the slot again.",
+          400
+        );
+      }
+
       const slotDay = await findSlotDayById({
         slotDayId: appointment.slotDayId,
         doctorId: getAppointmentDoctorId(appointment),
@@ -109,9 +123,34 @@ export const markPaymentSuccessService = async ({
         throw new AppError("Selected slot not found", 404);
       }
 
-      if (slot.status !== "available") {
+      if (slot.status !== "reserved") {
+        throw new AppError("Selected slot is not reserved", 400);
+      }
+
+      if (
+        !slot.reservedAppointmentId ||
+        slot.reservedAppointmentId.toString() !== appointment._id.toString()
+      ) {
+        throw new AppError("Slot reservation mismatch", 400);
+      }
+
+      if (!slot.reservedBy || slot.reservedBy.toString() !== patientId.toString()) {
+        throw new AppError("Slot is reserved by another patient", 400);
+      }
+
+      if (slot.reservedUntil && slot.reservedUntil < new Date()) {
+        slot.status = "available";
+        slot.reservedBy = null;
+        slot.reservedAppointmentId = null;
+        slot.reservedUntil = null;
+
+        appointment.reservation.releasedAt = new Date();
+
+        await saveSlotDay({ slotDay, session });
+        await saveAppointment({ appointment, session });
+
         throw new AppError(
-          "Selected slot is no longer available",
+          "Slot reservation expired. Please book again.",
           400
         );
       }
@@ -126,7 +165,67 @@ export const markPaymentSuccessService = async ({
         session,
       });
 
+   if (
+  appointment.pricing?.appliedCouponId &&
+  appointment.pricing?.couponDiscount > 0
+) {
+  const coupon = await findCouponForPayment({
+    couponId: appointment.pricing.appliedCouponId,
+    session,
+  });
+
+  if (!coupon) {
+    throw new AppError("Applied coupon no longer exists", 400);
+  }
+
+  if (!coupon.isActive) {
+    throw new AppError("Applied coupon is no longer active", 400);
+  }
+
+  const now = new Date();
+
+  if (now > coupon.validTo) {
+    throw new AppError("Applied coupon has expired", 400);
+  }
+
+  const userUsageCount = await countCompletedCouponUsageByUser({
+    userId: appointment.patientId,
+    couponId: coupon._id,
+    session,
+  });
+
+  if (userUsageCount >= coupon.maxUsagePerUser) {
+    throw new AppError("Coupon usage limit reached for this user", 400);
+  }
+
+  const incrementResult = await incrementCouponUsedCountSafely({
+    couponId: coupon._id,
+    session,
+  });
+
+  if (incrementResult.modifiedCount !== 1) {
+    throw new AppError("Coupon usage limit reached", 400);
+  }
+
+  await createCouponUsage({
+    payload: {
+      userId: appointment.patientId,
+      couponId: coupon._id,
+      appointmentId: appointment._id,
+      paymentId: payment._id,
+      discountApplied: appointment.pricing.couponDiscount,
+      finalAmount: appointment.pricing.finalAmount,
+      status: "completed",
+      usedAt: new Date(),
+    },
+    session,
+  });
+}
+
       slot.status = "booked";
+      slot.reservedBy = null;
+      slot.reservedAppointmentId = null;
+      slot.reservedUntil = null;
 
       appointment.status = "pending";
       appointment.paymentStatus = "paid";
@@ -160,10 +259,7 @@ export const markPaymentSuccessService = async ({
   }
 };
 
-export const markPaymentFailedService = async ({
-  patientId,
-  body,
-}) => {
+export const markPaymentFailedService = async ({ patientId, body }) => {
   validatePaymentFailedInput(body);
 
   const {
@@ -221,7 +317,37 @@ export const markPaymentFailedService = async ({
         session,
       });
 
+      const slotDay = await findSlotDayById({
+        slotDayId: appointment.slotDayId,
+        doctorId: getAppointmentDoctorId(appointment),
+        session,
+      });
+
+      if (slotDay) {
+        const slot = slotDay.slots.id(appointment.slotId);
+
+        if (
+          slot &&
+          slot.status === "reserved" &&
+          slot.reservedAppointmentId?.toString() === appointment._id.toString()
+        ) {
+          slot.status = "available";
+          slot.reservedBy = null;
+          slot.reservedAppointmentId = null;
+          slot.reservedUntil = null;
+
+          await saveSlotDay({
+            slotDay,
+            session,
+          });
+        }
+      }
+
       appointment.paymentStatus = "failed";
+      appointment.reservation = {
+        reservedUntil: appointment.reservation?.reservedUntil || null,
+        releasedAt: new Date(),
+      };
 
       await saveAppointment({
         appointment,

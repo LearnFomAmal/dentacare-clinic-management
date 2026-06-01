@@ -49,29 +49,35 @@ export const validateInitiateAppointmentInput = (body) => {
     appointmentDate,
     reason,
     reportIds = [],
+    couponCode = "",
   } = body;
+
+  if (!doctorId) {
+    throw new AppError("Doctor id is required", 400);
+  }
+
+  if (!slotDayId) {
+    throw new AppError("Slot day id is required", 400);
+  }
+
+  if (!slotId) {
+    throw new AppError("Slot id is required", 400);
+  }
 
   validateObjectId(doctorId, "doctor id");
   validateObjectId(slotDayId, "slot day id");
   validateObjectId(slotId, "slot id");
-  validateDateString(appointmentDate);
 
-  if (!reason || !reason.trim()) {
-    throw new AppError("Appointment reason is required", 400);
+  if (!appointmentDate || !/^\d{4}-\d{2}-\d{2}$/.test(appointmentDate)) {
+    throw new AppError("Valid appointment date is required", 400);
   }
 
-  if (reason.trim().length < 5) {
-    throw new AppError(
-      "Appointment reason must be at least 5 characters",
-      400
-    );
+  if (!reason || !reason.trim()) {
+    throw new AppError("Reason for appointment is required", 400);
   }
 
   if (reason.trim().length > 500) {
-    throw new AppError(
-      "Appointment reason cannot exceed 500 characters",
-      400
-    );
+    throw new AppError("Reason cannot exceed 500 characters", 400);
   }
 
   if (!Array.isArray(reportIds)) {
@@ -81,15 +87,30 @@ export const validateInitiateAppointmentInput = (body) => {
   reportIds.forEach((reportId) => {
     validateObjectId(reportId, "report id");
   });
+
+  if (couponCode && typeof couponCode !== "string") {
+    throw new AppError("Coupon code must be a string", 400);
+  }
 };
+
 
 export const validateAppointmentStatusFilter = (status) => {
   if (!status) return;
 
-  if (!VALID_STATUS_FILTERS.includes(status)) {
+  const allowedStatuses = [
+    "pending_payment",
+    "pending",
+    "approved",
+    "rejected",
+    "cancelled",
+    "completed",
+  ];
+
+  if (!allowedStatuses.includes(status)) {
     throw new AppError("Invalid appointment status filter", 400);
   }
 };
+
 
 export const validateRejectAppointmentInput = (body) => {
   const { reasonType, reason } = body;

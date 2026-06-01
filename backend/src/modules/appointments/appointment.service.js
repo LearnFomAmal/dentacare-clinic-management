@@ -3,6 +3,9 @@ import mongoose from "mongoose";
 import AppError from "../../shared/errors/AppError.js";
 import { findUserById } from "../users/user.repository.js";
 import {
+  validateCouponForAppointment,
+} from "../coupons/coupon.service.js";
+import {
   createAppointment,
   findAdminAppointmentById,
   findAdminAppointments,
@@ -19,6 +22,8 @@ import {
   findSlotDayForBooking,
   saveAppointment,
   saveSlotDay,
+  findSlotDayForBookingWithSession,
+updateReportsAsAttached,
 } from "./appointment.repository.js";
 
 import {
@@ -106,25 +111,54 @@ const releaseBookedSlot = async ({
     });
   }
 };
+const RESERVATION_MINUTES = 10;
 
-export const initiateAppointmentService = async ({
-  patientId,
-  body,
-}) => {
+const getReservationExpiry = () => {
+  return new Date(Date.now() + RESERVATION_MINUTES * 60 * 1000);
+};
+
+const clearExpiredReservationsInSlotDay = async ({ slotDay, session }) => {
+  const now = new Date();
+  let changed = false;
+
+  slotDay.slots.forEach((slot) => {
+    if (
+      slot.status === "reserved" &&
+      slot.reservedUntil &&
+      slot.reservedUntil < now
+    ) {
+      slot.status = "available";
+      slot.reservedBy = null;
+      slot.reservedAppointmentId = null;
+      slot.reservedUntil = null;
+      changed = true;
+    }
+  });
+
+  if (changed) {
+    await saveSlotDay({
+      slotDay,
+      session,
+    });
+  }
+};
+export const initiateAppointmentService = async ({ patientId, body }) => {
   validateObjectId(patientId, "patient id");
   validateInitiateAppointmentInput(body);
+
   const patient = await findUserById(patientId);
 
-if (!patient || patient.accountStatus?.isDeleted) {
-  throw new AppError("Patient not found", 404);
-}
+  if (!patient || patient.accountStatus?.isDeleted) {
+    throw new AppError("Patient not found", 404);
+  }
 
-if (!isPatientProfileComplete(patient)) {
-  throw new AppError(
-    "Please complete your profile before booking an appointment",
-    400
-  );
-}
+  if (!isPatientProfileComplete(patient)) {
+    throw new AppError(
+      "Please complete your profile before booking an appointment",
+      400
+    );
+  }
+
   const {
     doctorId,
     slotDayId,
@@ -132,6 +166,7 @@ if (!isPatientProfileComplete(patient)) {
     appointmentDate,
     reason,
     reportIds = [],
+    couponCode = "",
   } = body;
 
   const doctor = await findDoctorForBooking(doctorId);
@@ -152,48 +187,6 @@ if (!isPatientProfileComplete(patient)) {
     throw new AppError("Doctor is not verified", 400);
   }
 
-  const slotDay = await findSlotDayForBooking({
-    slotDayId,
-    doctorId,
-  });
-
-  if (!slotDay) {
-    throw new AppError("Slot day not found", 404);
-  }
-
-  if (slotDay.date !== appointmentDate) {
-    throw new AppError(
-      "Selected slot date does not match appointment date",
-      400
-    );
-  }
-
-  if (slotDay.isHoliday) {
-    throw new AppError("Cannot book appointment on holiday", 400);
-  }
-
-  const selectedSlot = slotDay.slots.id(slotId);
-
-  if (!selectedSlot || selectedSlot.isDeleted) {
-    throw new AppError("Selected slot not found", 404);
-  }
-
-  if (selectedSlot.status !== "available") {
-    throw new AppError("Selected slot is not available", 400);
-  }
-
-  const existingPendingAppointment =
-    await findExistingPendingPaymentAppointment({
-      patientId,
-      doctorId,
-      appointmentDate,
-      slotId,
-    });
-
-  if (existingPendingAppointment) {
-    return existingPendingAppointment;
-  }
-
   let appointmentReports = [];
 
   if (reportIds.length > 0) {
@@ -203,46 +196,143 @@ if (!isPatientProfileComplete(patient)) {
     });
 
     if (reports.length !== reportIds.length) {
-      throw new AppError(
-        "One or more selected reports are invalid",
-        400
-      );
+      throw new AppError("One or more selected reports are invalid", 400);
     }
 
     appointmentReports = reports.map(normalizeAppointmentReport);
   }
 
-  const consultationFee =
-    doctor.professionalInfo?.consultationFee || 0;
+  const consultationFee = doctor.professionalInfo?.consultationFee || 0;
 
-  const totalDiscount = 0;
-  const finalAmount = consultationFee - totalDiscount;
+  let couponDiscount = 0;
+  let appliedCouponId = null;
+  let appliedCouponCode = "";
 
-  const appointment = await createAppointment({
-    patientId: new mongoose.Types.ObjectId(patientId),
-    doctorId: new mongoose.Types.ObjectId(doctorId),
-    slotDayId: new mongoose.Types.ObjectId(slotDayId),
-    slotId: new mongoose.Types.ObjectId(slotId),
+  if (couponCode && couponCode.trim()) {
+    const couponResult = await validateCouponForAppointment({
+      userId: patientId,
+      doctorId,
+      couponCode,
+      appointmentAmount: consultationFee,
+    });
 
-    appointmentDate,
-    startTime: selectedSlot.startTime,
-    endTime: selectedSlot.endTime,
+    couponDiscount = couponResult.discount;
+    appliedCouponId = couponResult.coupon._id;
+    appliedCouponCode = couponResult.coupon.code;
+  }
 
-    reason: reason.trim(),
+  const referralDiscount = 0;
+  const rewardDiscount = 0;
+  const totalDiscount = couponDiscount + referralDiscount + rewardDiscount;
+  const finalAmount = Math.max(consultationFee - totalDiscount, 0);
+  const reservedUntil = getReservationExpiry();
 
-    reports: appointmentReports,
+  const session = await mongoose.startSession();
 
-    status: "pending_payment",
-    paymentStatus: "unpaid",
+  try {
+    let finalAppointment = null;
 
-    pricing: {
-      consultationFee,
-      totalDiscount,
-      finalAmount,
-    },
-  });
+    await session.withTransaction(async () => {
+      const slotDay = await findSlotDayForBookingWithSession({
+        slotDayId,
+        doctorId,
+        session,
+      });
 
-  return appointment;
+      if (!slotDay) {
+        throw new AppError("Slot day not found", 404);
+      }
+
+      await clearExpiredReservationsInSlotDay({
+        slotDay,
+        session,
+      });
+
+      if (slotDay.date !== appointmentDate) {
+        throw new AppError(
+          "Selected slot date does not match appointment date",
+          400
+        );
+      }
+
+      if (slotDay.isHoliday) {
+        throw new AppError("Cannot book appointment on holiday", 400);
+      }
+
+      const selectedSlot = slotDay.slots.id(slotId);
+
+      if (!selectedSlot || selectedSlot.isDeleted) {
+        throw new AppError("Selected slot not found", 404);
+      }
+
+      if (selectedSlot.status !== "available") {
+        throw new AppError("Selected slot is not available", 400);
+      }
+
+      const appointment = await createAppointment({
+        payload: {
+          patientId: new mongoose.Types.ObjectId(patientId),
+          doctorId: new mongoose.Types.ObjectId(doctorId),
+          slotDayId: new mongoose.Types.ObjectId(slotDayId),
+          slotId: new mongoose.Types.ObjectId(slotId),
+
+          appointmentDate,
+          startTime: selectedSlot.startTime,
+          endTime: selectedSlot.endTime,
+
+          reason: reason.trim(),
+          reports: appointmentReports,
+
+          status: "pending_payment",
+          paymentStatus: "unpaid",
+
+          pricing: {
+            consultationFee,
+            couponDiscount,
+            referralDiscount,
+            rewardDiscount,
+            totalDiscount,
+            finalAmount,
+            appliedCouponId,
+            appliedCouponCode,
+            appliedReferralId: null,
+            appliedRewardRuleId: null,
+          },
+
+          reservation: {
+            reservedUntil,
+            releasedAt: null,
+          },
+        },
+        session,
+      });
+
+      selectedSlot.status = "reserved";
+      selectedSlot.reservedBy = new mongoose.Types.ObjectId(patientId);
+      selectedSlot.reservedAppointmentId = appointment._id;
+      selectedSlot.reservedUntil = reservedUntil;
+
+      await saveSlotDay({
+        slotDay,
+        session,
+      });
+
+      if (reportIds.length > 0) {
+        await updateReportsAsAttached({
+          reportIds,
+          appointmentId: appointment._id,
+          doctorId,
+          session,
+        });
+      }
+
+      finalAppointment = appointment;
+    });
+
+    return finalAppointment;
+  } finally {
+    await session.endSession();
+  }
 };
 
 export const getPatientAppointmentDetailsService = async ({
