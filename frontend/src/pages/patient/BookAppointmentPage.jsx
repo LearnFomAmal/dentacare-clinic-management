@@ -24,7 +24,10 @@ import { getBookingDraft } from "../../utils/bookingDraftStorage";
 import { formatDateLong } from "../../utils/dateUtils";
 
 import { fetchPublicDoctorDetails } from "../../features/doctor/publicDoctorSlice";
-
+import {
+  clearReferralError,
+  fetchMyReferral,
+} from "../../features/referral/referralSlice";
 import {
   deleteDraftReport,
   fetchDraftReports,
@@ -113,6 +116,10 @@ const [couponCode, setCouponCode] = useState("");
     isInitiating,
     error: appointmentError,
   } = useAppSelector((state) => state.appointments);
+  const {
+  myReferral,
+  error: referralError,
+} = useAppSelector((state) => state.referrals);
 
   const bookingDraft = useMemo(() => {
     return getBookingDraft(doctorId);
@@ -186,6 +193,7 @@ useEffect(() => {
   dispatch(clearCouponError());
 }, [couponError, dispatch]);
 
+
   const doctor = selectedDoctor;
   const consultationFee = doctor?.professionalInfo?.consultationFee || 0;
   
@@ -202,6 +210,19 @@ useEffect(() => {
     })
   );
 }, [dispatch, doctorId, consultationFee]);
+
+useEffect(() => {
+  dispatch(fetchMyReferral());
+}, [dispatch]);
+
+useEffect(() => {
+  if (!referralError) return;
+
+  toast.error(referralError);
+  dispatch(clearReferralError());
+}, [referralError, dispatch]);
+
+
 const handleReportFormChange = (event) => {
   const { name, value, files } = event.target;
 
@@ -459,6 +480,44 @@ const handleRemoveCoupon = () => {
 };
 const couponDiscount = couponPreview?.discount || 0;
 const payableAmount = couponPreview?.finalAmount ?? consultationFee;
+const calculateReferralDiscountPreview = ({ config, amount }) => {
+  if (!config?.isActive) return 0;
+
+  const numericAmount = Number(amount || 0);
+
+  if (numericAmount < Number(config.minAppointmentAmount || 0)) {
+    return 0;
+  }
+
+  let discount = 0;
+
+  if (config.refereeDiscountType === "flat") {
+    discount = Number(config.refereeDiscountValue || 0);
+  }
+
+  if (config.refereeDiscountType === "percentage") {
+    discount =
+      (numericAmount * Number(config.refereeDiscountValue || 0)) / 100;
+
+    if (Number(config.maxDiscount || 0) > 0) {
+      discount = Math.min(discount, Number(config.maxDiscount));
+    }
+  }
+
+  return Math.floor(Math.min(discount, numericAmount));
+};
+
+const referralDiscount =
+  myReferral?.referredBy && !myReferral?.hasCompletedFirstAppointment
+    ? calculateReferralDiscountPreview({
+        config: myReferral?.config,
+        amount: consultationFee,
+      })
+    : 0;
+
+const couponDiscount = couponPreview?.discount || 0;
+const totalDiscount = couponDiscount + referralDiscount;
+const payableAmount = Math.max(consultationFee - totalDiscount, 0);
   return (
     <PatientLayout>
       <main className="mx-auto max-w-[1040px] px-6 py-10">
@@ -544,49 +603,53 @@ const payableAmount = couponPreview?.finalAmount ?? consultationFee;
                   value={`${draftReports.length} uploaded`}
                 />
 
-                <div className="border-t border-[#EEF0F6] pt-4">
-                  <SummaryRow
-                    label="Consultation Fee"
-                    value={`₹${consultationFee}`}
-                    strong
-                  />
-
-                  <CouponApplyBox
-  couponCode={couponCode}
-  setCouponCode={setCouponCode}
-  appliedCoupon={appliedCoupon}
-  availableCoupons={availableCoupons}
-  isLoadingCoupons={isLoadingCoupons}
-  isValidating={isValidating}
-  onApply={handleApplyCoupon}
-  onRemove={handleRemoveCoupon}
-/>
-
-<div className="border-t border-[#EEF0F6] pt-4">
+             <div className="border-t border-[#EEF0F6] pt-4">
   <SummaryRow
     label="Consultation Fee"
     value={`₹${consultationFee}`}
     strong
   />
 
-  <SummaryRow
-    label="Coupon Discount"
-    value={`₹${couponDiscount}`}
+  <CouponApplyBox
+    couponCode={couponCode}
+    setCouponCode={setCouponCode}
+    appliedCoupon={appliedCoupon}
+    availableCoupons={availableCoupons}
+    isLoadingCoupons={isLoadingCoupons}
+    isValidating={isValidating}
+    onApply={handleApplyCoupon}
+    onRemove={handleRemoveCoupon}
   />
 
-  <SummaryRow
-    label="Payable Amount"
-    value={`₹${payableAmount}`}
-    highlight
-  />
+  <div className="mt-4 space-y-3 border-t border-[#EEF0F6] pt-4">
+    <SummaryRow
+      label="Coupon Discount"
+      value={`₹${couponDiscount}`}
+    />
+
+    <SummaryRow
+      label="Referral Discount"
+      value={`₹${referralDiscount}`}
+    />
+
+    <SummaryRow
+      label="Total Discount"
+      value={`₹${totalDiscount}`}
+    />
+
+    <SummaryRow
+      label="Payable Amount"
+      value={`₹${payableAmount}`}
+      highlight
+    />
+  </div>
+
+  {referralDiscount > 0 && (
+    <p className="mt-3 rounded-xl bg-green-50 p-3 text-xs font-bold text-green-700">
+      Referral discount will be applied to this first appointment.
+    </p>
+  )}
 </div>
-
-                  <SummaryRow
-                    label="Payable Amount"
-                    value={`₹${consultationFee}`}
-                    highlight
-                  />
-                </div>
               </div>
 
               <Button

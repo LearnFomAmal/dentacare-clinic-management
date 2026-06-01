@@ -6,6 +6,7 @@ import publicDoctorReducer from "../features/doctor/publicDoctorSlice";
 import reportReducer from "../features/reports/reportSlice";
 import appointmentReducer from "../features/appointment/appointmentSlice";
 import couponReducer from "../features/coupon/couponSlice";
+import referralReducer from "../features/referral/referralSlice";
 
 export const store = configureStore({
   reducer: {
@@ -15,5 +16,6 @@ export const store = configureStore({
     reports: reportReducer,
     appointments: appointmentReducer,
     coupons: couponReducer,
+    referrals: referralReducer,
   },
 });

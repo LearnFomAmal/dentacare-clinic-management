@@ -148,5 +148,11 @@ RESTORE_DEFAULTS: (slotDayId) =>
   ADMIN_UPDATE_STATUS: (couponId) => `/coupons/admin/${couponId}/status`,
   ADMIN_DELETE: (couponId) => `/coupons/admin/${couponId}`,
 },
+REFERRAL: {
+  ME: "/referrals/me",
+  HISTORY: "/referrals/history",
 
+  ADMIN_GET_ALL: "/referrals/admin",
+  ADMIN_CONFIG: "/referrals/admin/config",
+},
 };

@@ -22,6 +22,7 @@ import PaymentSuccessPage from "../pages/patient/PaymentSuccessPage";
 import PaymentFailedPage from "../pages/patient/PaymentFailedPage";
 import MyAppointmentsPage from "../pages/patient/MyAppointmentsPage";
 import MyAppointmentDetailsPage from "../pages/patient/MyAppointmentDetailsPage";
+import ReferralPage from "../pages/patient/ReferralPage";
 
 import DoctorSettingsPage from "../pages/doctor/DoctorSettingsPage";
 import DoctorSlotManagementPage from "../pages/doctor/DoctorSlotManagementPage";
@@ -137,7 +138,14 @@ function AppRoutes() {
           </ProtectedRoute>
         }
       />
-
+       <Route
+   path={ROUTES.REFERRALS}
+   element={
+    <ProtectedRoute allowedRoles={["patient"]}>
+      <ReferralPage />
+    </ProtectedRoute>
+  }
+ />
       <Route
         path={ROUTES.BOOK_APPOINTMENT}
         element={

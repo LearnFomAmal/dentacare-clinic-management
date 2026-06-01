@@ -78,7 +78,11 @@ export const registerSchema = z
       message: "Blood group is required",
     }),
 
-    referralCode: z.string().optional(),
+    referralCode: z
+  .string()
+  .max(20, "Referral code is too long")
+  .optional()
+  .or(z.literal("")),
   })
   .refine((data) => data.password === data.confirmPassword, {
     message: "Passwords do not match",

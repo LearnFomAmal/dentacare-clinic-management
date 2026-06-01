@@ -272,13 +272,20 @@ function AppointmentSummary({ appointment }) {
     value={appointment.pricing?.couponDiscount || 0}
     discount
   />
+ 
+ <SummaryPriceRow
+  label="Referral Discount"
+  value={appointment.pricing?.referralDiscount || 0}
+  discount
+/>
 
   <SummaryPriceRow
     label="Total Discount"
     value={appointment.pricing?.totalDiscount || 0}
     discount
   />
-
+  
+  
   <div className="mt-3 border-t border-[#EEF0F6] pt-3">
     <div className="flex items-center justify-between">
       <p className="text-xs font-bold uppercase tracking-[0.7px] text-[#9CA3AF]">

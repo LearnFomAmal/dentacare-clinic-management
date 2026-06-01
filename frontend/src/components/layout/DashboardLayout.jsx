@@ -18,6 +18,7 @@ import {
   ShieldPlus,
   Stethoscope,
   UsersRound,
+  Gift,
 } from "lucide-react";
 import toast from "react-hot-toast";
 
@@ -120,23 +121,28 @@ const getRoleLinks = (role) => {
     ];
   }
 
-  return [
-    {
-      label: "Dashboard",
-      to: ROUTES.PATIENT_DASHBOARD || ROUTES.USER_SETTINGS,
-      icon: Home,
-    },
-    {
-      label: "My Appointments",
-      to: ROUTES.MY_APPOINTMENTS,
-      icon: CalendarCheck,
-    },
-    {
-      label: "Settings",
-      to: ROUTES.USER_SETTINGS,
-      icon: Settings,
-    },
-  ];
+ return [
+  {
+    label: "Dashboard",
+    to: ROUTES.PATIENT_DASHBOARD || ROUTES.USER_SETTINGS,
+    icon: Home,
+  },
+  {
+    label: "My Appointments",
+    to: ROUTES.MY_APPOINTMENTS,
+    icon: CalendarCheck,
+  },
+  {
+    label: "Referrals",
+    to: ROUTES.REFERRALS,
+    icon: Gift,
+  },
+  {
+    label: "Settings",
+    to: ROUTES.USER_SETTINGS,
+    icon: Settings,
+  },
+];
 };
 
 const patientTopLinks = [
@@ -153,7 +159,12 @@ const patientTopLinks = [
     label: "Find Doctors",
     to: ROUTES.FIND_DOCTORS,
   },
+  {
+    label: "Referrals",
+    to: ROUTES.REFERRALS,
+  },
 ];
+
 const getInitials = ({
   username = "",
   firstName = "",

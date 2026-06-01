@@ -23,7 +23,7 @@ export const ROUTES = {
   PAYMENT_FAILED: "/payment-failed/:appointmentId",
   MY_APPOINTMENTS: "/my-appointments",
   MY_APPOINTMENT_DETAILS: "/my-appointments/:appointmentId",
-
+  REFERRALS: "/referrals",
   // DOCTOR
   DOCTOR_DASHBOARD: "/doctor/dashboard",
   DOCTOR_SETTINGS: "/doctor/settings",
@@ -48,4 +48,5 @@ export const ROUTES = {
   ADMIN_COUPONS: "/admin/coupons",
   ADMIN_ADD_COUPON: "/admin/coupons/add",
   ADMIN_EDIT_COUPON: "/admin/coupons/:couponId/edit",
+  
 };

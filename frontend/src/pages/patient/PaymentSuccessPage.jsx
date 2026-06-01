@@ -92,6 +92,10 @@ function PaymentSuccessPage() {
   label="Coupon"
   value={appointment.pricing?.appliedCouponCode || "N/A"}
 />
+ <InfoRow
+  label="Referral Discount"
+  value={`₹${appointment.pricing?.referralDiscount || 0}`}
+/>
 
 <InfoRow
   label="Discount Saved"
