@@ -10,6 +10,7 @@ export const validateRegisterInput = (data) => {
     gender,
     phoneNumber,
     bloodGroup,
+    referralCode = "",
   } = data;
 
   if (
@@ -25,8 +26,8 @@ export const validateRegisterInput = (data) => {
     throw new AppError("All fields are required", 400);
   }
 
-  // username validation
   const usernameRegex = /^[A-Za-z ]{3,30}$/;
+
   if (!usernameRegex.test(username)) {
     throw new AppError(
       "Username must contain only letters and spaces, min 3 characters",
@@ -34,13 +35,12 @@ export const validateRegisterInput = (data) => {
     );
   }
 
-  // email validation
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
   if (!emailRegex.test(email)) {
     throw new AppError("Invalid email format", 400);
   }
 
-  // password validation
   const passwordRegex =
     /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&]).{8,20}$/;
 
@@ -55,9 +55,12 @@ export const validateRegisterInput = (data) => {
     throw new AppError("Passwords do not match", 400);
   }
 
-  // age validation minimum 6 years
   const dob = new Date(dateOfBirth);
   const today = new Date();
+
+  if (Number.isNaN(dob.getTime()) || dob > today) {
+    throw new AppError("Invalid date of birth", 400);
+  }
 
   let age = today.getFullYear() - dob.getFullYear();
   const monthDiff = today.getMonth() - dob.getMonth();
@@ -73,24 +76,37 @@ export const validateRegisterInput = (data) => {
     throw new AppError("Patient must be at least 6 years old", 400);
   }
 
-  // gender validation
   if (!["male", "female", "other"].includes(gender.toLowerCase())) {
     throw new AppError("Invalid gender selected", 400);
   }
 
-  // phone validation
   const phoneRegex = /^[6-9]\d{9}$/;
+
   if (!phoneRegex.test(phoneNumber)) {
     throw new AppError("Phone number must be valid 10 digit Indian number", 400);
   }
 
-  // blood group validation
   const validBloodGroups = [
-    "A+","A-","B+","B-","AB+","AB-","O+","O-"
+    "A+",
+    "A-",
+    "B+",
+    "B-",
+    "AB+",
+    "AB-",
+    "O+",
+    "O-",
   ];
 
   if (!validBloodGroups.includes(bloodGroup.toUpperCase())) {
     throw new AppError("Invalid blood group", 400);
+  }
+
+  if (referralCode && typeof referralCode !== "string") {
+    throw new AppError("Referral code must be a string", 400);
+  }
+
+  if (referralCode && referralCode.trim().length > 20) {
+    throw new AppError("Invalid referral code", 400);
   }
 };
 

@@ -13,6 +13,9 @@ import {
  findCouponForPayment,
 countCompletedCouponUsageByUser,
 incrementCouponUsedCountSafely,
+findReferralForPayment,
+findActiveReferralConfigForPayment,
+markReferralDiscountUsedForPayment,
 } from "./payment.repository.js";
 
 import {
@@ -220,6 +223,50 @@ export const markPaymentSuccessService = async ({ patientId, body }) => {
     },
     session,
   });
+}
+if (
+  appointment.pricing?.appliedReferralId &&
+  appointment.pricing?.referralDiscount > 0
+) {
+  const referral = await findReferralForPayment({
+    referralId: appointment.pricing.appliedReferralId,
+    referredUserId: appointment.patientId,
+    session,
+  });
+
+  if (!referral) {
+    throw new AppError(
+      "Referral discount is no longer available",
+      400
+    );
+  }
+
+  const referralConfig = await findActiveReferralConfigForPayment({
+    session,
+  });
+
+  if (!referralConfig) {
+    throw new AppError(
+      "Referral discount is no longer active",
+      400
+    );
+  }
+
+  const updatedReferral = await markReferralDiscountUsedForPayment({
+    referralId: referral._id,
+    referredUserId: appointment.patientId,
+    appointmentId: appointment._id,
+    refereeDiscount: appointment.pricing.referralDiscount,
+    referrerReward: referralConfig.referrerReward || 0,
+    session,
+  });
+
+  if (!updatedReferral) {
+    throw new AppError(
+      "Referral discount was already used",
+      400
+    );
+  }
 }
 
       slot.status = "booked";

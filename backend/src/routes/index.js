@@ -13,6 +13,8 @@ import publicDoctorRoutes from "../modules/publicDoctors/publicDoctor.routes.js"
 import appointmentRoutes from "../modules/appointments/appointment.routes.js";
 import paymentRoutes from "../modules/payments/payment.routes.js";
 import couponRoutes from "../modules/coupons/coupon.routes.js";
+import referralRoutes from "../modules/referrals/referral.routes.js";
+
 const router = Router();
 
 // ==========================================
@@ -32,6 +34,7 @@ router.use("/reports", reportRoutes);
 router.use("/appointments", appointmentRoutes);
 router.use("/payments", paymentRoutes);
 router.use("/coupons", couponRoutes);
+router.use("/referrals", referralRoutes);
 // ==========================================
 // HEALTH CHECK
 // ==========================================

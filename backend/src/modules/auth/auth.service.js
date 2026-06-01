@@ -11,7 +11,11 @@ import {
 
 import jwt from "jsonwebtoken";
 import { env } from "../../config/env.js";
-
+import {
+  createReferralAfterRegistration,
+  generateUniqueReferralCode,
+  validateReferralCodeForRegistration,
+} from "../referrals/referral.service.js";
 import {
   findUserByEmail,
   findUserByReferralCode,
@@ -43,9 +47,7 @@ import {
 import { hashOtp } from "../../shared/utils/hashOtp.js";
 const googleClient = new OAuth2Client(env.GOOGLE_CLIENT_ID);
 
-const generateReferralCode = () => {
-  return `DENTA${Math.floor(1000 + Math.random() * 9000)}`;
-};
+
 
 const isPatientProfileComplete = (user) => {
   return Boolean(
@@ -95,15 +97,18 @@ export const registerRequestService = async (data) => {
     throw new AppError("User already exists. Please login.", 400);
   }
 
-  let referredBy = null;
+ let referredBy = null;
+let normalizedReferralCode = "";
 
-  if (referralCode) {
-    const referralUser = await findUserByReferralCode(referralCode);
-    if (!referralUser) {
-      throw new AppError("Invalid referral code", 400);
-    }
-    referredBy = referralUser._id;
-  }
+if (referralCode && referralCode.trim()) {
+  const referralUser = await validateReferralCodeForRegistration({
+    referralCode,
+    email,
+  });
+
+  referredBy = referralUser._id;
+  normalizedReferralCode = referralUser.referral.referralCode;
+}
 
   await deleteOldOtps(email, "register");
 const otp = generateOtp();
@@ -121,14 +126,15 @@ const hashedOtp = await hashOtp(otp);
     resendAvailableAt: new Date(Date.now() + 60 * 1000),
 
     tempUserData: {
-      username,
-      password: hashedPassword,
-      dateOfBirth,
-      gender,
-      phoneNumber,
-      bloodGroup,
-      referredBy,
-    },
+  username,
+  password: hashedPassword,
+  dateOfBirth,
+  gender,
+  phoneNumber,
+  bloodGroup,
+  referredBy,
+  referralCodeUsed: normalizedReferralCode,
+},
   });
 
   await sendOtpMail(email, otp);
@@ -196,29 +202,40 @@ if (!isOtpMatched) {
   const temp = otpRecord.tempUserData;
   otpRecord.isUsed = true;
   await otpRecord.save();
-  await createUser({
-    username: temp.username,
-    email,
-    password: temp.password,
+  const newReferralCode = await generateUniqueReferralCode();
 
-    personalInfo: {
-      dateOfBirth: temp.dateOfBirth,
-      gender: temp.gender,
-      phoneNumber: temp.phoneNumber,
-      bloodGroup: temp.bloodGroup,
-    },
+const user = await createUser({
+  username: temp.username,
+  email,
+  password: temp.password,
 
-    referral: {
-      referralCode: `DENTA${Math.floor(1000 + Math.random() * 9000)}`,
-      referredBy: temp.referredBy || null,
-    },
+  personalInfo: {
+    dateOfBirth: temp.dateOfBirth,
+    gender: temp.gender,
+    phoneNumber: temp.phoneNumber,
+    bloodGroup: temp.bloodGroup,
+  },
 
-   accountStatus: {
+  referral: {
+    referralCode: newReferralCode,
+    referredBy: temp.referredBy || null,
+    hasCompletedFirstAppointment: false,
+  },
+
+  accountStatus: {
     isVerified: true,
     isBlocked: false,
     isDeleted: false,
-   },
+  },
+});
+
+if (temp.referredBy) {
+  await createReferralAfterRegistration({
+    referrerId: temp.referredBy,
+    referredUserId: user._id,
+    referralCode: temp.referralCodeUsed,
   });
+}
  
   await deleteOldOtps(email, "register");
 };
@@ -540,9 +557,7 @@ export const googleLoginService = async ({
     if (!user.googleId) {
       updatePayload.googleId = googleId;
     }
-if (!user.googleId) {
-  updatePayload.googleId = googleId;
-}
+
 
 if (!user.authProvider) {
   updatePayload.authProvider = user.password ? "local" : "google";
@@ -571,10 +586,11 @@ if (!user.authProvider) {
         profileImage: payload.picture || "",
       },
 
-      referral: {
-        referralCode: generateReferralCode(),
-        referredBy: null,
-      },
+     referral: {
+    referralCode: await generateUniqueReferralCode(),
+    referredBy: null,
+    hasCompletedFirstAppointment: false,
+},
 
       accountStatus: {
         isVerified: true,

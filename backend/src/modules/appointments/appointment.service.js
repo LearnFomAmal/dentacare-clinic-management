@@ -25,7 +25,9 @@ import {
   findSlotDayForBookingWithSession,
 updateReportsAsAttached,
 } from "./appointment.repository.js";
-
+import {
+  getReferralDiscountForAppointment,
+} from "../referrals/referral.service.js";
 import {
   validateAppointmentStatusFilter,
   validateInitiateAppointmentInput,
@@ -221,10 +223,17 @@ export const initiateAppointmentService = async ({ patientId, body }) => {
     appliedCouponCode = couponResult.coupon.code;
   }
 
-  const referralDiscount = 0;
-  const rewardDiscount = 0;
-  const totalDiscount = couponDiscount + referralDiscount + rewardDiscount;
-  const finalAmount = Math.max(consultationFee - totalDiscount, 0);
+  const referralResult = await getReferralDiscountForAppointment({
+  patient,
+  appointmentAmount: consultationFee,
+});
+
+const referralDiscount = referralResult.referralDiscount;
+const appliedReferralId = referralResult.appliedReferralId;
+
+const rewardDiscount = 0;
+const totalDiscount = couponDiscount + referralDiscount + rewardDiscount;
+const finalAmount = Math.max(consultationFee - totalDiscount, 0);
   const reservedUntil = getReservationExpiry();
 
   const session = await mongoose.startSession();
@@ -295,7 +304,7 @@ export const initiateAppointmentService = async ({ patientId, body }) => {
             finalAmount,
             appliedCouponId,
             appliedCouponCode,
-            appliedReferralId: null,
+            appliedReferralId,
             appliedRewardRuleId: null,
           },
 

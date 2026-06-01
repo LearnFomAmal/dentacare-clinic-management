@@ -3,6 +3,8 @@ import DoctorSlot from "../../models/DoctorSlot.js";
 import Payment from "../../models/Payment.js";
 import Coupon from "../../models/Coupon.js";
 import CouponUsage from "../../models/CouponUsage.js";
+import Referral from "../../models/Referral.js";
+import ReferralConfig from "../../models/ReferralConfig.js";
 
 export const findPatientAppointmentById = ({
   appointmentId,
@@ -50,7 +52,7 @@ export const saveSlotDay = ({ slotDay, session = null }) => {
 };
 
 // ==============================
-// COUPON HELPERS FOR PAYMENT
+// COUPON HELPERS
 // ==============================
 export const findCouponForPayment = ({ couponId, session = null }) => {
   return Coupon.findOne({
@@ -99,4 +101,58 @@ export const incrementCouponUsedCountSafely = ({
       },
     }
   ).session(session);
+};
+
+// ==============================
+// REFERRAL HELPERS
+// ==============================
+export const findReferralForPayment = ({
+  referralId,
+  referredUserId,
+  session = null,
+}) => {
+  return Referral.findOne({
+    _id: referralId,
+    referredUserId,
+    status: "pending",
+  }).session(session);
+};
+
+export const findActiveReferralConfigForPayment = ({
+  session = null,
+}) => {
+  return ReferralConfig.findOne({
+    isActive: true,
+  })
+    .sort({ createdAt: -1 })
+    .session(session);
+};
+
+export const markReferralDiscountUsedForPayment = ({
+  referralId,
+  referredUserId,
+  appointmentId,
+  refereeDiscount,
+  referrerReward,
+  session = null,
+}) => {
+  return Referral.findOneAndUpdate(
+    {
+      _id: referralId,
+      referredUserId,
+      status: "pending",
+    },
+    {
+      status: "discount_used",
+      firstAppointmentId: appointmentId,
+      refereeDiscount,
+      referrerReward,
+      rewardStatus: "not_ready",
+      discountUsedAt: new Date(),
+    },
+    {
+      new: true,
+      session,
+    }
+  );
 };
