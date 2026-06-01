@@ -41,6 +41,8 @@ import PatientDashboardPage from "../pages/patient/PatientDashboardPage";
 import DoctorDashboardPage from "../pages/doctor/DoctorDashboardPage";
 import AdminDashboardPage from "../pages/admin/AdminDashboardPage";
 import AdminLoginPage from "../pages/public/AdminLoginPage";
+import AdminCouponsPage from "../pages/admin/AdminCouponsPage";
+import AdminCouponFormPage from "../pages/admin/AdminCouponFormPage";
 
 function AppRoutes() {
   return (
@@ -336,6 +338,32 @@ function AppRoutes() {
   }
 />
 
+ <Route
+  path={ROUTES.ADMIN_COUPONS}
+  element={
+    <ProtectedRoute allowedRoles={["admin"]}>
+      <AdminCouponsPage />
+    </ProtectedRoute>
+  }
+/>
+
+<Route
+  path={ROUTES.ADMIN_ADD_COUPON}
+  element={
+    <ProtectedRoute allowedRoles={["admin"]}>
+      <AdminCouponFormPage />
+    </ProtectedRoute>
+  }
+/>
+
+<Route
+  path={ROUTES.ADMIN_EDIT_COUPON}
+  element={
+    <ProtectedRoute allowedRoles={["admin"]}>
+      <AdminCouponFormPage />
+    </ProtectedRoute>
+  }
+/>
       <Route path="*" element={<Navigate to={ROUTES.HOME} replace />} />
     </Routes>
   );

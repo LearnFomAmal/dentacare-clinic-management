@@ -45,4 +45,7 @@ export const ROUTES = {
   ADMIN_SPECIALTIES: "/admin/specialties",
   ADMIN_APPOINTMENTS: "/admin/appointments",
   ADMIN_APPOINTMENT_DETAILS: "/admin/appointments/:appointmentId",
+  ADMIN_COUPONS: "/admin/coupons",
+  ADMIN_ADD_COUPON: "/admin/coupons/add",
+  ADMIN_EDIT_COUPON: "/admin/coupons/:couponId/edit",
 };

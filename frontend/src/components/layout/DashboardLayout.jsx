@@ -7,6 +7,7 @@ import {
   useNavigate,
 } from "react-router-dom";
 import {
+  BadgePercent,
   CalendarCheck,
   Home,
   LogOut,
@@ -16,7 +17,6 @@ import {
   Settings,
   ShieldPlus,
   Stethoscope,
-  UserRound,
   UsersRound,
 } from "lucide-react";
 import toast from "react-hot-toast";
@@ -60,35 +60,40 @@ const getRoleHome = (role) => {
 };
 
 const getRoleLinks = (role) => {
-  if (role === "admin") {
-    return [
-      {
-        label: "Dashboard",
-        to: ROUTES.ADMIN_DASHBOARD || ROUTES.ADMIN_PROFILE,
-        icon: Home,
-      },
-      {
-        label: "Patients",
-        to: ROUTES.ADMIN_USERS,
-        icon: UsersRound,
-      },
-      {
-        label: "Doctors",
-        to: ROUTES.ADMIN_DOCTORS,
-        icon: Stethoscope,
-      },
-      {
-        label: "Appointments",
-        to: ROUTES.ADMIN_APPOINTMENTS,
-        icon: CalendarCheck,
-      },
-      {
-        label: "Profile",
-        to: ROUTES.ADMIN_PROFILE,
-        icon: Settings,
-      },
-    ];
-  }
+ if (role === "admin") {
+  return [
+    {
+      label: "Dashboard",
+      to: ROUTES.ADMIN_DASHBOARD || ROUTES.ADMIN_PROFILE,
+      icon: Home,
+    },
+    {
+      label: "Patients",
+      to: ROUTES.ADMIN_USERS,
+      icon: UsersRound,
+    },
+    {
+      label: "Doctors",
+      to: ROUTES.ADMIN_DOCTORS,
+      icon: Stethoscope,
+    },
+    {
+      label: "Appointments",
+      to: ROUTES.ADMIN_APPOINTMENTS,
+      icon: CalendarCheck,
+    },
+    {
+      label: "Coupons",
+      to: ROUTES.ADMIN_COUPONS,
+      icon: BadgePercent,
+    },
+    {
+      label: "Profile",
+      to: ROUTES.ADMIN_PROFILE,
+      icon: Settings,
+    },
+  ];
+}
 
   if (role === "doctor") {
     return [
