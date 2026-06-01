@@ -36,6 +36,13 @@ import {
   initiateAppointment,
 } from "../../features/appointment/appointmentSlice";
 
+import {
+  clearAppliedCoupon,
+  clearCouponError,
+  fetchAvailableCoupons,
+  validateCoupon,
+} from "../../features/coupon/couponSlice";
+
 const formatTime = (time) => {
   if (!time) return "";
 
@@ -79,13 +86,21 @@ function BookAppointmentPage() {
 const { user } = useAppSelector((state) => state.auth);
 const [cropSourceUrl, setCropSourceUrl] = useState("");
 const [isReportCropOpen, setIsReportCropOpen] = useState(false);
+const [couponCode, setCouponCode] = useState("");
   const {
     selectedDoctor,
     selectedDate,
     selectedSlotsByDoctor,
     isLoadingDetails,
   } = useAppSelector((state) => state.publicDoctors);
-
+ const {
+  availableCoupons,
+  appliedCoupon,
+  couponPreview,
+  isLoading: isLoadingCoupons,
+  isValidating,
+  error: couponError,
+} = useAppSelector((state) => state.coupons);
   const {
     draftReports,
     isUploading,
@@ -164,13 +179,29 @@ useEffect(() => {
   };
 }, [localPreviewUrl, cropSourceUrl]);
 
+  useEffect(() => {
+  if (!couponError) return;
+
+  toast.error(couponError);
+  dispatch(clearCouponError());
+}, [couponError, dispatch]);
+
   const doctor = selectedDoctor;
   const consultationFee = doctor?.professionalInfo?.consultationFee || 0;
-
+  
   const selectedReportIds = useMemo(() => {
     return draftReports.map((report) => report._id);
   }, [draftReports]);
+ useEffect(() => {
+  if (!doctorId || !consultationFee) return;
 
+  dispatch(
+    fetchAvailableCoupons({
+      doctorId,
+      appointmentAmount: consultationFee,
+    })
+  );
+}, [dispatch, doctorId, consultationFee]);
 const handleReportFormChange = (event) => {
   const { name, value, files } = event.target;
 
@@ -381,16 +412,17 @@ setIsReportCropOpen(false);
 } 
     try {
 
-      const result = await dispatch(
-        initiateAppointment({
-          doctorId,
-          slotDayId,
-          slotId: selectedSlot._id,
-          appointmentDate: finalSelectedDate,
-          reason: bookingReason.trim(),
-          reportIds: selectedReportIds,
-        })
-      ).unwrap();
+     const result = await dispatch(
+  initiateAppointment({
+    doctorId,
+    slotDayId,
+    slotId: selectedSlot._id,
+    appointmentDate: finalSelectedDate,
+    reason: bookingReason.trim(),
+    reportIds: selectedReportIds,
+    couponCode: appliedCoupon?.code || "",
+  })
+).unwrap();
 
       toast.success(result.message || "Appointment initiated successfully");
 
@@ -400,6 +432,33 @@ setIsReportCropOpen(false);
     }
   };
 
+   const handleApplyCoupon = async () => {
+  if (!couponCode.trim()) {
+    toast.error("Please enter coupon code");
+    return;
+  }
+
+  try {
+    const result = await dispatch(
+      validateCoupon({
+        doctorId,
+        couponCode: couponCode.trim(),
+        appointmentAmount: consultationFee,
+      })
+    ).unwrap();
+
+    toast.success(result.message || "Coupon applied successfully");
+  } catch (err) {
+    toast.error(err || "Failed to apply coupon");
+  }
+};
+
+const handleRemoveCoupon = () => {
+  setCouponCode("");
+  dispatch(clearAppliedCoupon());
+};
+const couponDiscount = couponPreview?.discount || 0;
+const payableAmount = couponPreview?.finalAmount ?? consultationFee;
   return (
     <PatientLayout>
       <main className="mx-auto max-w-[1040px] px-6 py-10">
@@ -492,7 +551,35 @@ setIsReportCropOpen(false);
                     strong
                   />
 
-                  <SummaryRow label="Discount" value="₹0" />
+                  <CouponApplyBox
+  couponCode={couponCode}
+  setCouponCode={setCouponCode}
+  appliedCoupon={appliedCoupon}
+  availableCoupons={availableCoupons}
+  isLoadingCoupons={isLoadingCoupons}
+  isValidating={isValidating}
+  onApply={handleApplyCoupon}
+  onRemove={handleRemoveCoupon}
+/>
+
+<div className="border-t border-[#EEF0F6] pt-4">
+  <SummaryRow
+    label="Consultation Fee"
+    value={`₹${consultationFee}`}
+    strong
+  />
+
+  <SummaryRow
+    label="Coupon Discount"
+    value={`₹${couponDiscount}`}
+  />
+
+  <SummaryRow
+    label="Payable Amount"
+    value={`₹${payableAmount}`}
+    highlight
+  />
+</div>
 
                   <SummaryRow
                     label="Payable Amount"
@@ -513,9 +600,9 @@ setIsReportCropOpen(false);
               </Button>
 
               <p className="mt-3 text-xs leading-5 text-[#9CA3AF]">
-                Your appointment will be created as pending payment. Payment
-                confirmation will be connected in the next task.
-              </p>
+  Your selected slot will be reserved temporarily. Complete payment within 10
+  minutes to confirm the booking request.
+</p>
             </aside>
           </div>
         )}
@@ -867,6 +954,100 @@ function SummaryRow({
       >
         {value}
       </span>
+    </div>
+  );
+}
+
+
+function CouponApplyBox({
+  couponCode,
+  setCouponCode,
+  appliedCoupon,
+  availableCoupons,
+  isLoadingCoupons,
+  isValidating,
+  onApply,
+  onRemove,
+}) {
+  return (
+    <div className="rounded-2xl border border-[#EEF0F6] bg-[#F8FAFC] p-4">
+      <p className="text-sm font-extrabold text-[#111827]">
+        Apply Coupon
+      </p>
+
+      <div className="mt-3 flex gap-2">
+        <input
+          type="text"
+          value={couponCode}
+          onChange={(event) => setCouponCode(event.target.value.toUpperCase())}
+          disabled={Boolean(appliedCoupon)}
+          placeholder="Enter coupon code"
+          className="h-11 flex-1 rounded-xl border border-[#E5E7EB] bg-white px-3 text-sm font-bold uppercase outline-none transition focus:border-[#9381FF] focus:ring-4 focus:ring-[#9381FF]/10 disabled:bg-slate-100"
+        />
+
+        {appliedCoupon ? (
+          <button
+            type="button"
+            onClick={onRemove}
+            className="h-11 rounded-xl bg-red-50 px-4 text-xs font-extrabold text-red-600 transition hover:bg-red-100"
+          >
+            Remove
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={onApply}
+            disabled={isValidating}
+            className="h-11 rounded-xl bg-[#9381FF] px-4 text-xs font-extrabold text-white transition hover:bg-[#7E6EF2] disabled:opacity-60"
+          >
+            {isValidating ? "Applying..." : "Apply"}
+          </button>
+        )}
+      </div>
+
+      {appliedCoupon && (
+        <div className="mt-3 rounded-xl bg-green-50 p-3 text-xs font-bold text-green-700">
+          {appliedCoupon.code} applied successfully
+        </div>
+      )}
+
+      {!appliedCoupon && availableCoupons?.length > 0 && (
+        <div className="mt-4 space-y-2">
+          <p className="text-xs font-bold uppercase text-[#9CA3AF]">
+            Available coupons
+          </p>
+
+          {availableCoupons.slice(0, 3).map((coupon) => (
+            <button
+              key={coupon._id}
+              type="button"
+              disabled={!coupon.isUserEligible}
+              onClick={() => setCouponCode(coupon.code)}
+              className="w-full rounded-xl border border-[#E5E7EB] bg-white p-3 text-left text-xs transition hover:border-[#9381FF] disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              <div className="flex items-center justify-between gap-3">
+                <span className="font-extrabold text-[#111827]">
+                  {coupon.code}
+                </span>
+
+                <span className="font-extrabold text-green-600">
+                  Save ₹{coupon.discountPreview || 0}
+                </span>
+              </div>
+
+              <p className="mt-1 text-[#6B7280]">
+                {coupon.title}
+              </p>
+            </button>
+          ))}
+        </div>
+      )}
+
+      {isLoadingCoupons && (
+        <p className="mt-3 text-xs font-bold text-[#6B7280]">
+          Loading coupons...
+        </p>
+      )}
     </div>
   );
 }

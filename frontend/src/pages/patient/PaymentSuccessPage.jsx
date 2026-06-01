@@ -87,6 +87,17 @@ function PaymentSuccessPage() {
                 label="Transaction ID"
                 value={appointment.paymentSummary?.transactionId || "N/A"}
               />
+
+              <InfoRow
+  label="Coupon"
+  value={appointment.pricing?.appliedCouponCode || "N/A"}
+/>
+
+<InfoRow
+  label="Discount Saved"
+  value={`₹${appointment.pricing?.totalDiscount || 0}`}
+/>
+
             </div>
           ) : null}
 

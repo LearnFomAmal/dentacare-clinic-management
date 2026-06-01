@@ -261,18 +261,47 @@ function AppointmentSummary({ appointment }) {
         />
       </div>
 
-      <div className="mt-5 flex items-center justify-between rounded-2xl bg-white p-4">
-        <div>
-          <p className="text-xs font-bold uppercase tracking-[0.7px] text-[#9CA3AF]">
-            Total to pay
-          </p>
+     <div className="mt-5 rounded-2xl bg-white p-4">
+  <SummaryPriceRow
+    label="Consultation Fee"
+    value={appointment.pricing?.consultationFee || 0}
+  />
 
-          <p className="mt-1 flex items-center text-3xl font-extrabold text-[#111827]">
-            <IndianRupee size={26} />
-            {totalAmount}
-          </p>
-        </div>
-      </div>
+  <SummaryPriceRow
+    label="Coupon Discount"
+    value={appointment.pricing?.couponDiscount || 0}
+    discount
+  />
+
+  <SummaryPriceRow
+    label="Total Discount"
+    value={appointment.pricing?.totalDiscount || 0}
+    discount
+  />
+
+  <div className="mt-3 border-t border-[#EEF0F6] pt-3">
+    <div className="flex items-center justify-between">
+      <p className="text-xs font-bold uppercase tracking-[0.7px] text-[#9CA3AF]">
+        Total to pay
+      </p>
+
+      <p className="flex items-center text-3xl font-extrabold text-[#111827]">
+        <IndianRupee size={26} />
+        {appointment.pricing?.finalAmount || 0}
+      </p>
+    </div>
+  </div>
+
+  {appointment.reservation?.reservedUntil && (
+    <p className="mt-3 rounded-xl bg-orange-50 p-3 text-xs font-bold text-orange-600">
+      Complete payment before{" "}
+      {new Date(appointment.reservation.reservedUntil).toLocaleTimeString([], {
+        hour: "2-digit",
+        minute: "2-digit",
+      })}
+    </p>
+  )}
+</div>
     </section>
   );
 }
@@ -294,7 +323,22 @@ function SummaryBox({ label, value, icon: Icon }) {
     </div>
   );
 }
+function SummaryPriceRow({ label, value, discount = false }) {
+  return (
+    <div className="flex items-center justify-between py-1 text-sm">
+      <span className="font-bold text-[#6B7280]">{label}</span>
 
+      <span
+        className={`flex items-center font-extrabold ${
+          discount ? "text-green-600" : "text-[#111827]"
+        }`}
+      >
+        {discount && value > 0 ? "- " : ""}
+        ₹{value}
+      </span>
+    </div>
+  );
+}
 function PaymentMethodCard({ method, active, onClick }) {
   const Icon = method.icon;
 

@@ -136,4 +136,17 @@ RESTORE_DEFAULTS: (slotDayId) =>
     SUCCESS: "/payments/success",
     FAILED: "/payments/failed",
   },
+
+  COUPON: {
+  AVAILABLE: "/coupons/available",
+  VALIDATE: "/coupons/validate",
+
+  ADMIN_CREATE: "/coupons/admin",
+  ADMIN_GET_ALL: "/coupons/admin",
+  ADMIN_GET_DETAILS: (couponId) => `/coupons/admin/${couponId}`,
+  ADMIN_UPDATE: (couponId) => `/coupons/admin/${couponId}`,
+  ADMIN_UPDATE_STATUS: (couponId) => `/coupons/admin/${couponId}/status`,
+  ADMIN_DELETE: (couponId) => `/coupons/admin/${couponId}`,
+},
+
 };

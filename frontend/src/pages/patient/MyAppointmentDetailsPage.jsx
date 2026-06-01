@@ -142,30 +142,50 @@ function MyAppointmentDetailsPage() {
 
               <div className="mt-6 space-y-4">
                 <SummaryRow
-                  label="Consultation Fee"
-                  value={`₹${appointment.pricing?.consultationFee || 0}`}
-                />
+  label="Consultation Fee"
+  value={`₹${appointment.pricing?.consultationFee || 0}`}
+/>
 
-                <SummaryRow
-                  label="Discount"
-                  value={`₹${appointment.pricing?.totalDiscount || 0}`}
-                />
+<SummaryRow
+  label="Coupon Discount"
+  value={`₹${appointment.pricing?.couponDiscount || 0}`}
+/>
 
-                <SummaryRow
-                  label="Paid Amount"
-                  value={`₹${appointment.pricing?.finalAmount || 0}`}
-                  highlight
-                />
+<SummaryRow
+  label="Referral Discount"
+  value={`₹${appointment.pricing?.referralDiscount || 0}`}
+/>
 
-                <SummaryRow
-                  label="Payment Status"
-                  value={appointment.paymentStatus}
-                />
+<SummaryRow
+  label="Reward Discount"
+  value={`₹${appointment.pricing?.rewardDiscount || 0}`}
+/>
 
-                <SummaryRow
-                  label="Transaction"
-                  value={appointment.paymentSummary?.transactionId || "N/A"}
-                />
+<SummaryRow
+  label="Total Discount"
+  value={`₹${appointment.pricing?.totalDiscount || 0}`}
+/>
+
+<SummaryRow
+  label="Paid Amount"
+  value={`₹${appointment.pricing?.finalAmount || 0}`}
+  highlight
+/>
+
+<SummaryRow
+  label="Coupon Code"
+  value={appointment.pricing?.appliedCouponCode || "N/A"}
+/>
+
+<SummaryRow
+  label="Payment Status"
+  value={appointment.paymentStatus}
+/>
+
+<SummaryRow
+  label="Transaction"
+  value={appointment.paymentSummary?.transactionId || "N/A"}
+/>
               </div>
 
               {appointment.status === "rejected" && (
