@@ -6,12 +6,14 @@ import {
   CheckCircle2,
   Droplets,
   FileText,
+  IndianRupee,
   Mail,
   Phone,
+  RefreshCcw,
+  Upload,
   UserRound,
   VenusAndMars,
   X,
-  Upload,
   XCircle,
 } from "lucide-react";
 import { Link, useParams } from "react-router-dom";
@@ -19,12 +21,10 @@ import toast from "react-hot-toast";
 
 import DashboardLayout from "../../components/layout/DashboardLayout";
 import RejectAppointmentModal from "../../components/appointments/RejectAppointmentModal";
-import CancelAppointmentModal from "../../components/appointments/CancelAppointmentModal";
 import { useAppDispatch, useAppSelector } from "../../app/hooks";
 
 import {
   approveDoctorAppointment,
-  cancelDoctorAppointment,
   clearAppointmentError,
   completeDoctorAppointment,
   fetchDoctorAppointmentDetails,
@@ -56,7 +56,6 @@ const calculateAge = (dateOfBirth) => {
   }
 
   const today = new Date();
-
   let age = today.getFullYear() - dob.getFullYear();
 
   const monthDiff = today.getMonth() - dob.getMonth();
@@ -73,20 +72,34 @@ const formatText = (value) => {
   if (!value) return "Not available";
 
   return String(value)
-    .replace("_", " ")
+    .replaceAll("_", " ")
     .replace(/\b\w/g, (char) => char.toUpperCase());
 };
 
 const formatDateTime = (value) => {
   if (!value) return "Not available";
 
-  return new Date(value).toLocaleString("en-IN", {
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return "Not available";
+  }
+
+  return date.toLocaleString("en-IN", {
     day: "2-digit",
     month: "short",
     year: "numeric",
     hour: "2-digit",
     minute: "2-digit",
   });
+};
+
+const formatMoney = (value) => {
+  return `₹${Number(value || 0)}`;
+};
+
+const getFileUrl = (report) => {
+  return report?.file?.url || report?.fileUrl || report?.url || "";
 };
 
 function DoctorAppointmentDetailsPage() {
@@ -98,7 +111,6 @@ function DoctorAppointmentDetailsPage() {
     isLoadingDetails,
     isDeciding,
     isCompleting,
-    isCancelling,
     error,
   } = useAppSelector((state) => state.appointments);
 
@@ -110,7 +122,6 @@ function DoctorAppointmentDetailsPage() {
   } = useAppSelector((state) => state.reports);
 
   const [rejectModalOpen, setRejectModalOpen] = useState(false);
-  const [cancelModalOpen, setCancelModalOpen] = useState(false);
 
   const [prescriptionTitle, setPrescriptionTitle] = useState("");
   const [prescriptionText, setPrescriptionText] = useState("");
@@ -162,8 +173,18 @@ function DoctorAppointmentDetailsPage() {
     };
   }, [appointment, patient]);
 
-  const canCancel =
-    appointment && ["approved"].includes(appointment.status);
+  const prescriptions = appointmentReports.filter(
+    (report) => report.reportType === "prescription"
+  );
+
+  const uploadedPatientReports =
+    appointment?.reports?.filter(
+      (report) => report.reportType !== "prescription"
+    ) || [];
+
+  const canApproveOrReject = appointment?.status === "pending";
+  const canComplete = appointment?.status === "approved";
+  const canUploadPrescription = appointment?.status === "completed";
 
   const handleApprove = async () => {
     try {
@@ -198,31 +219,6 @@ function DoctorAppointmentDetailsPage() {
       dispatch(fetchDoctorAppointmentDetails(appointmentId));
     } catch (err) {
       toast.error(err || "Failed to reject appointment");
-    }
-  };
-
-  const handleCancelAppointment = async ({ reasonType, reason }) => {
-    if (!reason.trim()) {
-      toast.error("Cancellation reason is required");
-      return;
-    }
-
-    try {
-      const result = await dispatch(
-        cancelDoctorAppointment({
-          appointmentId,
-          reasonType,
-          reason,
-        })
-      ).unwrap();
-
-      toast.success(result.message || "Appointment cancelled");
-      setCancelModalOpen(false);
-
-      dispatch(fetchDoctorAppointmentDetails(appointmentId));
-      dispatch(fetchDoctorAppointmentReports(appointmentId));
-    } catch (err) {
-      toast.error(err || "Failed to cancel appointment");
     }
   };
 
@@ -305,172 +301,22 @@ function DoctorAppointmentDetailsPage() {
           Appointment not found.
         </div>
       ) : (
-        <div className="grid gap-6 lg:grid-cols-[1fr_330px]">
+        <div className="grid gap-6 lg:grid-cols-[1fr_340px]">
           <section className="space-y-6">
-            <div className="rounded-3xl border border-[#EEF0F6] bg-white p-7 shadow-[0_18px_48px_rgba(17,24,39,0.05)]">
-              <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
-                <div className="flex items-center gap-4">
-                  <PatientAvatar patientInfo={patientInfo} />
+            <AppointmentHeaderCard
+              appointment={appointment}
+              patientInfo={patientInfo}
+            />
 
-                  <div>
-                    <p className="text-xs font-bold uppercase tracking-[0.7px] text-[#9381FF]">
-                      Patient
-                    </p>
+            <PatientDetailsCard patientInfo={patientInfo} />
 
-                    <h2 className="mt-1 text-2xl font-extrabold text-[#111827]">
-                      {patientInfo.name}
-                    </h2>
+            <UploadedReportsSection reports={uploadedPatientReports} />
 
-                    <p className="mt-2 text-sm font-bold text-[#6B7280]">
-                      {formatAppointmentDate(appointment.appointmentDate)} ·{" "}
-                      {formatAppointmentTime(appointment.startTime)} -{" "}
-                      {formatAppointmentTime(appointment.endTime)}
-                    </p>
-                  </div>
-                </div>
+            <RescheduleHistorySection appointment={appointment} />
 
-                <span
-                  className={`inline-flex w-fit rounded-full border px-4 py-2 text-sm font-extrabold capitalize ${getStatusBadgeClass(
-                    appointment.status
-                  )}`}
-                >
-                  {getCleanStatus(appointment.status)}
-                </span>
-              </div>
-
-              <div className="mt-7 rounded-2xl bg-[#F8FAFC] p-5">
-                <p className="text-xs font-bold uppercase tracking-[0.6px] text-[#9CA3AF]">
-                  Reason for visit
-                </p>
-
-                <p className="mt-2 text-sm leading-7 text-[#374151]">
-                  {appointment.reason || "No reason provided"}
-                </p>
-              </div>
-
-              {appointment.status === "completed" && (
-                <div className="mt-5 rounded-2xl bg-green-50 p-5">
-                  <p className="flex items-center gap-2 text-sm font-extrabold text-green-700">
-                    <CheckCircle2 size={18} />
-                    Appointment completed
-                  </p>
-
-                  <p className="mt-2 text-xs font-bold text-green-600">
-                    Completed at {formatDateTime(appointment.completedAt)}
-                  </p>
-                </div>
-              )}
-
-              {appointment.status === "cancelled" && (
-                <div className="mt-5 rounded-2xl bg-slate-100 p-5">
-                  <p className="flex items-center gap-2 text-sm font-extrabold text-slate-700">
-                    <XCircle size={18} />
-                    Appointment cancelled
-                  </p>
-
-                  <p className="mt-2 text-xs font-bold text-slate-600">
-                    Cancelled by{" "}
-                    {appointment.cancellation?.cancelledBy || "N/A"}
-                  </p>
-
-                  <p className="mt-3 text-sm leading-6 text-slate-700">
-                    {appointment.cancellation?.reason || "No reason provided"}
-                  </p>
-
-                  {appointment.paymentStatus === "refunded" && (
-                    <p className="mt-3 rounded-xl bg-green-50 px-4 py-3 text-xs font-extrabold text-green-700">
-                      Refund credited to patient wallet.
-                    </p>
-                  )}
-                </div>
-              )}
-            </div>
-
-            <div className="rounded-3xl border border-[#EEF0F6] bg-white p-7 shadow-[0_18px_48px_rgba(17,24,39,0.05)]">
-              <div className="mb-5">
-                <p className="text-sm font-bold uppercase tracking-[0.8px] text-[#9381FF]">
-                  Patient details
-                </p>
-
-                <h2 className="mt-1 text-xl font-extrabold text-[#111827]">
-                  Basic Medical Information
-                </h2>
-              </div>
-
-              <div className="grid gap-4 md:grid-cols-2">
-                <PatientInfoBox
-                  icon={Mail}
-                  label="Email"
-                  value={patientInfo.email}
-                />
-
-                <PatientInfoBox
-                  icon={Phone}
-                  label="Phone Number"
-                  value={patientInfo.phoneNumber}
-                />
-
-                <PatientInfoBox
-                  icon={VenusAndMars}
-                  label="Gender"
-                  value={patientInfo.gender}
-                />
-
-                <PatientInfoBox
-                  icon={Droplets}
-                  label="Blood Group"
-                  value={patientInfo.bloodGroup}
-                />
-
-                <PatientInfoBox
-                  icon={CalendarDays}
-                  label="Age"
-                  value={patientInfo.age}
-                />
-
-                <PatientInfoBox
-                  icon={CalendarDays}
-                  label="Date of Birth"
-                  value={
-                    patientInfo.dateOfBirth
-                      ? new Date(patientInfo.dateOfBirth).toLocaleDateString(
-                          "en-IN",
-                          {
-                            day: "2-digit",
-                            month: "short",
-                            year: "numeric",
-                          }
-                        )
-                      : "Not available"
-                  }
-                />
-              </div>
-            </div>
-
-            <div className="rounded-3xl border border-[#EEF0F6] bg-white p-7 shadow-[0_18px_48px_rgba(17,24,39,0.05)]">
-              <h2 className="text-xl font-extrabold text-[#111827]">
-                Uploaded Reports
-              </h2>
-
-              {appointment.reports?.length > 0 ? (
-                <div className="mt-5 grid gap-4 md:grid-cols-2">
-                  {appointment.reports.map((report, index) => (
-                    <ReportCard
-                      key={report.reportId || `${report.title}-${index}`}
-                      report={report}
-                    />
-                  ))}
-                </div>
-              ) : (
-                <p className="mt-4 rounded-2xl border border-dashed border-[#D1D5DB] bg-[#F8FAFC] p-6 text-center text-sm font-bold text-[#6B7280]">
-                  No reports uploaded.
-                </p>
-              )}
-            </div>
-
-            {appointment.status === "completed" && (
+            {canUploadPrescription && (
               <PrescriptionSection
-                reports={appointmentReports}
+                reports={prescriptions}
                 isLoading={isLoadingAppointmentReports}
                 isUploading={isUploadingPrescription}
                 title={prescriptionTitle}
@@ -484,11 +330,18 @@ function DoctorAppointmentDetailsPage() {
                 onSubmit={handlePrescriptionUpload}
               />
             )}
+
+            {!canUploadPrescription && prescriptions.length > 0 && (
+              <PrescriptionPreviewSection
+                reports={prescriptions}
+                isLoading={isLoadingAppointmentReports}
+              />
+            )}
           </section>
 
           <aside className="h-fit rounded-3xl border border-[#EEF0F6] bg-white p-6 shadow-[0_18px_48px_rgba(17,24,39,0.06)]">
             <h2 className="text-xl font-extrabold text-[#111827]">
-              Decision
+              Appointment Summary
             </h2>
 
             <div className="mt-5">
@@ -505,13 +358,35 @@ function DoctorAppointmentDetailsPage() {
               <InfoRow label="Patient" value={patientInfo.name} />
               <InfoRow label="Payment" value={appointment.paymentStatus} />
               <InfoRow
-                label="Amount"
-                value={`₹${appointment.pricing?.finalAmount || 0}`}
+                label="Consultation Fee"
+                value={formatMoney(appointment.pricing?.consultationFee)}
+              />
+              <InfoRow
+                label="Total Discount"
+                value={formatMoney(appointment.pricing?.totalDiscount)}
+              />
+              <InfoRow
+                label="Paid Amount"
+                value={formatMoney(appointment.pricing?.finalAmount)}
+                highlight
+              />
+              <InfoRow
+                label="Refund Status"
+                value={
+                  appointment.paymentStatus === "refunded"
+                    ? "Refunded to wallet"
+                    : "N/A"
+                }
+              />
+              <InfoRow
+                label="Transaction"
+                value={appointment.paymentSummary?.transactionId || "N/A"}
               />
               <InfoRow
                 label="Reports"
-                value={`${appointment.reports?.length || 0}`}
+                value={`${uploadedPatientReports.length}`}
               />
+              <InfoRow label="Prescriptions" value={`${prescriptions.length}`} />
 
               {appointment.completedAt && (
                 <InfoRow
@@ -521,7 +396,7 @@ function DoctorAppointmentDetailsPage() {
               )}
             </div>
 
-            {appointment.status === "pending" && (
+            {canApproveOrReject && (
               <div className="mt-6 grid gap-3">
                 <button
                   type="button"
@@ -530,7 +405,7 @@ function DoctorAppointmentDetailsPage() {
                   className="inline-flex h-11 items-center justify-center gap-2 rounded-2xl bg-green-50 text-sm font-extrabold text-green-700 transition hover:bg-green-100 disabled:opacity-60"
                 >
                   <Check size={16} />
-                  Approve
+                  {isDeciding ? "Processing..." : "Approve"}
                 </button>
 
                 <button
@@ -545,7 +420,7 @@ function DoctorAppointmentDetailsPage() {
               </div>
             )}
 
-            {appointment.status === "approved" && (
+            {canComplete && (
               <div className="mt-6 space-y-3">
                 <button
                   type="button"
@@ -557,59 +432,52 @@ function DoctorAppointmentDetailsPage() {
                   {isCompleting ? "Completing..." : "Mark as Completed"}
                 </button>
 
-                {canCancel && (
-                  <button
-                    type="button"
-                    disabled={isCancelling}
-                    onClick={() => setCancelModalOpen(true)}
-                    className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-2xl bg-red-50 text-sm font-extrabold text-red-600 transition hover:bg-red-100 disabled:opacity-60"
-                  >
-                    <XCircle size={17} />
-                    {isCancelling ? "Cancelling..." : "Cancel Appointment"}
-                  </button>
-                )}
-
                 <p className="rounded-2xl bg-orange-50 p-3 text-xs font-bold leading-5 text-orange-600">
-                  Completing this appointment may trigger referral reward credit
-                  if this is the patient's first completed appointment.
+                  Completing this appointment can trigger referral reward credit
+                  if this is the patient&apos;s first completed appointment.
                 </p>
               </div>
             )}
 
             {appointment.status === "completed" && (
-              <div className="mt-6 rounded-2xl bg-green-50 p-4">
-                <p className="text-xs font-bold uppercase text-green-600">
-                  Completed
-                </p>
-
-                <p className="mt-1 text-sm font-semibold leading-6 text-green-700">
-                  This appointment has been marked as completed.
-                </p>
-              </div>
+              <StatusMessage
+                type="success"
+                title="Completed"
+                message="This appointment has been marked as completed. Prescription upload is now available."
+              />
             )}
 
             {appointment.status === "rejected" && (
-              <div className="mt-6 rounded-2xl bg-red-50 p-4">
-                <p className="text-xs font-bold uppercase text-red-500">
-                  Rejection reason
-                </p>
-
-                <p className="mt-1 text-sm font-semibold leading-6 text-red-700">
-                  {appointment.rejection?.reason || "No reason provided"}
-                </p>
-              </div>
+              <StatusMessage
+                type="danger"
+                title={`Rejected by ${
+                  appointment.rejection?.rejectedBy || "N/A"
+                }`}
+                message={appointment.rejection?.reason || "No reason provided"}
+              />
             )}
 
             {appointment.status === "cancelled" && (
-              <div className="mt-6 rounded-2xl bg-slate-100 p-4">
-                <p className="text-xs font-bold uppercase text-slate-600">
-                  Cancelled by {appointment.cancellation?.cancelledBy || "N/A"}
-                </p>
+              <StatusMessage
+                type="neutral"
+                title={`Cancelled by ${
+                  appointment.cancellation?.cancelledBy || "N/A"
+                }`}
+                message={appointment.cancellation?.reason || "No reason provided"}
+                footer={
+                  appointment.paymentStatus === "refunded"
+                    ? "Refund credited to patient wallet."
+                    : ""
+                }
+              />
+            )}
 
-                <p className="mt-2 text-sm leading-6 text-slate-700">
-                  {appointment.cancellation?.reason || "No reason provided"}
-                </p>
-              </div>
+            {appointment.status === "pending_payment" && (
+              <StatusMessage
+                type="warning"
+                title="Payment Pending"
+                message="This booking is reserved but payment is not completed yet."
+              />
             )}
           </aside>
         </div>
@@ -622,91 +490,293 @@ function DoctorAppointmentDetailsPage() {
         onClose={() => setRejectModalOpen(false)}
         onConfirm={handleReject}
       />
-
-      <CancelAppointmentModal
-        open={cancelModalOpen}
-        loading={isCancelling}
-        actor="doctor"
-        appointment={appointment}
-        onClose={() => setCancelModalOpen(false)}
-        onConfirm={handleCancelAppointment}
-      />
     </DashboardLayout>
   );
 }
 
-function PatientAvatar({ patientInfo }) {
-  const initials = patientInfo.name
-    ? patientInfo.name.slice(0, 2).toUpperCase()
-    : "PT";
-
+function AppointmentHeaderCard({ appointment, patientInfo }) {
   return (
-    <div className="flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-3xl bg-[#F0F1FF] text-2xl font-extrabold text-[#9381FF]">
-      {patientInfo.profileImage ? (
-        <img
-          src={patientInfo.profileImage}
-          alt={patientInfo.name}
-          className="h-full w-full object-cover"
-        />
-      ) : (
-        initials
+    <div className="rounded-3xl border border-[#EEF0F6] bg-white p-7 shadow-[0_18px_48px_rgba(17,24,39,0.05)]">
+      <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
+        <div className="flex items-center gap-4">
+          <PatientAvatar patientInfo={patientInfo} />
+
+          <div>
+            <p className="text-xs font-bold uppercase tracking-[0.7px] text-[#9381FF]">
+              Patient
+            </p>
+
+            <h2 className="mt-1 text-2xl font-extrabold text-[#111827]">
+              {patientInfo.name}
+            </h2>
+
+            <p className="mt-2 text-sm font-bold text-[#6B7280]">
+              {formatAppointmentDate(appointment.appointmentDate)} ·{" "}
+              {formatAppointmentTime(appointment.startTime)} -{" "}
+              {formatAppointmentTime(appointment.endTime)}
+            </p>
+          </div>
+        </div>
+
+        <span
+          className={`inline-flex w-fit rounded-full border px-4 py-2 text-sm font-extrabold capitalize ${getStatusBadgeClass(
+            appointment.status
+          )}`}
+        >
+          {getCleanStatus(appointment.status)}
+        </span>
+      </div>
+
+      <div className="mt-7 rounded-2xl bg-[#F8FAFC] p-5">
+        <p className="text-xs font-bold uppercase tracking-[0.6px] text-[#9CA3AF]">
+          Reason for visit
+        </p>
+
+        <p className="mt-2 whitespace-pre-line text-sm leading-7 text-[#374151]">
+          {appointment.reason || "No reason provided"}
+        </p>
+      </div>
+
+      {appointment.status === "completed" && (
+        <div className="mt-5 rounded-2xl bg-green-50 p-5">
+          <p className="flex items-center gap-2 text-sm font-extrabold text-green-700">
+            <CheckCircle2 size={18} />
+            Appointment completed
+          </p>
+
+          <p className="mt-2 text-xs font-bold text-green-600">
+            Completed at {formatDateTime(appointment.completedAt)}
+          </p>
+        </div>
+      )}
+
+      {appointment.status === "cancelled" && (
+        <div className="mt-5 rounded-2xl bg-slate-100 p-5">
+          <p className="flex items-center gap-2 text-sm font-extrabold text-slate-700">
+            <XCircle size={18} />
+            Appointment cancelled
+          </p>
+
+          <p className="mt-2 text-xs font-bold text-slate-600">
+            Cancelled by {appointment.cancellation?.cancelledBy || "N/A"}
+          </p>
+
+          <p className="mt-3 text-sm leading-6 text-slate-700">
+            {appointment.cancellation?.reason || "No reason provided"}
+          </p>
+
+          {appointment.paymentStatus === "refunded" && (
+            <p className="mt-3 rounded-xl bg-green-50 px-4 py-3 text-xs font-extrabold text-green-700">
+              Refund credited to patient wallet.
+            </p>
+          )}
+        </div>
+      )}
+
+      {appointment.status === "rejected" && (
+        <div className="mt-5 rounded-2xl bg-red-50 p-5">
+          <p className="text-xs font-bold uppercase text-red-500">
+            Rejected by {appointment.rejection?.rejectedBy || "N/A"}
+          </p>
+
+          <p className="mt-2 text-sm leading-6 text-red-700">
+            {appointment.rejection?.reason || "No reason provided"}
+          </p>
+        </div>
       )}
     </div>
   );
 }
 
-function PatientInfoBox({ icon: Icon, label, value }) {
+function PatientDetailsCard({ patientInfo }) {
   return (
-    <div className="rounded-2xl border border-[#EEF0F6] bg-[#F8FAFC] p-4">
-      <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-2xl bg-[#F0F1FF] text-[#9381FF]">
-        <Icon size={18} />
+    <div className="rounded-3xl border border-[#EEF0F6] bg-white p-7 shadow-[0_18px_48px_rgba(17,24,39,0.05)]">
+      <div className="mb-5">
+        <p className="text-sm font-bold uppercase tracking-[0.8px] text-[#9381FF]">
+          Patient details
+        </p>
+
+        <h2 className="mt-1 text-xl font-extrabold text-[#111827]">
+          Basic Medical Information
+        </h2>
       </div>
 
-      <p className="text-xs font-bold uppercase tracking-[0.6px] text-[#9CA3AF]">
-        {label}
-      </p>
+      <div className="grid gap-4 md:grid-cols-2">
+        <PatientInfoBox icon={Mail} label="Email" value={patientInfo.email} />
 
-      <p className="mt-1 break-words text-sm font-extrabold text-[#111827]">
-        {value}
-      </p>
+        <PatientInfoBox
+          icon={Phone}
+          label="Phone Number"
+          value={patientInfo.phoneNumber}
+        />
+
+        <PatientInfoBox
+          icon={VenusAndMars}
+          label="Gender"
+          value={patientInfo.gender}
+        />
+
+        <PatientInfoBox
+          icon={Droplets}
+          label="Blood Group"
+          value={patientInfo.bloodGroup}
+        />
+
+        <PatientInfoBox
+          icon={CalendarDays}
+          label="Age"
+          value={patientInfo.age}
+        />
+
+        <PatientInfoBox
+          icon={CalendarDays}
+          label="Date of Birth"
+          value={
+            patientInfo.dateOfBirth
+              ? new Date(patientInfo.dateOfBirth).toLocaleDateString("en-IN", {
+                  day: "2-digit",
+                  month: "short",
+                  year: "numeric",
+                })
+              : "Not available"
+          }
+        />
+      </div>
     </div>
   );
 }
 
-function InfoRow({ label, value }) {
+function UploadedReportsSection({ reports = [] }) {
   return (
-    <div className="flex justify-between gap-4 border-b border-[#EEF0F6] pb-3 last:border-0">
-      <span className="text-[#6B7280]">{label}</span>
+    <div className="rounded-3xl border border-[#EEF0F6] bg-white p-7 shadow-[0_18px_48px_rgba(17,24,39,0.05)]">
+      <h2 className="text-xl font-extrabold text-[#111827]">
+        Patient Uploaded Reports
+      </h2>
 
-      <span className="text-right font-extrabold capitalize text-[#111827]">
-        {value}
-      </span>
+      <p className="mt-2 text-sm leading-6 text-[#6B7280]">
+        Reports attached by the patient during appointment booking.
+      </p>
+
+      {reports.length > 0 ? (
+        <div className="mt-5 grid gap-4 md:grid-cols-2">
+          {reports.map((report, index) => (
+            <ReportCard
+              key={report.reportId || report._id || `${report.title}-${index}`}
+              report={report}
+            />
+          ))}
+        </div>
+      ) : (
+        <p className="mt-4 rounded-2xl border border-dashed border-[#D1D5DB] bg-[#F8FAFC] p-6 text-center text-sm font-bold text-[#6B7280]">
+          No reports uploaded.
+        </p>
+      )}
     </div>
   );
 }
 
-function ReportCard({ report }) {
+function RescheduleHistorySection({ appointment }) {
+  const history = appointment?.rescheduleHistory || [];
+
+  if (history.length === 0 && !appointment?.reschedule?.rescheduleCount) {
+    return null;
+  }
+
   return (
-    <div className="rounded-2xl border border-[#EEF0F6] bg-[#F8FAFC] p-4">
-      <FileText size={18} className="text-[#9381FF]" />
+    <div className="rounded-3xl border border-[#EEF0F6] bg-white p-7 shadow-[0_18px_48px_rgba(17,24,39,0.05)]">
+      <div className="flex items-start gap-4">
+        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-[#F0F1FF] text-[#9381FF]">
+          <RefreshCcw size={20} />
+        </div>
 
-      <p className="mt-3 text-sm font-extrabold text-[#111827]">
-        {report.title || "Untitled report"}
-      </p>
+        <div>
+          <h2 className="text-xl font-extrabold text-[#111827]">
+            Reschedule History
+          </h2>
 
-      <p className="mt-1 text-xs capitalize text-[#6B7280]">
-        {report.reportType?.replace("_", " ") || "Other"}
-      </p>
+          <p className="mt-2 text-sm leading-6 text-[#6B7280]">
+            Shows previous appointment slot changes requested by the patient.
+          </p>
+        </div>
+      </div>
 
-      {report.fileUrl && (
-        <a
-          href={report.fileUrl}
-          target="_blank"
-          rel="noreferrer"
-          className="mt-3 inline-block text-xs font-extrabold text-[#9381FF]"
-        >
-          Preview file
-        </a>
+      {history.length === 0 ? (
+        <p className="mt-5 rounded-2xl bg-[#F8FAFC] p-5 text-sm font-bold text-[#6B7280]">
+          Rescheduled {appointment?.reschedule?.rescheduleCount || 0} time(s).
+        </p>
+      ) : (
+        <div className="mt-5 space-y-4">
+          {history.map((item, index) => (
+            <div
+              key={item._id || `${item.rescheduledAt}-${index}`}
+              className="rounded-2xl border border-[#EEF0F6] bg-[#F8FAFC] p-5"
+            >
+              <p className="text-xs font-bold uppercase text-[#9381FF]">
+                Reschedule #{index + 1}
+              </p>
+
+              <div className="mt-3 grid gap-3 md:grid-cols-2">
+                <SmallInfo
+                  label="Previous Slot"
+                  value={`${formatAppointmentDate(
+                    item.oldAppointmentDate
+                  )} · ${formatAppointmentTime(
+                    item.oldStartTime
+                  )} - ${formatAppointmentTime(item.oldEndTime)}`}
+                />
+
+                <SmallInfo
+                  label="New Slot"
+                  value={`${formatAppointmentDate(
+                    item.newAppointmentDate
+                  )} · ${formatAppointmentTime(
+                    item.newStartTime
+                  )} - ${formatAppointmentTime(item.newEndTime)}`}
+                />
+
+                <SmallInfo
+                  label="Reason Type"
+                  value={formatText(item.reasonType)}
+                />
+
+                <SmallInfo
+                  label="Rescheduled At"
+                  value={formatDateTime(item.rescheduledAt)}
+                />
+              </div>
+
+              <p className="mt-4 rounded-2xl bg-white p-4 text-sm leading-6 text-[#374151]">
+                {item.reason || "No reason provided"}
+              </p>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function PrescriptionPreviewSection({ reports = [], isLoading }) {
+  return (
+    <div className="rounded-3xl border border-[#EEF0F6] bg-white p-7 shadow-[0_18px_48px_rgba(17,24,39,0.05)]">
+      <h2 className="text-xl font-extrabold text-[#111827]">
+        Uploaded Prescriptions
+      </h2>
+
+      {isLoading ? (
+        <p className="mt-4 rounded-2xl bg-[#F8FAFC] p-5 text-sm font-bold text-[#6B7280]">
+          Loading prescriptions...
+        </p>
+      ) : reports.length === 0 ? (
+        <p className="mt-4 rounded-2xl border border-dashed border-[#D1D5DB] bg-[#F8FAFC] p-6 text-center text-sm font-bold text-[#6B7280]">
+          No prescription uploaded yet.
+        </p>
+      ) : (
+        <div className="mt-4 space-y-4">
+          {reports.map((report) => (
+            <PrescriptionCard key={report._id} report={report} />
+          ))}
+        </div>
       )}
     </div>
   );
@@ -726,10 +796,6 @@ function PrescriptionSection({
   onFileChange,
   onSubmit,
 }) {
-  const prescriptions = reports.filter(
-    (report) => report.reportType === "prescription"
-  );
-
   return (
     <div className="rounded-3xl border border-[#EEF0F6] bg-white p-7 shadow-[0_18px_48px_rgba(17,24,39,0.05)]">
       <div className="mb-5">
@@ -834,13 +900,13 @@ function PrescriptionSection({
           <p className="mt-4 rounded-2xl bg-[#F8FAFC] p-5 text-sm font-bold text-[#6B7280]">
             Loading prescriptions...
           </p>
-        ) : prescriptions.length === 0 ? (
+        ) : reports.length === 0 ? (
           <p className="mt-4 rounded-2xl border border-dashed border-[#D1D5DB] bg-[#F8FAFC] p-6 text-center text-sm font-bold text-[#6B7280]">
             No prescription uploaded yet.
           </p>
         ) : (
           <div className="mt-4 space-y-4">
-            {prescriptions.map((report) => (
+            {reports.map((report) => (
               <PrescriptionCard key={report._id} report={report} />
             ))}
           </div>
@@ -850,11 +916,113 @@ function PrescriptionSection({
   );
 }
 
+function PatientAvatar({ patientInfo }) {
+  const initials = patientInfo.name
+    ? patientInfo.name.slice(0, 2).toUpperCase()
+    : "PT";
+
+  return (
+    <div className="flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-3xl bg-[#F0F1FF] text-2xl font-extrabold text-[#9381FF]">
+      {patientInfo.profileImage ? (
+        <img
+          src={patientInfo.profileImage}
+          alt={patientInfo.name}
+          className="h-full w-full object-cover"
+        />
+      ) : (
+        initials
+      )}
+    </div>
+  );
+}
+
+function PatientInfoBox({ icon: Icon, label, value }) {
+  return (
+    <div className="rounded-2xl border border-[#EEF0F6] bg-[#F8FAFC] p-4">
+      <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-2xl bg-[#F0F1FF] text-[#9381FF]">
+        <Icon size={18} />
+      </div>
+
+      <p className="text-xs font-bold uppercase tracking-[0.6px] text-[#9CA3AF]">
+        {label}
+      </p>
+
+      <p className="mt-1 break-words text-sm font-extrabold text-[#111827]">
+        {value}
+      </p>
+    </div>
+  );
+}
+
+function SmallInfo({ label, value }) {
+  return (
+    <div className="rounded-2xl bg-white p-4">
+      <p className="text-xs font-bold uppercase tracking-[0.6px] text-[#9CA3AF]">
+        {label}
+      </p>
+
+      <p className="mt-1 text-sm font-extrabold text-[#111827]">{value}</p>
+    </div>
+  );
+}
+
+function InfoRow({ label, value, highlight = false }) {
+  return (
+    <div className="flex justify-between gap-4 border-b border-[#EEF0F6] pb-3 last:border-0">
+      <span className="text-[#6B7280]">{label}</span>
+
+      <span
+        className={`text-right font-extrabold capitalize ${
+          highlight ? "flex items-center text-[#9381FF]" : "text-[#111827]"
+        }`}
+      >
+        {highlight && <IndianRupee size={14} />}
+        {highlight ? String(value).replace("₹", "") : value}
+      </span>
+    </div>
+  );
+}
+
+function ReportCard({ report }) {
+  const fileUrl = getFileUrl(report);
+
+  return (
+    <div className="rounded-2xl border border-[#EEF0F6] bg-[#F8FAFC] p-4">
+      <FileText size={18} className="text-[#9381FF]" />
+
+      <p className="mt-3 text-sm font-extrabold text-[#111827]">
+        {report.title || "Untitled report"}
+      </p>
+
+      <p className="mt-1 text-xs capitalize text-[#6B7280]">
+        {report.reportType?.replace("_", " ") || "Other"}
+      </p>
+
+      {fileUrl ? (
+        <a
+          href={fileUrl}
+          target="_blank"
+          rel="noreferrer"
+          className="mt-3 inline-block text-xs font-extrabold text-[#9381FF]"
+        >
+          Preview file
+        </a>
+      ) : (
+        <p className="mt-3 text-xs font-bold text-[#9CA3AF]">
+          No file attached
+        </p>
+      )}
+    </div>
+  );
+}
+
 function PrescriptionCard({ report }) {
+  const fileUrl = getFileUrl(report);
+
   return (
     <div className="rounded-2xl border border-[#EEF0F6] bg-[#F8FAFC] p-5">
       <div className="flex items-start gap-3">
-        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#F0F1FF] text-[#9381FF]">
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#F0F1FF] text-[#9381FF]">
           <FileText size={18} />
         </div>
 
@@ -875,9 +1043,9 @@ function PrescriptionCard({ report }) {
             </p>
           )}
 
-          {report.file?.url && (
+          {fileUrl && (
             <a
-              href={report.file.url}
+              href={fileUrl}
               target="_blank"
               rel="noreferrer"
               className="mt-3 inline-block text-xs font-extrabold text-[#9381FF]"
@@ -887,6 +1055,25 @@ function PrescriptionCard({ report }) {
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+function StatusMessage({ type, title, message, footer = "" }) {
+  const classNameMap = {
+    success: "bg-green-50 text-green-700",
+    danger: "bg-red-50 text-red-700",
+    warning: "bg-orange-50 text-orange-700",
+    neutral: "bg-slate-100 text-slate-700",
+  };
+
+  return (
+    <div className={`mt-6 rounded-2xl p-4 ${classNameMap[type]}`}>
+      <p className="text-xs font-bold uppercase">{title}</p>
+
+      <p className="mt-2 text-sm font-semibold leading-6">{message}</p>
+
+      {footer && <p className="mt-3 text-xs font-extrabold">{footer}</p>}
     </div>
   );
 }
