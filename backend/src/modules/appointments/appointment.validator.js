@@ -19,6 +19,14 @@ const VALID_CANCELLATION_REASON_TYPES = [
   "other",
 ];
 
+const VALID_RESCHEDULE_REASON_TYPES = [
+  "personal_reason",
+  "medical_emergency",
+  "schedule_conflict",
+  "doctor_requested",
+  "other",
+];
+
 const isValidObjectId = (id) => mongoose.Types.ObjectId.isValid(id);
 
 export const validateObjectId = (id, fieldName) => {
@@ -68,9 +76,7 @@ export const validateInitiateAppointmentInput = (body) => {
   validateObjectId(slotDayId, "slot day id");
   validateObjectId(slotId, "slot id");
 
-  if (!appointmentDate || !/^\d{4}-\d{2}-\d{2}$/.test(appointmentDate)) {
-    throw new AppError("Valid appointment date is required", 400);
-  }
+  validateDateString(appointmentDate);
 
   if (!reason || !reason.trim()) {
     throw new AppError("Reason for appointment is required", 400);
@@ -151,6 +157,50 @@ export const validateCancelAppointmentInput = (body) => {
   if (reason.trim().length > 300) {
     throw new AppError(
       "Cancellation reason cannot exceed 300 characters",
+      400
+    );
+  }
+};
+
+export const validateRescheduleAppointmentInput = (body) => {
+  const {
+    newSlotDayId,
+    newSlotId,
+    newAppointmentDate,
+    reasonType,
+    reason,
+  } = body;
+
+  if (!newSlotDayId) {
+    throw new AppError("New slot day id is required", 400);
+  }
+
+  if (!newSlotId) {
+    throw new AppError("New slot id is required", 400);
+  }
+
+  validateObjectId(newSlotDayId, "new slot day id");
+  validateObjectId(newSlotId, "new slot id");
+  validateDateString(newAppointmentDate);
+
+  if (!reasonType || !VALID_RESCHEDULE_REASON_TYPES.includes(reasonType)) {
+    throw new AppError("Invalid reschedule reason type", 400);
+  }
+
+  if (!reason || !reason.trim()) {
+    throw new AppError("Reschedule reason is required", 400);
+  }
+
+  if (reason.trim().length < 5) {
+    throw new AppError(
+      "Reschedule reason must be at least 5 characters",
+      400
+    );
+  }
+
+  if (reason.trim().length > 300) {
+    throw new AppError(
+      "Reschedule reason cannot exceed 300 characters",
       400
     );
   }

@@ -6,6 +6,7 @@ import {
   Gift,
   IndianRupee,
   XCircle,
+  RefreshCcw,
 } from "lucide-react";
 import { Link, useParams } from "react-router-dom";
 import toast from "react-hot-toast";
@@ -18,8 +19,9 @@ import {
   cancelMyAppointment,
   clearAppointmentError,
   fetchMyAppointmentDetails,
+  rescheduleMyAppointment,
 } from "../../features/appointment/appointmentSlice";
-
+import RescheduleAppointmentModal from "../../components/appointments/RescheduleAppointmentModal";
 import {
   clearAppointmentReports,
   clearReportError,
@@ -52,11 +54,12 @@ function MyAppointmentDetailsPage() {
   const dispatch = useAppDispatch();
 
   const [cancelModalOpen, setCancelModalOpen] = useState(false);
-
+  const [rescheduleModalOpen, setRescheduleModalOpen] = useState(false);
   const {
     selectedAppointment,
     isLoadingDetails,
     isCancelling,
+    isRescheduling,
     error,
   } = useAppSelector((state) => state.appointments);
 
@@ -119,9 +122,43 @@ function MyAppointmentDetailsPage() {
       toast.error(err || "Failed to cancel appointment");
     }
   };
+  const handleRescheduleAppointment = async ({
+  newSlotDayId,
+  newSlotId,
+  newAppointmentDate,
+  reasonType,
+  reason,
+}) => {
+  if (!reason.trim()) {
+    toast.error("Reschedule reason is required");
+    return;
+  }
 
+  try {
+    const result = await dispatch(
+      rescheduleMyAppointment({
+        appointmentId,
+        newSlotDayId,
+        newSlotId,
+        newAppointmentDate,
+        reasonType,
+        reason,
+      })
+    ).unwrap();
+
+    toast.success(result.message || "Appointment rescheduled");
+    setRescheduleModalOpen(false);
+
+    dispatch(fetchMyAppointmentDetails(appointmentId));
+  } catch (err) {
+    toast.error(err || "Failed to reschedule appointment");
+  }
+};
   const canCancel =
     appointment && ["pending", "approved"].includes(appointment.status);
+
+    const canReschedule =
+  appointment && ["pending", "approved"].includes(appointment.status);
 
   return (
     <PatientLayout>
@@ -364,7 +401,17 @@ function MyAppointmentDetailsPage() {
                   {isCancelling ? "Cancelling..." : "Cancel Appointment"}
                 </button>
               )}
-
+                {canReschedule && (
+  <button
+    type="button"
+    disabled={isRescheduling}
+    onClick={() => setRescheduleModalOpen(true)}
+    className="mt-3 inline-flex h-12 w-full items-center justify-center gap-2 rounded-2xl bg-[#F0F1FF] text-sm font-extrabold text-[#9381FF] transition hover:bg-[#E6E7FF] disabled:opacity-60"
+  >
+    <RefreshCcw size={17} />
+    {isRescheduling ? "Rescheduling..." : "Reschedule Appointment"}
+  </button>
+)}
               {appointment.status === "rejected" && (
                 <div className="mt-6 rounded-2xl bg-red-50 p-4">
                   <p className="text-xs font-bold uppercase text-red-500">
@@ -413,6 +460,13 @@ function MyAppointmentDetailsPage() {
           onClose={() => setCancelModalOpen(false)}
           onConfirm={handleCancelAppointment}
         />
+        <RescheduleAppointmentModal
+   open={rescheduleModalOpen}
+   loading={isRescheduling}
+   appointment={appointment}
+   onClose={() => setRescheduleModalOpen(false)}
+   onConfirm={handleRescheduleAppointment}
+/>
       </main>
     </PatientLayout>
   );

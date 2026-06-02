@@ -37,6 +37,7 @@ import {
   validateInitiateAppointmentInput,
   validateObjectId,
   validateRejectAppointmentInput,
+  validateRescheduleAppointmentInput,
 } from "./appointment.validator.js";
 
 const RESERVATION_MINUTES = 10;
@@ -133,25 +134,28 @@ const ensureAppointmentCanBeCancelled = ({ appointment, cancelledBy }) => {
     );
   }
 
-  if (cancelledBy === "patient" && !["pending", "approved"].includes(appointment.status)) {
+  if (
+    cancelledBy === "patient" &&
+    !["pending", "approved"].includes(appointment.status)
+  ) {
     throw new AppError(
       "Patient can cancel only pending or approved appointments",
       400
     );
   }
 
-  if (cancelledBy === "doctor" && appointment.status !== "approved") {
-    throw new AppError(
-      "Doctor can cancel only approved appointments",
-      400
-    );
-  }
-
-  if (cancelledBy === "admin" && !["pending", "approved"].includes(appointment.status)) {
+  if (
+    cancelledBy === "admin" &&
+    !["pending", "approved"].includes(appointment.status)
+  ) {
     throw new AppError(
       "Admin can cancel only pending or approved appointments",
       400
     );
+  }
+
+  if (cancelledBy === "doctor") {
+    throw new AppError("Doctor cancellation is not allowed", 403);
   }
 };
 
@@ -736,39 +740,6 @@ export const completeAppointmentByDoctorService = async ({
   }
 };
 
-export const cancelAppointmentByDoctorService = async ({
-  doctorId,
-  appointmentId,
-  body,
-}) => {
-  validateObjectId(doctorId, "doctor id");
-  validateObjectId(appointmentId, "appointment id");
-
-  const session = await mongoose.startSession();
-
-  try {
-    let updatedAppointment = null;
-
-    await session.withTransaction(async () => {
-      const appointment = await findAppointmentForDoctorAction({
-        doctorId,
-        appointmentId,
-        session,
-      });
-
-      updatedAppointment = await cancelAppointmentCore({
-        appointment,
-        cancelledBy: "doctor",
-        body,
-        session,
-      });
-    });
-
-    return updatedAppointment;
-  } finally {
-    await session.endSession();
-  }
-};
 
 export const getAdminAppointmentsService = async ({ query }) => {
   const { status } = query;
@@ -904,6 +875,181 @@ export const cancelAppointmentByAdminService = async ({
         body,
         session,
       });
+    });
+
+    return updatedAppointment;
+  } finally {
+    await session.endSession();
+  }
+};
+
+const ensureAppointmentCanBeRescheduled = (appointment) => {
+  if (!appointment) {
+    throw new AppError("Appointment not found", 404);
+  }
+
+  if (!["pending", "approved"].includes(appointment.status)) {
+    throw new AppError(
+      "Only pending or approved appointments can be rescheduled",
+      400
+    );
+  }
+
+  if (appointment.paymentStatus !== "paid") {
+    throw new AppError("Only paid appointments can be rescheduled", 400);
+  }
+
+  if (appointment.status === "completed") {
+    throw new AppError("Completed appointment cannot be rescheduled", 400);
+  }
+
+  if (appointment.status === "cancelled") {
+    throw new AppError("Cancelled appointment cannot be rescheduled", 400);
+  }
+
+  if (appointment.status === "rejected") {
+    throw new AppError("Rejected appointment cannot be rescheduled", 400);
+  }
+};
+
+export const rescheduleAppointmentByPatientService = async ({
+  patientId,
+  appointmentId,
+  body,
+}) => {
+  validateObjectId(patientId, "patient id");
+  validateObjectId(appointmentId, "appointment id");
+  validateRescheduleAppointmentInput(body);
+
+  const {
+    newSlotDayId,
+    newSlotId,
+    newAppointmentDate,
+    reasonType,
+    reason,
+  } = body;
+
+  const session = await mongoose.startSession();
+
+  try {
+    let updatedAppointment = null;
+
+    await session.withTransaction(async () => {
+      const appointment = await findAppointmentForPatientAction({
+        patientId,
+        appointmentId,
+        session,
+      });
+
+      ensureAppointmentCanBeRescheduled(appointment);
+
+      const oldSlotDay = await findSlotDayById({
+        slotDayId: appointment.slotDayId,
+        doctorId: appointment.doctorId,
+        session,
+      });
+
+      const newSlotDay = await findSlotDayById({
+        slotDayId: newSlotDayId,
+        doctorId: appointment.doctorId,
+        session,
+      });
+
+      if (!newSlotDay) {
+        throw new AppError("New slot day not found", 404);
+      }
+
+      if (newSlotDay.date !== newAppointmentDate) {
+        throw new AppError(
+          "Selected new slot date does not match appointment date",
+          400
+        );
+      }
+
+      if (newSlotDay.isHoliday) {
+        throw new AppError("Cannot reschedule to a holiday", 400);
+      }
+
+      const newSlot = newSlotDay.slots.id(newSlotId);
+
+      if (!newSlot || newSlot.isDeleted) {
+        throw new AppError("New selected slot not found", 404);
+      }
+
+      if (newSlot.status !== "available") {
+        throw new AppError("New selected slot is not available", 400);
+      }
+
+      if (oldSlotDay) {
+        const oldSlot = oldSlotDay.slots.id(appointment.slotId);
+
+        if (oldSlot && !oldSlot.isDeleted && oldSlot.status === "booked") {
+          oldSlot.status = "available";
+          oldSlot.reservedBy = null;
+          oldSlot.reservedAppointmentId = null;
+          oldSlot.reservedUntil = null;
+
+          await saveSlotDay({
+            slotDay: oldSlotDay,
+            session,
+          });
+        }
+      }
+
+      newSlot.status = "booked";
+      newSlot.reservedBy = null;
+      newSlot.reservedAppointmentId = null;
+      newSlot.reservedUntil = null;
+
+      const oldData = {
+        oldSlotDayId: appointment.slotDayId,
+        oldSlotId: appointment.slotId,
+        oldAppointmentDate: appointment.appointmentDate,
+        oldStartTime: appointment.startTime,
+        oldEndTime: appointment.endTime,
+      };
+
+      appointment.slotDayId = new mongoose.Types.ObjectId(newSlotDayId);
+      appointment.slotId = new mongoose.Types.ObjectId(newSlotId);
+      appointment.appointmentDate = newAppointmentDate;
+      appointment.startTime = newSlot.startTime;
+      appointment.endTime = newSlot.endTime;
+
+      appointment.status = "pending";
+      appointment.approval = {
+        approvedBy: "",
+        approvedAt: null,
+      };
+
+      appointment.reschedule = {
+        rescheduleCount: Number(appointment.reschedule?.rescheduleCount || 0) + 1,
+        lastRescheduledAt: new Date(),
+        lastReason: reason.trim(),
+      };
+
+      appointment.rescheduleHistory.push({
+        ...oldData,
+        newSlotDayId: new mongoose.Types.ObjectId(newSlotDayId),
+        newSlotId: new mongoose.Types.ObjectId(newSlotId),
+        newAppointmentDate,
+        newStartTime: newSlot.startTime,
+        newEndTime: newSlot.endTime,
+        reasonType,
+        reason: reason.trim(),
+        rescheduledAt: new Date(),
+      });
+
+      await saveSlotDay({
+        slotDay: newSlotDay,
+        session,
+      });
+
+      await saveAppointment({
+        appointment,
+        session,
+      });
+
+      updatedAppointment = appointment;
     });
 
     return updatedAppointment;

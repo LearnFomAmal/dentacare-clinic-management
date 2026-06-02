@@ -8,7 +8,6 @@ import {
   approveAppointmentByAdminController,
   approveAppointmentByDoctorController,
   cancelAppointmentByAdminController,
-  cancelAppointmentByDoctorController,
   cancelAppointmentByPatientController,
   completeAppointmentByDoctorController,
   getAdminAppointmentDetailsController,
@@ -20,6 +19,7 @@ import {
   initiateAppointmentController,
   rejectAppointmentByAdminController,
   rejectAppointmentByDoctorController,
+  rescheduleAppointmentByPatientController,
 } from "./appointment.controller.js";
 
 const router = express.Router();
@@ -41,6 +41,12 @@ router.patch(
   "/my/:appointmentId/cancel",
   protect,
   cancelAppointmentByPatientController
+);
+
+router.patch(
+  "/my/:appointmentId/reschedule",
+  protect,
+  rescheduleAppointmentByPatientController
 );
 
 // ==============================
@@ -72,11 +78,8 @@ router.patch(
   completeAppointmentByDoctorController
 );
 
-router.patch(
-  "/doctor/:appointmentId/cancel",
-  protectDoctor,
-  cancelAppointmentByDoctorController
-);
+// Doctor cancel intentionally removed.
+// Emergency cancellation is patient/admin only.
 
 // ==============================
 // ADMIN ROUTES

@@ -18,6 +18,24 @@ export const getAppointmentDetailsApi = async (appointmentId) => {
   return response.data;
 };
 
+export const createRazorpayOrderApi = async (payload) => {
+  const response = await axiosInstance.post(
+    API_ENDPOINTS.PAYMENT.CREATE_RAZORPAY_ORDER,
+    payload
+  );
+
+  return response.data;
+};
+
+export const verifyRazorpayPaymentApi = async (payload) => {
+  const response = await axiosInstance.post(
+    API_ENDPOINTS.PAYMENT.VERIFY_RAZORPAY,
+    payload
+  );
+
+  return response.data;
+};
+
 export const markPaymentSuccessApi = async (payload) => {
   const response = await axiosInstance.post(
     API_ENDPOINTS.PAYMENT.SUCCESS,
@@ -60,6 +78,28 @@ export const cancelMyAppointmentApi = async ({
   const response = await axiosInstance.patch(
     API_ENDPOINTS.APPOINTMENT.MY_CANCEL(appointmentId),
     {
+      reasonType,
+      reason,
+    }
+  );
+
+  return response.data;
+};
+
+export const rescheduleMyAppointmentApi = async ({
+  appointmentId,
+  newSlotDayId,
+  newSlotId,
+  newAppointmentDate,
+  reasonType,
+  reason,
+}) => {
+  const response = await axiosInstance.patch(
+    API_ENDPOINTS.APPOINTMENT.MY_RESCHEDULE(appointmentId),
+    {
+      newSlotDayId,
+      newSlotId,
+      newAppointmentDate,
       reasonType,
       reason,
     }
@@ -114,22 +154,6 @@ export const rejectDoctorAppointmentApi = async ({
 export const completeDoctorAppointmentApi = async (appointmentId) => {
   const response = await axiosInstance.patch(
     API_ENDPOINTS.APPOINTMENT.DOCTOR_COMPLETE(appointmentId)
-  );
-
-  return response.data;
-};
-
-export const cancelDoctorAppointmentApi = async ({
-  appointmentId,
-  reasonType,
-  reason,
-}) => {
-  const response = await axiosInstance.patch(
-    API_ENDPOINTS.APPOINTMENT.DOCTOR_CANCEL(appointmentId),
-    {
-      reasonType,
-      reason,
-    }
   );
 
   return response.data;

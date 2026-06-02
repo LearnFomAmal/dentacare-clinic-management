@@ -119,13 +119,15 @@ RESTORE_DEFAULTS: (slotDayId) =>
       `/reports/doctor/appointment/${appointmentId}`,
   },
 
-  APPOINTMENT: {
+ APPOINTMENT: {
   INITIATE: "/appointments/initiate",
   DETAILS: (appointmentId) => `/appointments/${appointmentId}`,
 
   MY: "/appointments/my",
   MY_DETAILS: (appointmentId) => `/appointments/my/${appointmentId}`,
   MY_CANCEL: (appointmentId) => `/appointments/my/${appointmentId}/cancel`,
+  MY_RESCHEDULE: (appointmentId) =>
+    `/appointments/my/${appointmentId}/reschedule`,
 
   DOCTOR_LIST: "/appointments/doctor",
   DOCTOR_DETAILS: (appointmentId) => `/appointments/doctor/${appointmentId}`,
@@ -135,8 +137,6 @@ RESTORE_DEFAULTS: (slotDayId) =>
     `/appointments/doctor/${appointmentId}/reject`,
   DOCTOR_COMPLETE: (appointmentId) =>
     `/appointments/doctor/${appointmentId}/complete`,
-  DOCTOR_CANCEL: (appointmentId) =>
-    `/appointments/doctor/${appointmentId}/cancel`,
 
   ADMIN_LIST: "/appointments/admin",
   ADMIN_DETAILS: (appointmentId) => `/appointments/admin/${appointmentId}`,
@@ -148,10 +148,12 @@ RESTORE_DEFAULTS: (slotDayId) =>
     `/appointments/admin/${appointmentId}/cancel`,
 },
 
-  PAYMENT: {
-    SUCCESS: "/payments/success",
-    FAILED: "/payments/failed",
-  },
+PAYMENT: {
+  CREATE_RAZORPAY_ORDER: "/payments/razorpay/create-order",
+  VERIFY_RAZORPAY: "/payments/razorpay/verify",
+  SUCCESS: "/payments/success",
+  FAILED: "/payments/failed",
+},
 
   COUPON: {
   AVAILABLE: "/coupons/available",

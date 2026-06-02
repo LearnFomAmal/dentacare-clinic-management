@@ -26,6 +26,15 @@ export const findPaymentByTransactionId = ({
   }).session(session);
 };
 
+export const findPaymentByRazorpayOrderId = ({
+  orderId,
+  session = null,
+}) => {
+  return Payment.findOne({
+    "razorpay.orderId": orderId,
+  }).session(session);
+};
+
 export const createPayment = async ({ payload, session = null }) => {
   const payments = await Payment.create([payload], { session });
 

@@ -27,6 +27,86 @@ const appointmentReportSchema = new mongoose.Schema(
   { _id: false }
 );
 
+const rescheduleHistorySchema = new mongoose.Schema(
+  {
+    oldSlotDayId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "DoctorSlot",
+      default: null,
+    },
+
+    oldSlotId: {
+      type: mongoose.Schema.Types.ObjectId,
+      default: null,
+    },
+
+    oldAppointmentDate: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+
+    oldStartTime: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+
+    oldEndTime: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+
+    newSlotDayId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "DoctorSlot",
+      default: null,
+    },
+
+    newSlotId: {
+      type: mongoose.Schema.Types.ObjectId,
+      default: null,
+    },
+
+    newAppointmentDate: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+
+    newStartTime: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+
+    newEndTime: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+
+    reasonType: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+
+    reason: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+
+    rescheduledAt: {
+      type: Date,
+      default: Date.now,
+    },
+  },
+  { _id: false }
+);
+
 const appointmentSchema = new mongoose.Schema(
   {
     patientId: {
@@ -106,68 +186,68 @@ const appointmentSchema = new mongoose.Schema(
       index: true,
     },
 
-   pricing: {
-  consultationFee: {
-    type: Number,
-    required: true,
-    min: 0,
-  },
+    pricing: {
+      consultationFee: {
+        type: Number,
+        required: true,
+        min: 0,
+      },
 
-  couponDiscount: {
-    type: Number,
-    default: 0,
-    min: 0,
-  },
+      couponDiscount: {
+        type: Number,
+        default: 0,
+        min: 0,
+      },
 
-  referralDiscount: {
-    type: Number,
-    default: 0,
-    min: 0,
-  },
+      referralDiscount: {
+        type: Number,
+        default: 0,
+        min: 0,
+      },
 
-  rewardDiscount: {
-    type: Number,
-    default: 0,
-    min: 0,
-  },
+      rewardDiscount: {
+        type: Number,
+        default: 0,
+        min: 0,
+      },
 
-  totalDiscount: {
-    type: Number,
-    default: 0,
-    min: 0,
-  },
+      totalDiscount: {
+        type: Number,
+        default: 0,
+        min: 0,
+      },
 
-  finalAmount: {
-    type: Number,
-    required: true,
-    min: 0,
-  },
+      finalAmount: {
+        type: Number,
+        required: true,
+        min: 0,
+      },
 
-  appliedCouponId: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: "Coupon",
-    default: null,
-  },
+      appliedCouponId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "Coupon",
+        default: null,
+      },
 
-  appliedCouponCode: {
-    type: String,
-    default: "",
-    trim: true,
-    uppercase: true,
-  },
+      appliedCouponCode: {
+        type: String,
+        default: "",
+        trim: true,
+        uppercase: true,
+      },
 
-  appliedReferralId: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: "Referral",
-    default: null,
-  },
+      appliedReferralId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "Referral",
+        default: null,
+      },
 
-  appliedRewardRuleId: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: "RewardRule",
-    default: null,
-  },
-},
+      appliedRewardRuleId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "RewardRule",
+        default: null,
+      },
+    },
 
     paymentSummary: {
       paymentId: {
@@ -186,24 +266,29 @@ const appointmentSchema = new mongoose.Schema(
         default: "",
       },
 
+      razorpayOrderId: {
+        type: String,
+        default: "",
+      },
+
       paidAt: {
         type: Date,
         default: null,
       },
     },
-      
-   reservation: {
-  reservedUntil: {
-    type: Date,
-    default: null,
-  },
 
-  releasedAt: {
-    type: Date,
-    default: null,
-  },
-},
- 
+    reservation: {
+      reservedUntil: {
+        type: Date,
+        default: null,
+      },
+
+      releasedAt: {
+        type: Date,
+        default: null,
+      },
+    },
+
     approval: {
       approvedBy: {
         type: String,
@@ -265,6 +350,30 @@ const appointmentSchema = new mongoose.Schema(
         type: Date,
         default: null,
       },
+    },
+
+    reschedule: {
+      rescheduleCount: {
+        type: Number,
+        default: 0,
+        min: 0,
+      },
+
+      lastRescheduledAt: {
+        type: Date,
+        default: null,
+      },
+
+      lastReason: {
+        type: String,
+        default: "",
+        trim: true,
+      },
+    },
+
+    rescheduleHistory: {
+      type: [rescheduleHistorySchema],
+      default: [],
     },
 
     completedAt: {

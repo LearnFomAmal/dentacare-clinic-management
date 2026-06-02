@@ -7,11 +7,41 @@ const VALID_PAYMENT_METHODS = [
   "phonepe",
   "upi",
   "wallet",
+  "razorpay",
 ];
 
 export const validateObjectId = (id, fieldName = "id") => {
   if (!id || !mongoose.Types.ObjectId.isValid(id)) {
     throw new AppError(`Invalid ${fieldName}`, 400);
+  }
+};
+
+export const validateCreateRazorpayOrderInput = (body) => {
+  const { appointmentId } = body;
+
+  validateObjectId(appointmentId, "appointment id");
+};
+
+export const validateVerifyRazorpayPaymentInput = (body) => {
+  const {
+    appointmentId,
+    razorpay_order_id,
+    razorpay_payment_id,
+    razorpay_signature,
+  } = body;
+
+  validateObjectId(appointmentId, "appointment id");
+
+  if (!razorpay_order_id || !String(razorpay_order_id).trim()) {
+    throw new AppError("Razorpay order id is required", 400);
+  }
+
+  if (!razorpay_payment_id || !String(razorpay_payment_id).trim()) {
+    throw new AppError("Razorpay payment id is required", 400);
+  }
+
+  if (!razorpay_signature || !String(razorpay_signature).trim()) {
+    throw new AppError("Razorpay signature is required", 400);
   }
 };
 

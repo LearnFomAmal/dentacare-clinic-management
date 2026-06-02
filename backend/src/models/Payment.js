@@ -91,6 +91,27 @@ const paymentSchema = new mongoose.Schema(
       index: true,
     },
 
+    razorpay: {
+      orderId: {
+        type: String,
+        default: "",
+        trim: true,
+        index: true,
+      },
+
+      paymentId: {
+        type: String,
+        default: "",
+        trim: true,
+      },
+
+      signature: {
+        type: String,
+        default: "",
+        trim: true,
+      },
+    },
+
     status: {
       type: String,
       enum: ["paid", "failed", "refunded"],

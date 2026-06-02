@@ -17,7 +17,9 @@ import {
   rejectAdminAppointmentApi,
   rejectDoctorAppointmentApi,
   cancelAdminAppointmentApi,
-  cancelDoctorAppointmentApi,
+  createRazorpayOrderApi,
+  rescheduleMyAppointmentApi,
+  verifyRazorpayPaymentApi,
   cancelMyAppointmentApi,
 } from "./appointmentService";
 
@@ -186,24 +188,6 @@ export const cancelMyAppointment = createAsyncThunk(
   }
 );
 
-export const cancelDoctorAppointment = createAsyncThunk(
-  "appointments/cancelDoctorAppointment",
-  async (payload, { rejectWithValue }) => {
-    try {
-      const response = await cancelDoctorAppointmentApi(payload);
-
-      return {
-        appointment: response.data,
-        message:
-          response.message || "Appointment cancelled by doctor successfully",
-      };
-    } catch (error) {
-      return rejectWithValue(
-        getErrorMessage(error, "Failed to cancel appointment")
-      );
-    }
-  }
-);
 
 export const cancelAdminAppointment = createAsyncThunk(
   "appointments/cancelAdminAppointment",
@@ -405,6 +389,61 @@ export const rejectAdminAppointment = createAsyncThunk(
   }
 );
 
+export const createRazorpayOrder = createAsyncThunk(
+  "appointments/createRazorpayOrder",
+  async (payload, { rejectWithValue }) => {
+    try {
+      const response = await createRazorpayOrderApi(payload);
+
+      return {
+        order: response.data,
+        message: response.message || "Razorpay order created",
+      };
+    } catch (error) {
+      return rejectWithValue(
+        getErrorMessage(error, "Failed to create Razorpay order")
+      );
+    }
+  }
+);
+
+export const verifyRazorpayPayment = createAsyncThunk(
+  "appointments/verifyRazorpayPayment",
+  async (payload, { rejectWithValue }) => {
+    try {
+      const response = await verifyRazorpayPaymentApi(payload);
+
+      return {
+        appointment: response.data?.appointment,
+        payment: response.data?.payment,
+        message: response.message || "Payment verified successfully",
+      };
+    } catch (error) {
+      return rejectWithValue(
+        getErrorMessage(error, "Failed to verify Razorpay payment")
+      );
+    }
+  }
+);
+
+export const rescheduleMyAppointment = createAsyncThunk(
+  "appointments/rescheduleMyAppointment",
+  async (payload, { rejectWithValue }) => {
+    try {
+      const response = await rescheduleMyAppointmentApi(payload);
+
+      return {
+        appointment: response.data,
+        message: response.message || "Appointment rescheduled successfully",
+      };
+    } catch (error) {
+      return rejectWithValue(
+        getErrorMessage(error, "Failed to reschedule appointment")
+      );
+    }
+  }
+);
+
 const appointmentSlice = createSlice({
   name: "appointments",
 
@@ -419,7 +458,7 @@ const appointmentSlice = createSlice({
     selectedAppointment: null,
     latestPayment: null,
 
-    selectedPaymentMethod: "google_pay",
+    // selectedPaymentMethod: "google_pay",
 
     isInitiating: false,
     isLoadingDetails: false,
@@ -428,7 +467,9 @@ const appointmentSlice = createSlice({
     isDeciding: false,
     isCompleting: false,
     isCancelling: false,
-
+    latestRazorpayOrder: null,
+    isCreatingRazorpayOrder: false,
+     isRescheduling: false,
     error: null,
   },
 
@@ -758,25 +799,7 @@ const appointmentSlice = createSlice({
   state.error = action.payload;
 })
 
-.addCase(cancelDoctorAppointment.pending, (state) => {
-  state.isCancelling = true;
-  state.error = null;
-})
 
-.addCase(cancelDoctorAppointment.fulfilled, (state, action) => {
-  state.isCancelling = false;
-  state.selectedAppointment = action.payload.appointment;
-  state.doctorAppointments = updateAppointmentInList(
-    state.doctorAppointments,
-    action.payload.appointment
-  );
-  state.error = null;
-})
-
-.addCase(cancelDoctorAppointment.rejected, (state, action) => {
-  state.isCancelling = false;
-  state.error = action.payload;
-})
 
 .addCase(cancelAdminAppointment.pending, (state) => {
   state.isCancelling = true;
@@ -796,7 +819,66 @@ const appointmentSlice = createSlice({
 .addCase(cancelAdminAppointment.rejected, (state, action) => {
   state.isCancelling = false;
   state.error = action.payload;
+})
+
+.addCase(createRazorpayOrder.pending, (state) => {
+  state.isCreatingRazorpayOrder = true;
+  state.error = null;
+})
+
+.addCase(createRazorpayOrder.fulfilled, (state, action) => {
+  state.isCreatingRazorpayOrder = false;
+  state.latestRazorpayOrder = action.payload.order;
+  state.error = null;
+})
+
+.addCase(createRazorpayOrder.rejected, (state, action) => {
+  state.isCreatingRazorpayOrder = false;
+  state.error = action.payload;
+})
+
+.addCase(verifyRazorpayPayment.pending, (state) => {
+  state.isPaying = true;
+  state.error = null;
+})
+
+.addCase(verifyRazorpayPayment.fulfilled, (state, action) => {
+  state.isPaying = false;
+  state.initiatedAppointment = action.payload.appointment;
+  state.selectedAppointment = action.payload.appointment;
+  state.latestPayment = action.payload.payment;
+  state.error = null;
+
+  saveInitiatedAppointment(action.payload.appointment);
+  clearStoredBookingDraft();
+  state.bookingDraft = null;
+})
+
+.addCase(verifyRazorpayPayment.rejected, (state, action) => {
+  state.isPaying = false;
+  state.error = action.payload;
+})
+
+.addCase(rescheduleMyAppointment.pending, (state) => {
+  state.isRescheduling = true;
+  state.error = null;
+})
+
+.addCase(rescheduleMyAppointment.fulfilled, (state, action) => {
+  state.isRescheduling = false;
+  state.selectedAppointment = action.payload.appointment;
+  state.myAppointments = updateAppointmentInList(
+    state.myAppointments,
+    action.payload.appointment
+  );
+  state.error = null;
+})
+
+.addCase(rescheduleMyAppointment.rejected, (state, action) => {
+  state.isRescheduling = false;
+  state.error = action.payload;
 });
+
   },
 });
 

@@ -2,10 +2,9 @@ import { useEffect } from "react";
 import {
   ArrowLeft,
   CalendarDays,
+  CreditCard,
   IndianRupee,
-  Landmark,
   ShieldCheck,
-  Smartphone,
   Wallet,
 } from "lucide-react";
 import { Link, useNavigate, useParams } from "react-router-dom";
@@ -18,12 +17,12 @@ import {
   clearAppointmentError,
   confirmPaymentFailed,
   confirmPaymentSuccess,
+  createRazorpayOrder,
   fetchAppointmentDetails,
   setSelectedPaymentMethod,
+  verifyRazorpayPayment,
 } from "../../features/appointment/appointmentSlice";
-import {
-  fetchMyWallet,
-} from "../../features/wallet/walletSlice";
+import { fetchMyWallet } from "../../features/wallet/walletSlice";
 import {
   formatAppointmentDate,
   formatAppointmentTime,
@@ -34,22 +33,10 @@ import {
 
 const paymentMethods = [
   {
-    id: "google_pay",
-    title: "Google Pay",
-    subtitle: "Fast payment simulation",
-    icon: Smartphone,
-  },
-  {
-    id: "phonepe",
-    title: "PhonePe",
-    subtitle: "UPI instant route",
-    icon: Smartphone,
-  },
-  {
-    id: "upi",
-    title: "UPI",
-    subtitle: "Pay with any UPI app",
-    icon: Landmark,
+    id: "razorpay",
+    title: "Razorpay Test",
+    subtitle: "Cards, UPI, wallets in Razorpay test mode",
+    icon: CreditCard,
   },
   {
     id: "wallet",
@@ -58,6 +45,22 @@ const paymentMethods = [
     icon: Wallet,
   },
 ];
+
+const loadRazorpayScript = () => {
+  return new Promise((resolve) => {
+    if (window.Razorpay) {
+      resolve(true);
+      return;
+    }
+
+    const script = document.createElement("script");
+    script.src = "https://checkout.razorpay.com/v1/checkout.js";
+    script.onload = () => resolve(true);
+    script.onerror = () => resolve(false);
+
+    document.body.appendChild(script);
+  });
+};
 
 function PaymentPage() {
   const { appointmentId } = useParams();
@@ -69,15 +72,15 @@ function PaymentPage() {
     selectedPaymentMethod,
     isLoadingDetails,
     isPaying,
+    isCreatingRazorpayOrder,
     error,
   } = useAppSelector((state) => state.appointments);
 
-  const {
-    wallet,
-    isLoadingWallet,
-  } = useAppSelector((state) => state.wallet);
+  const { wallet, isLoadingWallet } = useAppSelector((state) => state.wallet);
 
   useEffect(() => {
+    dispatch(setSelectedPaymentMethod("razorpay"));
+
     if (appointmentId) {
       dispatch(fetchAppointmentDetails(appointmentId));
     }
@@ -98,7 +101,28 @@ function PaymentPage() {
   const isWalletPayment = selectedPaymentMethod === "wallet";
   const isWalletInsufficient = isWalletPayment && walletBalance < finalAmount;
 
-  const handleSuccessPayment = async () => {
+  const recordFailedPayment = async (failureReason = "Payment cancelled") => {
+    if (!appointment?._id) return;
+
+    try {
+      await dispatch(
+        confirmPaymentFailed({
+          appointmentId: appointment._id,
+          paymentMethod: selectedPaymentMethod,
+          transactionId: generateTransactionId(),
+          failureReason,
+        })
+      ).unwrap();
+
+      navigate(`/payment-failed/${appointment._id}`, {
+        replace: true,
+      });
+    } catch (err) {
+      toast.error(err || "Failed to record payment failure");
+    }
+  };
+
+  const handleWalletPayment = async () => {
     if (!appointment?._id) {
       toast.error("Appointment not found");
       return;
@@ -118,16 +142,13 @@ function PaymentPage() {
       const result = await dispatch(
         confirmPaymentSuccess({
           appointmentId: appointment._id,
-          paymentMethod: selectedPaymentMethod,
+          paymentMethod: "wallet",
           transactionId: generateTransactionId(),
         })
       ).unwrap();
 
       toast.success(result.message || "Payment successful");
-
-      if (selectedPaymentMethod === "wallet") {
-        dispatch(fetchMyWallet());
-      }
+      dispatch(fetchMyWallet());
 
       navigate(`/payment-success/${appointment._id}`, {
         replace: true,
@@ -137,30 +158,106 @@ function PaymentPage() {
     }
   };
 
-  const handleFailedPayment = async () => {
+  const handleRazorpayPayment = async () => {
     if (!appointment?._id) {
       toast.error("Appointment not found");
       return;
     }
 
+    if (appointment.status !== "pending_payment") {
+      toast.error("This appointment is not waiting for payment");
+      return;
+    }
+
+    const loaded = await loadRazorpayScript();
+
+    if (!loaded) {
+      toast.error("Failed to load Razorpay checkout");
+      return;
+    }
+
     try {
-      const result = await dispatch(
-        confirmPaymentFailed({
+      const orderResult = await dispatch(
+        createRazorpayOrder({
           appointmentId: appointment._id,
-          paymentMethod: selectedPaymentMethod,
-          transactionId: generateTransactionId(),
-          failureReason: "Payment cancelled by patient",
         })
       ).unwrap();
 
-      toast.error(result.message || "Payment failed");
+      const order = orderResult.order;
 
-      navigate(`/payment-failed/${appointment._id}`, {
-        replace: true,
+      const options = {
+        key: order.keyId || import.meta.env.VITE_RAZORPAY_KEY_ID,
+        amount: order.amount,
+        currency: order.currency,
+        name: order.name || "DentaCare",
+        description:
+          order.description || "Dental appointment consultation fee",
+        order_id: order.orderId,
+
+        handler: async (response) => {
+          try {
+            const verifyResult = await dispatch(
+              verifyRazorpayPayment({
+                appointmentId: appointment._id,
+                razorpay_order_id: response.razorpay_order_id,
+                razorpay_payment_id: response.razorpay_payment_id,
+                razorpay_signature: response.razorpay_signature,
+              })
+            ).unwrap();
+
+            toast.success(
+              verifyResult.message || "Payment verified successfully"
+            );
+
+            navigate(`/payment-success/${appointment._id}`, {
+              replace: true,
+            });
+          } catch (err) {
+            toast.error(err || "Payment verification failed");
+            navigate(`/payment-failed/${appointment._id}`, {
+              replace: true,
+            });
+          }
+        },
+
+        prefill: {
+          name: appointment.patientId?.username || "",
+          email: appointment.patientId?.email || "",
+          contact: appointment.patientId?.personalInfo?.phoneNumber || "",
+        },
+
+        theme: {
+          color: "#9381FF",
+        },
+
+        modal: {
+          ondismiss: () => {
+            recordFailedPayment("Razorpay checkout closed by patient");
+          },
+        },
+      };
+
+      const razorpay = new window.Razorpay(options);
+
+      razorpay.on("payment.failed", async (response) => {
+        await recordFailedPayment(
+          response?.error?.description || "Razorpay payment failed"
+        );
       });
+
+      razorpay.open();
     } catch (err) {
-      toast.error(err || "Failed to record payment failure");
+      toast.error(err || "Failed to start Razorpay payment");
     }
+  };
+
+  const handlePrimaryPayment = () => {
+    if (selectedPaymentMethod === "wallet") {
+      handleWalletPayment();
+      return;
+    }
+
+    handleRazorpayPayment();
   };
 
   return (
@@ -188,8 +285,8 @@ function PaymentPage() {
           </h1>
 
           <p className="mt-2 text-sm leading-6 text-[#6B7280]">
-            Complete payment before reservation expiry. Wallet payments debit
-            your DentaCare wallet instantly.
+            Use Razorpay test mode or your DentaCare wallet. The backend will
+            verify Razorpay payment before confirming your appointment.
           </p>
 
           {isLoadingDetails ? (
@@ -223,6 +320,19 @@ function PaymentPage() {
                 </div>
               </section>
 
+              {selectedPaymentMethod === "razorpay" && (
+                <div className="mt-5 rounded-2xl bg-blue-50 p-4 text-blue-700">
+                  <p className="text-sm font-extrabold">
+                    Razorpay Test Mode
+                  </p>
+
+                  <p className="mt-1 text-xs font-bold leading-5">
+                    Use Razorpay test cards/UPI from your Razorpay dashboard.
+                    No real payment should be collected while using test keys.
+                  </p>
+                </div>
+              )}
+
               {isWalletPayment && (
                 <div
                   className={`mt-5 rounded-2xl p-4 ${
@@ -255,20 +365,28 @@ function PaymentPage() {
 
               <button
                 type="button"
-                onClick={handleSuccessPayment}
-                disabled={isPaying || isWalletInsufficient}
+                onClick={handlePrimaryPayment}
+                disabled={
+                  isPaying ||
+                  isCreatingRazorpayOrder ||
+                  isWalletInsufficient
+                }
                 className="mt-6 h-12 w-full rounded-2xl bg-[#9381FF] text-sm font-extrabold text-white shadow-[0_14px_30px_rgba(147,129,255,0.26)] transition hover:bg-[#7E6EF2] disabled:cursor-not-allowed disabled:opacity-60"
               >
-                {isPaying ? "Processing..." : "Payment"}
+                {isPaying || isCreatingRazorpayOrder
+                  ? "Processing..."
+                  : selectedPaymentMethod === "wallet"
+                  ? "Pay with Wallet"
+                  : "Pay with Razorpay"}
               </button>
 
               <button
                 type="button"
-                onClick={handleFailedPayment}
-                disabled={isPaying}
+                onClick={() => recordFailedPayment("Payment cancelled by patient")}
+                disabled={isPaying || isCreatingRazorpayOrder}
                 className="mt-3 h-12 w-full rounded-2xl bg-red-50 text-sm font-extrabold text-red-600 transition hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-60"
               >
-                Cancel
+                Cancel Payment
               </button>
             </>
           )}

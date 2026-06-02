@@ -5,7 +5,6 @@ import {
   approveAppointmentByAdminService,
   approveAppointmentByDoctorService,
   cancelAppointmentByAdminService,
-  cancelAppointmentByDoctorService,
   cancelAppointmentByPatientService,
   completeAppointmentByDoctorService,
   getAdminAppointmentDetailsService,
@@ -17,6 +16,7 @@ import {
   initiateAppointmentService,
   rejectAppointmentByAdminService,
   rejectAppointmentByDoctorService,
+  rescheduleAppointmentByPatientService,
 } from "./appointment.service.js";
 
 const getPatientId = (req) => {
@@ -95,6 +95,26 @@ export const cancelAppointmentByPatientController = asyncHandler(
       200,
       true,
       "Appointment cancelled successfully",
+      appointment
+    );
+  }
+);
+
+export const rescheduleAppointmentByPatientController = asyncHandler(
+  async (req, res) => {
+    const patientId = getPatientId(req);
+
+    const appointment = await rescheduleAppointmentByPatientService({
+      patientId,
+      appointmentId: req.params.appointmentId,
+      body: req.body,
+    });
+
+    sendResponse(
+      res,
+      200,
+      true,
+      "Appointment rescheduled successfully",
       appointment
     );
   }
@@ -179,26 +199,6 @@ export const completeAppointmentByDoctorController = asyncHandler(
       200,
       true,
       "Appointment marked as completed successfully",
-      appointment
-    );
-  }
-);
-
-export const cancelAppointmentByDoctorController = asyncHandler(
-  async (req, res) => {
-    const doctorId = getDoctorId(req);
-
-    const appointment = await cancelAppointmentByDoctorService({
-      doctorId,
-      appointmentId: req.params.appointmentId,
-      body: req.body,
-    });
-
-    sendResponse(
-      res,
-      200,
-      true,
-      "Appointment cancelled by doctor successfully",
       appointment
     );
   }
