@@ -50,3 +50,14 @@ export const uploadBookingReport = multer({
     fileSize: 5 * 1024 * 1024,
   },
 }).single("file");
+
+export const uploadDoctorPrescription = multer({
+  storage,
+  fileFilter: createFileFilter(
+    reportMimeTypes,
+    "Only JPG, JPEG, PNG, WEBP and PDF files are allowed"
+  ),
+  limits: {
+    fileSize: 5 * 1024 * 1024,
+  },
+}).single("file");

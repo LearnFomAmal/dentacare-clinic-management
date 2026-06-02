@@ -78,6 +78,16 @@ const walletSlice = createSlice({
     clearWalletError: (state) => {
       state.error = null;
     },
+
+    clearWalletState: (state) => {
+      state.wallet = null;
+      state.transactions = [];
+      state.pagination = null;
+      state.isLoadingWallet = false;
+      state.isLoadingTransactions = false;
+      state.isToppingUp = false;
+      state.error = null;
+    },
   },
 
   extraReducers: (builder) => {
@@ -95,7 +105,7 @@ const walletSlice = createSlice({
 
       .addCase(fetchMyWallet.rejected, (state, action) => {
         state.isLoadingWallet = false;
-        state.error = action.payload;
+        state.error = action.payload || "Failed to fetch wallet";
       })
 
       .addCase(fetchWalletTransactions.pending, (state) => {
@@ -112,7 +122,8 @@ const walletSlice = createSlice({
 
       .addCase(fetchWalletTransactions.rejected, (state, action) => {
         state.isLoadingTransactions = false;
-        state.error = action.payload;
+        state.error =
+          action.payload || "Failed to fetch wallet transactions";
       })
 
       .addCase(topupWallet.pending, (state) => {
@@ -122,7 +133,7 @@ const walletSlice = createSlice({
 
       .addCase(topupWallet.fulfilled, (state, action) => {
         state.isToppingUp = false;
-        state.wallet = action.payload.wallet;
+        state.wallet = action.payload.wallet || state.wallet;
 
         if (action.payload.transaction) {
           state.transactions = [
@@ -136,11 +147,11 @@ const walletSlice = createSlice({
 
       .addCase(topupWallet.rejected, (state, action) => {
         state.isToppingUp = false;
-        state.error = action.payload;
+        state.error = action.payload || "Failed to top up wallet";
       });
   },
 });
 
-export const { clearWalletError } = walletSlice.actions;
+export const { clearWalletError, clearWalletState } = walletSlice.actions;
 
 export default walletSlice.reducer;

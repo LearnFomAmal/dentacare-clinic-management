@@ -104,10 +104,19 @@ RESTORE_DEFAULTS: (slotDayId) =>
     DELETE: (id) => `/specialties/${id}`,
   },
 
-  REPORT: {
+    REPORT: {
     BOOKING_UPLOAD: "/reports/booking-upload",
     DRAFTS: "/reports/drafts",
     DELETE_DRAFT: (reportId) => `/reports/drafts/${reportId}`,
+
+    DOCTOR_UPLOAD_PRESCRIPTION: (appointmentId) =>
+      `/reports/doctor/prescription/${appointmentId}`,
+
+    PATIENT_APPOINTMENT_REPORTS: (appointmentId) =>
+      `/reports/patient/appointment/${appointmentId}`,
+
+    DOCTOR_APPOINTMENT_REPORTS: (appointmentId) =>
+      `/reports/doctor/appointment/${appointmentId}`,
   },
 
   APPOINTMENT: {

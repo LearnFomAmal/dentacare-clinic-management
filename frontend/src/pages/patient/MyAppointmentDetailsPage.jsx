@@ -9,7 +9,11 @@ import {
 } from "lucide-react";
 import { Link, useParams } from "react-router-dom";
 import toast from "react-hot-toast";
-
+import {
+  clearAppointmentReports,
+  clearReportError,
+  fetchPatientAppointmentReports,
+} from "../../features/reports/reportSlice";
 import PatientLayout from "../../components/patient/PatientLayout";
 import { useAppDispatch, useAppSelector } from "../../app/hooks";
 import {
@@ -44,6 +48,11 @@ function MyAppointmentDetailsPage() {
   const { selectedAppointment, isLoadingDetails, error } = useAppSelector(
     (state) => state.appointments
   );
+   const {
+    appointmentReports,
+    isLoadingAppointmentReports,
+    error: reportError,
+  } = useAppSelector((state) => state.reports);
 
   useEffect(() => {
     if (appointmentId) {
@@ -59,6 +68,18 @@ function MyAppointmentDetailsPage() {
   }, [error, dispatch]);
 
   const appointment = selectedAppointment;
+   useEffect(() => {
+    if (!appointmentId) return;
+
+    dispatch(clearAppointmentReports());
+    dispatch(fetchPatientAppointmentReports(appointmentId));
+  }, [dispatch, appointmentId]);
+    useEffect(() => {
+    if (!reportError) return;
+
+    toast.error(reportError);
+    dispatch(clearReportError());
+  }, [reportError, dispatch]);
 
   return (
     <PatientLayout>
@@ -177,7 +198,14 @@ function MyAppointmentDetailsPage() {
                   </p>
                 )}
               </div>
+                            {appointment.status === "completed" && (
+                <PrescriptionViewSection
+                  reports={appointmentReports}
+                  isLoading={isLoadingAppointmentReports}
+                />
+              )}
             </section>
+
 
             <aside className="h-fit rounded-3xl border border-[#EEF0F6] bg-white p-6 shadow-[0_18px_48px_rgba(17,24,39,0.06)]">
               <h2 className="text-xl font-extrabold text-[#111827]">
@@ -343,6 +371,74 @@ function SummaryRow({ label, value, highlight = false }) {
         {highlight && <IndianRupee size={14} />}
         {highlight ? String(value).replace("₹", "") : value}
       </span>
+    </div>
+  );
+}
+function PrescriptionViewSection({ reports, isLoading }) {
+  const prescriptions = reports.filter(
+    (report) => report.reportType === "prescription"
+  );
+
+  return (
+    <div className="rounded-3xl border border-[#EEF0F6] bg-white p-7 shadow-[0_18px_48px_rgba(17,24,39,0.05)]">
+      <h2 className="text-xl font-extrabold text-[#111827]">
+        Doctor Prescription
+      </h2>
+
+      <p className="mt-2 text-sm leading-6 text-[#6B7280]">
+        Prescription and treatment instructions uploaded by your doctor.
+      </p>
+
+      {isLoading ? (
+        <p className="mt-5 rounded-2xl bg-[#F8FAFC] p-5 text-sm font-bold text-[#6B7280]">
+          Loading prescription...
+        </p>
+      ) : prescriptions.length === 0 ? (
+        <p className="mt-5 rounded-2xl border border-dashed border-[#D1D5DB] bg-[#F8FAFC] p-6 text-center text-sm font-bold text-[#6B7280]">
+          Prescription not uploaded yet.
+        </p>
+      ) : (
+        <div className="mt-5 space-y-4">
+          {prescriptions.map((report) => (
+            <PatientPrescriptionCard key={report._id} report={report} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function PatientPrescriptionCard({ report }) {
+  return (
+    <div className="rounded-2xl border border-[#EEF0F6] bg-[#F8FAFC] p-5">
+      <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-xl bg-[#F0F1FF] text-[#9381FF]">
+        <FileText size={18} />
+      </div>
+
+      <h3 className="text-sm font-extrabold text-[#111827]">
+        {report.title}
+      </h3>
+
+      <p className="mt-3 whitespace-pre-line rounded-2xl bg-white p-4 text-sm leading-7 text-[#374151]">
+        {report.prescriptionText}
+      </p>
+
+      {report.description && (
+        <p className="mt-3 text-xs font-semibold leading-5 text-[#6B7280]">
+          {report.description}
+        </p>
+      )}
+
+      {report.file?.url && (
+        <a
+          href={report.file.url}
+          target="_blank"
+          rel="noreferrer"
+          className="mt-3 inline-block text-xs font-extrabold text-[#9381FF]"
+        >
+          Preview prescription file
+        </a>
+      )}
     </div>
   );
 }

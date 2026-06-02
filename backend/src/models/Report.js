@@ -41,6 +41,7 @@ const reportSchema = new mongoose.Schema(
       type: String,
       enum: ["xray", "prescription", "lab_report", "medical_history", "other"],
       default: "other",
+      index: true,
     },
 
     description: {
@@ -50,15 +51,22 @@ const reportSchema = new mongoose.Schema(
       maxlength: 500,
     },
 
+    prescriptionText: {
+      type: String,
+      default: "",
+      trim: true,
+      maxlength: 2000,
+    },
+
     file: {
       url: {
         type: String,
-        required: true,
+        default: "",
       },
 
       publicId: {
         type: String,
-        required: true,
+        default: "",
       },
 
       originalName: {
@@ -96,6 +104,12 @@ const reportSchema = new mongoose.Schema(
   },
   { timestamps: true }
 );
+
+reportSchema.index({
+  appointmentId: 1,
+  status: 1,
+  reportType: 1,
+});
 
 const Report = mongoose.model("Report", reportSchema);
 

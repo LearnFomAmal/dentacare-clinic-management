@@ -2,8 +2,11 @@ import { createAsyncThunk, createSlice } from "@reduxjs/toolkit";
 
 import {
   deleteDraftReportApi,
+  getDoctorAppointmentReportsApi,
   getDraftReportsApi,
+  getPatientAppointmentReportsApi,
   uploadBookingReportApi,
+  uploadDoctorPrescriptionApi,
 } from "./reportService";
 
 const getErrorMessage = (error, fallback) => {
@@ -65,14 +68,70 @@ export const deleteDraftReport = createAsyncThunk(
   }
 );
 
+export const uploadDoctorPrescription = createAsyncThunk(
+  "reports/uploadDoctorPrescription",
+  async ({ appointmentId, formData }, { rejectWithValue }) => {
+    try {
+      const response = await uploadDoctorPrescriptionApi({
+        appointmentId,
+        formData,
+      });
+
+      return {
+        report: response.data,
+        message: response.message || "Prescription uploaded successfully",
+      };
+    } catch (error) {
+      return rejectWithValue(
+        getErrorMessage(error, "Failed to upload prescription")
+      );
+    }
+  }
+);
+
+export const fetchPatientAppointmentReports = createAsyncThunk(
+  "reports/fetchPatientAppointmentReports",
+  async (appointmentId, { rejectWithValue }) => {
+    try {
+      const response = await getPatientAppointmentReportsApi(appointmentId);
+
+      return response.data || [];
+    } catch (error) {
+      return rejectWithValue(
+        getErrorMessage(error, "Failed to fetch appointment reports")
+      );
+    }
+  }
+);
+
+export const fetchDoctorAppointmentReports = createAsyncThunk(
+  "reports/fetchDoctorAppointmentReports",
+  async (appointmentId, { rejectWithValue }) => {
+    try {
+      const response = await getDoctorAppointmentReportsApi(appointmentId);
+
+      return response.data || [];
+    } catch (error) {
+      return rejectWithValue(
+        getErrorMessage(error, "Failed to fetch appointment reports")
+      );
+    }
+  }
+);
+
 const reportSlice = createSlice({
   name: "reports",
 
   initialState: {
     draftReports: [],
+    appointmentReports: [],
+
     isUploading: false,
+    isUploadingPrescription: false,
     isLoading: false,
+    isLoadingAppointmentReports: false,
     isDeleting: false,
+
     error: null,
   },
 
@@ -83,6 +142,10 @@ const reportSlice = createSlice({
 
     clearDraftReports: (state) => {
       state.draftReports = [];
+    },
+
+    clearAppointmentReports: (state) => {
+      state.appointmentReports = [];
     },
   },
 
@@ -136,6 +199,54 @@ const reportSlice = createSlice({
       .addCase(deleteDraftReport.rejected, (state, action) => {
         state.isDeleting = false;
         state.error = action.payload;
+      })
+
+      .addCase(uploadDoctorPrescription.pending, (state) => {
+        state.isUploadingPrescription = true;
+        state.error = null;
+      })
+
+      .addCase(uploadDoctorPrescription.fulfilled, (state, action) => {
+        state.isUploadingPrescription = false;
+        state.appointmentReports.unshift(action.payload.report);
+        state.error = null;
+      })
+
+      .addCase(uploadDoctorPrescription.rejected, (state, action) => {
+        state.isUploadingPrescription = false;
+        state.error = action.payload;
+      })
+
+      .addCase(fetchPatientAppointmentReports.pending, (state) => {
+        state.isLoadingAppointmentReports = true;
+        state.error = null;
+      })
+
+      .addCase(fetchPatientAppointmentReports.fulfilled, (state, action) => {
+        state.isLoadingAppointmentReports = false;
+        state.appointmentReports = action.payload;
+        state.error = null;
+      })
+
+      .addCase(fetchPatientAppointmentReports.rejected, (state, action) => {
+        state.isLoadingAppointmentReports = false;
+        state.error = action.payload;
+      })
+
+      .addCase(fetchDoctorAppointmentReports.pending, (state) => {
+        state.isLoadingAppointmentReports = true;
+        state.error = null;
+      })
+
+      .addCase(fetchDoctorAppointmentReports.fulfilled, (state, action) => {
+        state.isLoadingAppointmentReports = false;
+        state.appointmentReports = action.payload;
+        state.error = null;
+      })
+
+      .addCase(fetchDoctorAppointmentReports.rejected, (state, action) => {
+        state.isLoadingAppointmentReports = false;
+        state.error = action.payload;
       });
   },
 });
@@ -143,6 +254,7 @@ const reportSlice = createSlice({
 export const {
   clearReportError,
   clearDraftReports,
+  clearAppointmentReports,
 } = reportSlice.actions;
 
 export default reportSlice.reducer;

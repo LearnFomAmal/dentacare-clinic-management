@@ -11,6 +11,7 @@ import {
   UserRound,
   VenusAndMars,
   X,
+  Upload,
 } from "lucide-react";
 import { Link, useParams } from "react-router-dom";
 import toast from "react-hot-toast";
@@ -25,6 +26,7 @@ import {
   fetchDoctorAppointmentDetails,
   rejectDoctorAppointment,
 } from "../../features/appointment/appointmentSlice";
+
 import {
   formatAppointmentDate,
   formatAppointmentTime,
@@ -32,6 +34,13 @@ import {
   getPatientName,
   getStatusBadgeClass,
 } from "../../utils/appointmentUi";
+
+import {
+  clearAppointmentReports,
+  clearReportError,
+  fetchDoctorAppointmentReports,
+  uploadDoctorPrescription,
+} from "../../features/reports/reportSlice";
 
 const calculateAge = (dateOfBirth) => {
   if (!dateOfBirth) return "Not available";
@@ -88,8 +97,19 @@ function DoctorAppointmentDetailsPage() {
     error,
   } = useAppSelector((state) => state.appointments);
 
-  const [rejectModalOpen, setRejectModalOpen] = useState(false);
+   const {
+    appointmentReports,
+    isLoadingAppointmentReports,
+    isUploadingPrescription,
+    error: reportError,
+  } = useAppSelector((state) => state.reports);
 
+
+  const [rejectModalOpen, setRejectModalOpen] = useState(false);
+   const [prescriptionTitle, setPrescriptionTitle] = useState("");
+  const [prescriptionText, setPrescriptionText] = useState("");
+  const [prescriptionDescription, setPrescriptionDescription] = useState("");
+  const [prescriptionFile, setPrescriptionFile] = useState(null);
   useEffect(() => {
     if (appointmentId) {
       dispatch(fetchDoctorAppointmentDetails(appointmentId));
@@ -102,6 +122,20 @@ function DoctorAppointmentDetailsPage() {
     toast.error(error);
     dispatch(clearAppointmentError());
   }, [error, dispatch]);
+
+     useEffect(() => {
+    if (!appointmentId) return;
+
+    dispatch(clearAppointmentReports());
+    dispatch(fetchDoctorAppointmentReports(appointmentId));
+  }, [dispatch, appointmentId]);
+
+    useEffect(() => {
+    if (!reportError) return;
+
+    toast.error(reportError);
+    dispatch(clearReportError());
+  }, [reportError, dispatch]);
 
   const appointment = selectedAppointment;
 
@@ -169,7 +203,50 @@ const handleComplete = async () => {
     toast.error(err || "Failed to complete appointment");
   }
 };
+  const handlePrescriptionUpload = async (event) => {
+    event.preventDefault();
 
+    if (!prescriptionTitle.trim()) {
+      toast.error("Prescription title is required");
+      return;
+    }
+
+    if (!prescriptionText.trim()) {
+      toast.error("Prescription text is required");
+      return;
+    }
+
+    const formData = new FormData();
+
+    formData.append("title", prescriptionTitle.trim());
+    formData.append("prescriptionText", prescriptionText.trim());
+    formData.append("description", prescriptionDescription.trim());
+
+    if (prescriptionFile) {
+      formData.append("file", prescriptionFile);
+    }
+
+    try {
+      const result = await dispatch(
+        uploadDoctorPrescription({
+          appointmentId,
+          formData,
+        })
+      ).unwrap();
+
+      toast.success(result.message || "Prescription uploaded");
+
+      setPrescriptionTitle("");
+      setPrescriptionText("");
+      setPrescriptionDescription("");
+      setPrescriptionFile(null);
+
+      dispatch(fetchDoctorAppointmentDetails(appointmentId));
+      dispatch(fetchDoctorAppointmentReports(appointmentId));
+    } catch (err) {
+      toast.error(err || "Failed to upload prescription");
+    }
+  };
   return (
     <DashboardLayout title="Appointment Details">
       <Link
@@ -324,8 +401,24 @@ const handleComplete = async () => {
                 </p>
               )}
             </div>
+               {appointment.status === "completed" && (
+              <PrescriptionSection
+                reports={appointmentReports}
+                isLoading={isLoadingAppointmentReports}
+                isUploading={isUploadingPrescription}
+                title={prescriptionTitle}
+                prescriptionText={prescriptionText}
+                description={prescriptionDescription}
+                file={prescriptionFile}
+                onTitleChange={setPrescriptionTitle}
+                onPrescriptionTextChange={setPrescriptionText}
+                onDescriptionChange={setPrescriptionDescription}
+                onFileChange={setPrescriptionFile}
+                onSubmit={handlePrescriptionUpload}
+              />
+            )}
           </section>
-
+                
           <aside className="h-fit rounded-3xl border border-[#EEF0F6] bg-white p-6 shadow-[0_18px_48px_rgba(17,24,39,0.06)]">
             <h2 className="text-xl font-extrabold text-[#111827]">
               Decision
@@ -514,6 +607,182 @@ function ReportCard({ report }) {
           Preview file
         </a>
       )}
+    </div>
+  );
+}
+
+function PrescriptionSection({
+  reports,
+  isLoading,
+  isUploading,
+  title,
+  prescriptionText,
+  description,
+  file,
+  onTitleChange,
+  onPrescriptionTextChange,
+  onDescriptionChange,
+  onFileChange,
+  onSubmit,
+}) {
+  const prescriptions = reports.filter(
+    (report) => report.reportType === "prescription"
+  );
+
+  return (
+    <div className="rounded-3xl border border-[#EEF0F6] bg-white p-7 shadow-[0_18px_48px_rgba(17,24,39,0.05)]">
+      <div className="mb-5">
+        <p className="text-sm font-bold uppercase tracking-[0.8px] text-[#9381FF]">
+          Prescription
+        </p>
+
+        <h2 className="mt-1 text-xl font-extrabold text-[#111827]">
+          Upload Prescription
+        </h2>
+
+        <p className="mt-2 text-sm leading-6 text-[#6B7280]">
+          Prescription upload is allowed only after the appointment is completed.
+        </p>
+      </div>
+
+      <form onSubmit={onSubmit} className="rounded-3xl bg-[#F8FAFC] p-5">
+        <div className="grid gap-4 md:grid-cols-2">
+          <div>
+            <label className="text-xs font-bold uppercase tracking-[0.6px] text-[#6B7280]">
+              Title
+            </label>
+
+            <input
+              type="text"
+              value={title}
+              onChange={(event) => onTitleChange(event.target.value)}
+              placeholder="Prescription for dental pain"
+              className="mt-2 h-12 w-full rounded-2xl border border-[#EEF0F6] bg-white px-4 text-sm font-semibold outline-none focus:border-[#9381FF]"
+            />
+          </div>
+
+          <div>
+            <label className="text-xs font-bold uppercase tracking-[0.6px] text-[#6B7280]">
+              Optional File
+            </label>
+
+            <input
+              type="file"
+              accept="image/jpeg,image/jpg,image/png,image/webp,application/pdf"
+              onChange={(event) =>
+                onFileChange(event.target.files?.[0] || null)
+              }
+              className="mt-2 block w-full rounded-2xl border border-[#EEF0F6] bg-white px-4 py-3 text-sm font-semibold text-[#6B7280]"
+            />
+
+            {file && (
+              <p className="mt-2 text-xs font-bold text-[#9381FF]">
+                Selected: {file.name}
+              </p>
+            )}
+          </div>
+        </div>
+
+        <div className="mt-4">
+          <label className="text-xs font-bold uppercase tracking-[0.6px] text-[#6B7280]">
+            Prescription Text
+          </label>
+
+          <textarea
+            value={prescriptionText}
+            onChange={(event) =>
+              onPrescriptionTextChange(event.target.value)
+            }
+            placeholder="Medicine, dosage, instructions, follow-up advice..."
+            rows={5}
+            className="mt-2 w-full rounded-2xl border border-[#EEF0F6] bg-white px-4 py-3 text-sm font-semibold leading-6 outline-none focus:border-[#9381FF]"
+          />
+        </div>
+
+        <div className="mt-4">
+          <label className="text-xs font-bold uppercase tracking-[0.6px] text-[#6B7280]">
+            Description Optional
+          </label>
+
+          <textarea
+            value={description}
+            onChange={(event) => onDescriptionChange(event.target.value)}
+            placeholder="Extra note for the patient..."
+            rows={3}
+            className="mt-2 w-full rounded-2xl border border-[#EEF0F6] bg-white px-4 py-3 text-sm font-semibold leading-6 outline-none focus:border-[#9381FF]"
+          />
+        </div>
+
+        <button
+          type="submit"
+          disabled={isUploading}
+          className="mt-5 inline-flex h-12 items-center justify-center gap-2 rounded-2xl bg-[#9381FF] px-6 text-sm font-extrabold text-white transition hover:bg-[#7E6EF2] disabled:opacity-60"
+        >
+          <Upload size={17} />
+          {isUploading ? "Uploading..." : "Upload Prescription"}
+        </button>
+      </form>
+
+      <div className="mt-7">
+        <h3 className="text-lg font-extrabold text-[#111827]">
+          Uploaded Prescriptions
+        </h3>
+
+        {isLoading ? (
+          <p className="mt-4 rounded-2xl bg-[#F8FAFC] p-5 text-sm font-bold text-[#6B7280]">
+            Loading prescriptions...
+          </p>
+        ) : prescriptions.length === 0 ? (
+          <p className="mt-4 rounded-2xl border border-dashed border-[#D1D5DB] bg-[#F8FAFC] p-6 text-center text-sm font-bold text-[#6B7280]">
+            No prescription uploaded yet.
+          </p>
+        ) : (
+          <div className="mt-4 space-y-4">
+            {prescriptions.map((report) => (
+              <PrescriptionCard key={report._id} report={report} />
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function PrescriptionCard({ report }) {
+  return (
+    <div className="rounded-2xl border border-[#EEF0F6] bg-[#F8FAFC] p-5">
+      <div className="flex items-start gap-3">
+        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#F0F1FF] text-[#9381FF]">
+          <FileText size={18} />
+        </div>
+
+        <div className="min-w-0 flex-1">
+          <h4 className="text-sm font-extrabold text-[#111827]">
+            {report.title}
+          </h4>
+
+          <p className="mt-2 whitespace-pre-line rounded-2xl bg-white p-4 text-sm leading-7 text-[#374151]">
+            {report.prescriptionText}
+          </p>
+
+          {report.description && (
+            <p className="mt-3 text-xs font-semibold leading-5 text-[#6B7280]">
+              {report.description}
+            </p>
+          )}
+
+          {report.file?.url && (
+            <a
+              href={report.file.url}
+              target="_blank"
+              rel="noreferrer"
+              className="mt-3 inline-block text-xs font-extrabold text-[#9381FF]"
+            >
+              Preview prescription file
+            </a>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
