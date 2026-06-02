@@ -3,6 +3,7 @@ import { createAsyncThunk, createSlice } from "@reduxjs/toolkit";
 import {
   approveAdminAppointmentApi,
   approveDoctorAppointmentApi,
+  completeDoctorAppointmentApi,
   getAdminAppointmentDetailsApi,
   getAdminAppointmentsApi,
   getAppointmentDetailsApi,
@@ -50,10 +51,6 @@ const saveInitiatedAppointment = (appointment) => {
   );
 };
 
-const clearStoredInitiatedAppointment = () => {
-  sessionStorage.removeItem(INITIATED_APPOINTMENT_KEY);
-};
-
 const getStoredBookingDraft = () => {
   const data = safeJsonParse(sessionStorage.getItem(BOOKING_DRAFT_KEY));
 
@@ -75,8 +72,22 @@ const clearStoredBookingDraft = () => {
   sessionStorage.removeItem(BOOKING_DRAFT_KEY);
 };
 
+const clearStoredInitiatedAppointment = () => {
+  sessionStorage.removeItem(INITIATED_APPOINTMENT_KEY);
+};
+
 const getErrorMessage = (error, fallback) => {
   return error?.response?.data?.message || error?.message || fallback;
+};
+
+const updateAppointmentInList = (list, updatedAppointment) => {
+  if (!updatedAppointment?._id) return list;
+
+  return list.map((appointment) =>
+    appointment._id === updatedAppointment._id
+      ? updatedAppointment
+      : appointment
+  );
 };
 
 export const initiateAppointment = createAsyncThunk(
@@ -251,6 +262,26 @@ export const rejectDoctorAppointment = createAsyncThunk(
   }
 );
 
+export const completeDoctorAppointment = createAsyncThunk(
+  "appointments/completeDoctorAppointment",
+  async (appointmentId, { rejectWithValue }) => {
+    try {
+      const response = await completeDoctorAppointmentApi(appointmentId);
+
+      return {
+        appointment: response.data,
+        message:
+          response.message ||
+          "Appointment marked as completed successfully",
+      };
+    } catch (error) {
+      return rejectWithValue(
+        getErrorMessage(error, "Failed to complete appointment")
+      );
+    }
+  }
+);
+
 export const fetchAdminAppointments = createAsyncThunk(
   "appointments/fetchAdminAppointments",
   async (params = {}, { rejectWithValue }) => {
@@ -338,6 +369,7 @@ const appointmentSlice = createSlice({
     isLoadingList: false,
     isPaying: false,
     isDeciding: false,
+    isCompleting: false,
 
     error: null,
   },
@@ -556,6 +588,10 @@ const appointmentSlice = createSlice({
       .addCase(approveDoctorAppointment.fulfilled, (state, action) => {
         state.isDeciding = false;
         state.selectedAppointment = action.payload.appointment;
+        state.doctorAppointments = updateAppointmentInList(
+          state.doctorAppointments,
+          action.payload.appointment
+        );
         state.error = null;
       })
 
@@ -572,11 +608,35 @@ const appointmentSlice = createSlice({
       .addCase(rejectDoctorAppointment.fulfilled, (state, action) => {
         state.isDeciding = false;
         state.selectedAppointment = action.payload.appointment;
+        state.doctorAppointments = updateAppointmentInList(
+          state.doctorAppointments,
+          action.payload.appointment
+        );
         state.error = null;
       })
 
       .addCase(rejectDoctorAppointment.rejected, (state, action) => {
         state.isDeciding = false;
+        state.error = action.payload;
+      })
+
+      .addCase(completeDoctorAppointment.pending, (state) => {
+        state.isCompleting = true;
+        state.error = null;
+      })
+
+      .addCase(completeDoctorAppointment.fulfilled, (state, action) => {
+        state.isCompleting = false;
+        state.selectedAppointment = action.payload.appointment;
+        state.doctorAppointments = updateAppointmentInList(
+          state.doctorAppointments,
+          action.payload.appointment
+        );
+        state.error = null;
+      })
+
+      .addCase(completeDoctorAppointment.rejected, (state, action) => {
+        state.isCompleting = false;
         state.error = action.payload;
       })
 
@@ -588,6 +648,10 @@ const appointmentSlice = createSlice({
       .addCase(approveAdminAppointment.fulfilled, (state, action) => {
         state.isDeciding = false;
         state.selectedAppointment = action.payload.appointment;
+        state.adminAppointments = updateAppointmentInList(
+          state.adminAppointments,
+          action.payload.appointment
+        );
         state.error = null;
       })
 
@@ -604,6 +668,10 @@ const appointmentSlice = createSlice({
       .addCase(rejectAdminAppointment.fulfilled, (state, action) => {
         state.isDeciding = false;
         state.selectedAppointment = action.payload.appointment;
+        state.adminAppointments = updateAppointmentInList(
+          state.adminAppointments,
+          action.payload.appointment
+        );
         state.error = null;
       })
 

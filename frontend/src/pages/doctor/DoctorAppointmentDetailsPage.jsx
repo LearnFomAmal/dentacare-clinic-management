@@ -3,6 +3,7 @@ import {
   ArrowLeft,
   CalendarDays,
   Check,
+  CheckCircle2,
   Droplets,
   FileText,
   Mail,
@@ -20,6 +21,7 @@ import { useAppDispatch, useAppSelector } from "../../app/hooks";
 import {
   approveDoctorAppointment,
   clearAppointmentError,
+  completeDoctorAppointment,
   fetchDoctorAppointmentDetails,
   rejectDoctorAppointment,
 } from "../../features/appointment/appointmentSlice";
@@ -62,12 +64,29 @@ const formatText = (value) => {
     .replace(/\b\w/g, (char) => char.toUpperCase());
 };
 
+const formatCompletedAt = (value) => {
+  if (!value) return "Not available";
+
+  return new Date(value).toLocaleString("en-IN", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+};
+
 function DoctorAppointmentDetailsPage() {
   const { appointmentId } = useParams();
   const dispatch = useAppDispatch();
 
-  const { selectedAppointment, isLoadingDetails, isDeciding, error } =
-    useAppSelector((state) => state.appointments);
+  const {
+    selectedAppointment,
+    isLoadingDetails,
+    isDeciding,
+    isCompleting,
+    error,
+  } = useAppSelector((state) => state.appointments);
 
   const [rejectModalOpen, setRejectModalOpen] = useState(false);
 
@@ -137,6 +156,20 @@ function DoctorAppointmentDetailsPage() {
     }
   };
 
+const handleComplete = async () => {
+  try {
+    const result = await dispatch(
+      completeDoctorAppointment(appointmentId)
+    ).unwrap();
+
+    toast.success(result.message || "Appointment completed");
+
+    dispatch(fetchDoctorAppointmentDetails(appointmentId));
+  } catch (err) {
+    toast.error(err || "Failed to complete appointment");
+  }
+};
+
   return (
     <DashboardLayout title="Appointment Details">
       <Link
@@ -198,6 +231,19 @@ function DoctorAppointmentDetailsPage() {
                   {appointment.reason}
                 </p>
               </div>
+
+              {appointment.status === "completed" && (
+                <div className="mt-5 rounded-2xl bg-green-50 p-5">
+                  <p className="flex items-center gap-2 text-sm font-extrabold text-green-700">
+                    <CheckCircle2 size={18} />
+                    Appointment completed
+                  </p>
+
+                  <p className="mt-2 text-xs font-bold text-green-600">
+                    Completed at {formatCompletedAt(appointment.completedAt)}
+                  </p>
+                </div>
+              )}
             </div>
 
             <div className="rounded-3xl border border-[#EEF0F6] bg-white p-7 shadow-[0_18px_48px_rgba(17,24,39,0.05)]">
@@ -306,6 +352,13 @@ function DoctorAppointmentDetailsPage() {
                 label="Reports"
                 value={`${appointment.reports?.length || 0}`}
               />
+
+              {appointment.completedAt && (
+                <InfoRow
+                  label="Completed At"
+                  value={formatCompletedAt(appointment.completedAt)}
+                />
+              )}
             </div>
 
             {appointment.status === "pending" && (
@@ -329,6 +382,37 @@ function DoctorAppointmentDetailsPage() {
                   <X size={16} />
                   Reject
                 </button>
+              </div>
+            )}
+
+            {appointment.status === "approved" && (
+              <div className="mt-6">
+                <button
+                  type="button"
+                  disabled={isCompleting}
+                  onClick={handleComplete}
+                  className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-2xl bg-[#9381FF] text-sm font-extrabold text-white transition hover:bg-[#7E6EF2] disabled:opacity-60"
+                >
+                  <CheckCircle2 size={17} />
+                  {isCompleting ? "Completing..." : "Mark as Completed"}
+                </button>
+
+                <p className="mt-3 rounded-2xl bg-orange-50 p-3 text-xs font-bold leading-5 text-orange-600">
+                  Completing this appointment may trigger referral reward credit
+                  if this is the patient's first completed appointment.
+                </p>
+              </div>
+            )}
+
+            {appointment.status === "completed" && (
+              <div className="mt-6 rounded-2xl bg-green-50 p-4">
+                <p className="text-xs font-bold uppercase text-green-600">
+                  Completed
+                </p>
+
+                <p className="mt-1 text-sm font-semibold leading-6 text-green-700">
+                  This appointment has been marked as completed.
+                </p>
               </div>
             )}
 

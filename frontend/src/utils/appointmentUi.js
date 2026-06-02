@@ -67,17 +67,17 @@ export const getStatusBadgeClass = (status) => {
     return "bg-orange-50 text-orange-700 border-orange-100";
   }
 
-  if (status === "completed") {
-    return "bg-blue-50 text-blue-700 border-blue-100";
-  }
-
+  
+ if (status === "completed") {
+  return "border-green-200 bg-green-50 text-green-700";
+ }
   return "bg-slate-50 text-slate-700 border-slate-100";
 };
 
-export const getCleanStatus = (status) => {
-  if (!status) return "Unknown";
-
-  return status.replace("_", " ");
+export const getCleanStatus = (status = "") => {
+  return String(status || "")
+    .replace("_", " ")
+    .replace(/\b\w/g, (char) => char.toUpperCase());
 };
 
 export const generateTransactionId = () => {

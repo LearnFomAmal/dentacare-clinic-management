@@ -61,7 +61,7 @@ export const API_ENDPOINTS = {
     RESEND_FORGOT_PASSWORD_OTP: "/doctors/resend-forgot-password-otp",
 
     REFRESH_TOKEN: "/doctors/refresh-token",
-
+     
     ADMIN_CREATE: "/doctors",
     ADMIN_GET_ALL: "/doctors",
     ADMIN_GET_DETAILS: (id) => `/doctors/${id}`,
@@ -123,13 +123,16 @@ RESTORE_DEFAULTS: (slotDayId) =>
       `/appointments/doctor/${appointmentId}/approve`,
     DOCTOR_REJECT: (appointmentId) =>
       `/appointments/doctor/${appointmentId}/reject`,
-
+    DOCTOR_COMPLETE: (appointmentId) =>
+  `/appointments/doctor/${appointmentId}/complete`,
+    
     ADMIN_LIST: "/appointments/admin",
     ADMIN_DETAILS: (appointmentId) => `/appointments/admin/${appointmentId}`,
     ADMIN_APPROVE: (appointmentId) =>
       `/appointments/admin/${appointmentId}/approve`,
     ADMIN_REJECT: (appointmentId) =>
       `/appointments/admin/${appointmentId}/reject`,
+
   },
 
   PAYMENT: {

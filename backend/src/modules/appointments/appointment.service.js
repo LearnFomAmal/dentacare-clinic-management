@@ -3,12 +3,14 @@ import mongoose from "mongoose";
 import AppError from "../../shared/errors/AppError.js";
 import { findUserById } from "../users/user.repository.js";
 import {
+  creditReferralRewardToWallet,
   refundAppointmentPaymentToWallet,
 } from "../wallets/wallet.service.js";
 import {
   validateCouponForAppointment,
 } from "../coupons/coupon.service.js";
 import {
+  claimReferralRewardForCompletion,
   createAppointment,
   findAdminAppointmentById,
   findAdminAppointments,
@@ -17,16 +19,17 @@ import {
   findDoctorAppointmentById,
   findDoctorAppointments,
   findDoctorForBooking,
-  findExistingPendingPaymentAppointment,
   findAppointmentByIdForPatient,
   findPatientAppointments,
+  findPatientForCompletion,
   findPatientReportsByIds,
   findSlotDayById,
-  findSlotDayForBooking,
+  findSlotDayForBookingWithSession,
+  markPatientFirstAppointmentCompleted,
+  markReferralRewardCredited,
   saveAppointment,
   saveSlotDay,
-  findSlotDayForBookingWithSession,
-updateReportsAsAttached,
+  updateReportsAsAttached,
 } from "./appointment.repository.js";
 import {
   getReferralDiscountForAppointment,
@@ -37,6 +40,8 @@ import {
   validateObjectId,
   validateRejectAppointmentInput,
 } from "./appointment.validator.js";
+
+const RESERVATION_MINUTES = 10;
 
 const isPatientProfileComplete = (user) => {
   return Boolean(
@@ -87,6 +92,30 @@ const ensurePendingAppointmentForDecision = (appointment) => {
   }
 };
 
+const ensureAppointmentCanBeCompleted = (appointment) => {
+  if (!appointment) {
+    throw new AppError("Appointment not found", 404);
+  }
+
+  if (appointment.status === "completed") {
+    throw new AppError("Appointment is already completed", 400);
+  }
+
+  if (appointment.status !== "approved") {
+    throw new AppError(
+      "Only approved appointments can be marked as completed",
+      400
+    );
+  }
+
+  if (appointment.paymentStatus !== "paid") {
+    throw new AppError(
+      "Only paid appointments can be marked as completed",
+      400
+    );
+  }
+};
+
 const releaseBookedSlot = async ({
   appointment,
   session,
@@ -116,7 +145,6 @@ const releaseBookedSlot = async ({
     });
   }
 };
-const RESERVATION_MINUTES = 10;
 
 const getReservationExpiry = () => {
   return new Date(Date.now() + RESERVATION_MINUTES * 60 * 1000);
@@ -147,6 +175,7 @@ const clearExpiredReservationsInSlotDay = async ({ slotDay, session }) => {
     });
   }
 };
+
 export const initiateAppointmentService = async ({ patientId, body }) => {
   validateObjectId(patientId, "patient id");
   validateInitiateAppointmentInput(body);
@@ -227,16 +256,16 @@ export const initiateAppointmentService = async ({ patientId, body }) => {
   }
 
   const referralResult = await getReferralDiscountForAppointment({
-  patient,
-  appointmentAmount: consultationFee,
-});
+    patient,
+    appointmentAmount: consultationFee,
+  });
 
-const referralDiscount = referralResult.referralDiscount;
-const appliedReferralId = referralResult.appliedReferralId;
+  const referralDiscount = referralResult.referralDiscount;
+  const appliedReferralId = referralResult.appliedReferralId;
 
-const rewardDiscount = 0;
-const totalDiscount = couponDiscount + referralDiscount + rewardDiscount;
-const finalAmount = Math.max(consultationFee - totalDiscount, 0);
+  const rewardDiscount = 0;
+  const totalDiscount = couponDiscount + referralDiscount + rewardDiscount;
+  const finalAmount = Math.max(consultationFee - totalDiscount, 0);
   const reservedUntil = getReservationExpiry();
 
   const session = await mongoose.startSession();
@@ -530,6 +559,87 @@ export const rejectAppointmentByDoctorService = async ({
         appointment,
         session,
       });
+
+      updatedAppointment = appointment;
+    });
+
+    return updatedAppointment;
+  } finally {
+    await session.endSession();
+  }
+};
+
+export const completeAppointmentByDoctorService = async ({
+  doctorId,
+  appointmentId,
+}) => {
+  validateObjectId(doctorId, "doctor id");
+  validateObjectId(appointmentId, "appointment id");
+
+  const session = await mongoose.startSession();
+
+  try {
+    let updatedAppointment = null;
+
+    await session.withTransaction(async () => {
+      const appointment = await findAppointmentForDoctorAction({
+        doctorId,
+        appointmentId,
+        session,
+      });
+
+      ensureAppointmentCanBeCompleted(appointment);
+
+      appointment.status = "completed";
+      appointment.completedAt = new Date();
+
+      await saveAppointment({
+        appointment,
+        session,
+      });
+
+      const patient = await findPatientForCompletion({
+        patientId: appointment.patientId,
+        session,
+      });
+
+      if (!patient || patient.accountStatus?.isDeleted) {
+        throw new AppError("Patient not found", 404);
+      }
+
+      if (!patient.referral?.hasCompletedFirstAppointment) {
+        const firstCompletionResult =
+          await markPatientFirstAppointmentCompleted({
+            patientId: patient._id,
+            session,
+          });
+
+        const isFirstCompletedAppointment =
+          firstCompletionResult.modifiedCount === 1;
+
+        if (isFirstCompletedAppointment) {
+          const claimedReferral =
+            await claimReferralRewardForCompletion({
+              referredUserId: patient._id,
+              completedAppointmentId: appointment._id,
+              session,
+            });
+
+          if (claimedReferral) {
+            await creditReferralRewardToWallet({
+              userId: claimedReferral.referrerId,
+              referralId: claimedReferral._id,
+              amount: claimedReferral.referrerReward,
+              session,
+            });
+
+            await markReferralRewardCredited({
+              referralId: claimedReferral._id,
+              session,
+            });
+          }
+        }
+      }
 
       updatedAppointment = appointment;
     });

@@ -4,6 +4,7 @@ import { sendResponse } from "../../shared/utils/response.js";
 import {
   approveAppointmentByAdminService,
   approveAppointmentByDoctorService,
+  completeAppointmentByDoctorService,
   getAdminAppointmentDetailsService,
   getAdminAppointmentsService,
   getDoctorAppointmentDetailsService,
@@ -184,6 +185,25 @@ export const rejectAppointmentByDoctorController = asyncHandler(
       200,
       true,
       "Appointment rejected successfully",
+      appointment
+    );
+  }
+);
+
+export const completeAppointmentByDoctorController = asyncHandler(
+  async (req, res) => {
+    const doctorId = getDoctorId(req);
+
+    const appointment = await completeAppointmentByDoctorService({
+      doctorId,
+      appointmentId: req.params.appointmentId,
+    });
+
+    sendResponse(
+      res,
+      200,
+      true,
+      "Appointment marked as completed successfully",
       appointment
     );
   }

@@ -1,5 +1,12 @@
 import { useEffect } from "react";
-import { ArrowLeft, CalendarDays, FileText, IndianRupee } from "lucide-react";
+import {
+  ArrowLeft,
+  CalendarDays,
+  CheckCircle2,
+  FileText,
+  Gift,
+  IndianRupee,
+} from "lucide-react";
 import { Link, useParams } from "react-router-dom";
 import toast from "react-hot-toast";
 
@@ -17,6 +24,18 @@ import {
   getSpecialtyName,
   getStatusBadgeClass,
 } from "../../utils/appointmentUi";
+
+const formatCompletedAt = (value) => {
+  if (!value) return "N/A";
+
+  return new Date(value).toLocaleString("en-IN", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+};
 
 function MyAppointmentDetailsPage() {
   const { appointmentId } = useParams();
@@ -94,6 +113,19 @@ function MyAppointmentDetailsPage() {
                     value={getCleanStatus(appointment.status)}
                   />
                 </div>
+
+                {appointment.status === "completed" && (
+                  <div className="mt-6 rounded-2xl bg-green-50 p-5">
+                    <p className="flex items-center gap-2 text-sm font-extrabold text-green-700">
+                      <CheckCircle2 size={18} />
+                      Appointment completed
+                    </p>
+
+                    <p className="mt-2 text-xs font-bold text-green-600">
+                      Completed at {formatCompletedAt(appointment.completedAt)}
+                    </p>
+                  </div>
+                )}
               </div>
 
               <div className="rounded-3xl border border-[#EEF0F6] bg-white p-7 shadow-[0_18px_48px_rgba(17,24,39,0.05)]">
@@ -105,6 +137,28 @@ function MyAppointmentDetailsPage() {
                   {appointment.reason}
                 </p>
               </div>
+
+              {appointment.pricing?.referralDiscount > 0 && (
+                <div className="rounded-3xl border border-[#EEF0F6] bg-white p-7 shadow-[0_18px_48px_rgba(17,24,39,0.05)]">
+                  <div className="flex items-start gap-4">
+                    <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#F0F1FF] text-[#9381FF]">
+                      <Gift size={22} />
+                    </div>
+
+                    <div>
+                      <h2 className="text-xl font-extrabold text-[#111827]">
+                        Referral Benefit Applied
+                      </h2>
+
+                      <p className="mt-2 text-sm leading-6 text-[#6B7280]">
+                        You received ₹
+                        {appointment.pricing?.referralDiscount || 0} discount
+                        on this booking using a referral benefit.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               <div className="rounded-3xl border border-[#EEF0F6] bg-white p-7 shadow-[0_18px_48px_rgba(17,24,39,0.05)]">
                 <h2 className="text-xl font-extrabold text-[#111827]">
@@ -142,59 +196,64 @@ function MyAppointmentDetailsPage() {
 
               <div className="mt-6 space-y-4">
                 <SummaryRow
-  label="Consultation Fee"
-  value={`₹${appointment.pricing?.consultationFee || 0}`}
-/>
+                  label="Consultation Fee"
+                  value={`₹${appointment.pricing?.consultationFee || 0}`}
+                />
 
-<SummaryRow
-  label="Coupon Discount"
-  value={`₹${appointment.pricing?.couponDiscount || 0}`}
-/>
+                <SummaryRow
+                  label="Coupon Discount"
+                  value={`₹${appointment.pricing?.couponDiscount || 0}`}
+                />
 
-<SummaryRow
-  label="Referral Discount"
-  value={`₹${appointment.pricing?.referralDiscount || 0}`}
-/>
+                <SummaryRow
+                  label="Referral Discount"
+                  value={`₹${appointment.pricing?.referralDiscount || 0}`}
+                />
 
-<SummaryRow
-  label="Reward Discount"
-  value={`₹${appointment.pricing?.rewardDiscount || 0}`}
-/>
+                <SummaryRow
+                  label="Reward Discount"
+                  value={`₹${appointment.pricing?.rewardDiscount || 0}`}
+                />
 
-<SummaryRow
-  label="Total Discount"
-  value={`₹${appointment.pricing?.totalDiscount || 0}`}
-/>
+                <SummaryRow
+                  label="Total Discount"
+                  value={`₹${appointment.pricing?.totalDiscount || 0}`}
+                />
 
-<SummaryRow
-  label="Paid Amount"
-  value={`₹${appointment.pricing?.finalAmount || 0}`}
-  highlight
-/>
+                <SummaryRow
+                  label="Paid Amount"
+                  value={`₹${appointment.pricing?.finalAmount || 0}`}
+                  highlight
+                />
 
-<SummaryRow
-  label="Coupon Code"
-  value={appointment.pricing?.appliedCouponCode || "N/A"}
-/>
+                <SummaryRow
+                  label="Coupon Code"
+                  value={appointment.pricing?.appliedCouponCode || "N/A"}
+                />
 
-<SummaryRow
-  label="Payment Status"
-  value={appointment.paymentStatus}
-/>
+                <SummaryRow
+                  label="Payment Status"
+                  value={appointment.paymentStatus}
+                />
 
-<SummaryRow
-  label="Refund Status"
-  value={
-    appointment.paymentStatus === "refunded"
-      ? "Refunded to wallet"
-      : "N/A"
-  }
-/>
+                <SummaryRow
+                  label="Refund Status"
+                  value={
+                    appointment.paymentStatus === "refunded"
+                      ? "Refunded to wallet"
+                      : "N/A"
+                  }
+                />
 
-<SummaryRow
-  label="Transaction"
-  value={appointment.paymentSummary?.transactionId || "N/A"}
-/>
+                <SummaryRow
+                  label="Completed At"
+                  value={formatCompletedAt(appointment.completedAt)}
+                />
+
+                <SummaryRow
+                  label="Transaction"
+                  value={appointment.paymentSummary?.transactionId || "N/A"}
+                />
               </div>
 
               {appointment.status === "rejected" && (
@@ -205,6 +264,18 @@ function MyAppointmentDetailsPage() {
 
                   <p className="mt-2 text-sm leading-6 text-red-700">
                     {appointment.rejection?.reason}
+                  </p>
+                </div>
+              )}
+
+              {appointment.status === "completed" && (
+                <div className="mt-6 rounded-2xl bg-green-50 p-4">
+                  <p className="text-xs font-bold uppercase text-green-600">
+                    Completed
+                  </p>
+
+                  <p className="mt-2 text-sm leading-6 text-green-700">
+                    This appointment has been completed successfully.
                   </p>
                 </div>
               )}

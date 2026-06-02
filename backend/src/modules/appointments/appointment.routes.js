@@ -7,6 +7,7 @@ import { protectAdmin } from "../../middlewares/adminAuth.middleware.js";
 import {
   approveAppointmentByAdminController,
   approveAppointmentByDoctorController,
+  completeAppointmentByDoctorController,
   getAdminAppointmentDetailsController,
   getAdminAppointmentsController,
   getDoctorAppointmentDetailsController,
@@ -66,6 +67,12 @@ router.patch(
   "/doctor/:appointmentId/reject",
   protectDoctor,
   rejectAppointmentByDoctorController
+);
+
+router.patch(
+  "/doctor/:appointmentId/complete",
+  protectDoctor,
+  completeAppointmentByDoctorController
 );
 
 // ==============================

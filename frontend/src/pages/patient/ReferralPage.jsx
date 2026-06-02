@@ -220,10 +220,10 @@ function ReferralPage() {
                 value={`₹${config.referrerReward || 0}`}
               />
 
-              <p className="rounded-2xl bg-orange-50 p-4 text-xs font-bold leading-5 text-orange-600">
-                Your reward will be credited after your friend completes their
-                first appointment. Wallet credit is handled in the next module.
-              </p>
+              <p className="rounded-2xl bg-green-50 p-4 text-xs font-bold leading-5 text-green-700">
+  Your reward will be credited to your wallet automatically after your friend
+  completes their first appointment.
+</p>
             </div>
           ) : (
             <p className="mt-5 rounded-2xl bg-red-50 p-4 text-sm font-bold text-red-600">

@@ -95,6 +95,14 @@ export const rejectDoctorAppointmentApi = async ({
   return response.data;
 };
 
+export const completeDoctorAppointmentApi = async (appointmentId) => {
+  const response = await axiosInstance.patch(
+    API_ENDPOINTS.APPOINTMENT.DOCTOR_COMPLETE(appointmentId)
+  );
+
+  return response.data;
+};
+
 export const getAdminAppointmentsApi = async (params) => {
   const response = await axiosInstance.get(
     API_ENDPOINTS.APPOINTMENT.ADMIN_LIST,

@@ -32,6 +32,10 @@ const STATUS_TABS = [
     value: "approved",
   },
   {
+    label: "Completed",
+    value: "completed",
+  },
+  {
     label: "Rejected",
     value: "rejected",
   },
@@ -69,7 +73,7 @@ function MyAppointmentsPage() {
         .length,
       approved: myAppointments.filter((item) => item.status === "approved")
         .length,
-      rejected: myAppointments.filter((item) => item.status === "rejected")
+      completed: myAppointments.filter((item) => item.status === "completed")
         .length,
     };
   }, [myAppointments]);
@@ -87,8 +91,8 @@ function MyAppointmentsPage() {
           </h1>
 
           <p className="mt-3 max-w-[680px] text-base leading-7 text-[#6B7280] dark:text-slate-400">
-            View pending, approved, rejected, and payment pending appointment
-            requests.
+            View pending, approved, completed, rejected, and payment pending
+            appointment requests.
           </p>
         </section>
 
@@ -96,7 +100,7 @@ function MyAppointmentsPage() {
           <StatCard label="Total" value={stats.total} />
           <StatCard label="Pending" value={stats.pending} />
           <StatCard label="Approved" value={stats.approved} />
-          <StatCard label="Rejected" value={stats.rejected} />
+          <StatCard label="Completed" value={stats.completed} />
         </section>
 
         <section className="mb-6 flex flex-wrap gap-3">
@@ -196,6 +200,18 @@ function AppointmentCard({ appointment, onView }) {
           {formatAppointmentTime(appointment.endTime)}
         </p>
       </div>
+
+      {appointment.status === "completed" && (
+        <div className="mt-5 rounded-2xl bg-green-50 p-4 dark:bg-green-500/10">
+          <p className="text-xs font-bold uppercase text-green-600">
+            Completed
+          </p>
+
+          <p className="mt-1 text-sm font-medium text-green-700 dark:text-green-300">
+            Your consultation has been completed.
+          </p>
+        </div>
+      )}
 
       {appointment.status === "rejected" && (
         <div className="mt-5 rounded-2xl bg-red-50 p-4 dark:bg-red-500/10">

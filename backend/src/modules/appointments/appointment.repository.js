@@ -1,13 +1,15 @@
 import Appointment from "../../models/Appointment.js";
 import Doctor from "../../models/Doctor.js";
 import DoctorSlot from "../../models/DoctorSlot.js";
+import Referral from "../../models/Referral.js";
 import Report from "../../models/Report.js";
+import User from "../../models/User.js";
 
 const appointmentPopulate = [
   {
     path: "patientId",
     select:
-      "username email personalInfo profileImage accountStatus referral createdAt",
+      "username email personalInfo profileImage accountStatus referral walletSummary createdAt",
   },
   {
     path: "doctorId",
@@ -99,7 +101,9 @@ export const findDoctorAppointments = ({
 }) => {
   const filter = {
     doctorId,
-    paymentStatus: "paid",
+    paymentStatus: {
+      $in: ["paid", "refunded"],
+    },
   };
 
   if (status) {
@@ -225,3 +229,75 @@ export const updateReportsAsAttached = ({
   ).session(session);
 };
 
+// ==============================
+// DAY 18 COMPLETION HELPERS
+// ==============================
+export const findPatientForCompletion = ({
+  patientId,
+  session = null,
+}) => {
+  return User.findById(patientId)
+    .select("_id username email referral accountStatus walletSummary")
+    .session(session);
+};
+
+export const markPatientFirstAppointmentCompleted = ({
+  patientId,
+  session = null,
+}) => {
+  return User.updateOne(
+    {
+      _id: patientId,
+      "referral.hasCompletedFirstAppointment": false,
+    },
+    {
+      "referral.hasCompletedFirstAppointment": true,
+    }
+  ).session(session);
+};
+
+export const claimReferralRewardForCompletion = ({
+  referredUserId,
+  completedAppointmentId,
+  session = null,
+}) => {
+  return Referral.findOneAndUpdate(
+    {
+      referredUserId,
+      status: "discount_used",
+      rewardStatus: {
+        $ne: "credited",
+      },
+    },
+    {
+      status: "completed",
+      rewardStatus: "pending_wallet_credit",
+      firstCompletedAppointmentId: completedAppointmentId,
+      completedAt: new Date(),
+    },
+    {
+      new: true,
+      session,
+    }
+  );
+};
+
+export const markReferralRewardCredited = ({
+  referralId,
+  session = null,
+}) => {
+  return Referral.findOneAndUpdate(
+    {
+      _id: referralId,
+      rewardStatus: "pending_wallet_credit",
+    },
+    {
+      rewardStatus: "credited",
+      rewardedAt: new Date(),
+    },
+    {
+      new: true,
+      session,
+    }
+  );
+};

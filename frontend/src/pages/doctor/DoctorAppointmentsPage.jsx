@@ -31,6 +31,10 @@ const STATUS_TABS = [
     value: "approved",
   },
   {
+    label: "Completed",
+    value: "completed",
+  },
+  {
     label: "Rejected",
     value: "rejected",
   },
@@ -66,15 +70,18 @@ function DoctorAppointmentsPage() {
         .length,
       approved: doctorAppointments.filter((item) => item.status === "approved")
         .length,
+      completed: doctorAppointments.filter((item) => item.status === "completed")
+        .length,
     };
   }, [doctorAppointments]);
 
   return (
     <DashboardLayout title="Doctor Appointments">
-      <section className="mb-6 grid gap-4 md:grid-cols-3">
+      <section className="mb-6 grid gap-4 md:grid-cols-4">
         <StatCard label="Total" value={stats.total} />
         <StatCard label="Pending" value={stats.pending} />
         <StatCard label="Approved" value={stats.approved} />
+        <StatCard label="Completed" value={stats.completed} />
       </section>
 
       <section className="mb-6 flex flex-wrap gap-3">
