@@ -120,29 +120,33 @@ RESTORE_DEFAULTS: (slotDayId) =>
   },
 
   APPOINTMENT: {
-    INITIATE: "/appointments/initiate",
-    DETAILS: (appointmentId) => `/appointments/${appointmentId}`,
+  INITIATE: "/appointments/initiate",
+  DETAILS: (appointmentId) => `/appointments/${appointmentId}`,
 
-    MY: "/appointments/my",
-    MY_DETAILS: (appointmentId) => `/appointments/my/${appointmentId}`,
+  MY: "/appointments/my",
+  MY_DETAILS: (appointmentId) => `/appointments/my/${appointmentId}`,
+  MY_CANCEL: (appointmentId) => `/appointments/my/${appointmentId}/cancel`,
 
-    DOCTOR_LIST: "/appointments/doctor",
-    DOCTOR_DETAILS: (appointmentId) => `/appointments/doctor/${appointmentId}`,
-    DOCTOR_APPROVE: (appointmentId) =>
-      `/appointments/doctor/${appointmentId}/approve`,
-    DOCTOR_REJECT: (appointmentId) =>
-      `/appointments/doctor/${appointmentId}/reject`,
-    DOCTOR_COMPLETE: (appointmentId) =>
-  `/appointments/doctor/${appointmentId}/complete`,
-    
-    ADMIN_LIST: "/appointments/admin",
-    ADMIN_DETAILS: (appointmentId) => `/appointments/admin/${appointmentId}`,
-    ADMIN_APPROVE: (appointmentId) =>
-      `/appointments/admin/${appointmentId}/approve`,
-    ADMIN_REJECT: (appointmentId) =>
-      `/appointments/admin/${appointmentId}/reject`,
+  DOCTOR_LIST: "/appointments/doctor",
+  DOCTOR_DETAILS: (appointmentId) => `/appointments/doctor/${appointmentId}`,
+  DOCTOR_APPROVE: (appointmentId) =>
+    `/appointments/doctor/${appointmentId}/approve`,
+  DOCTOR_REJECT: (appointmentId) =>
+    `/appointments/doctor/${appointmentId}/reject`,
+  DOCTOR_COMPLETE: (appointmentId) =>
+    `/appointments/doctor/${appointmentId}/complete`,
+  DOCTOR_CANCEL: (appointmentId) =>
+    `/appointments/doctor/${appointmentId}/cancel`,
 
-  },
+  ADMIN_LIST: "/appointments/admin",
+  ADMIN_DETAILS: (appointmentId) => `/appointments/admin/${appointmentId}`,
+  ADMIN_APPROVE: (appointmentId) =>
+    `/appointments/admin/${appointmentId}/approve`,
+  ADMIN_REJECT: (appointmentId) =>
+    `/appointments/admin/${appointmentId}/reject`,
+  ADMIN_CANCEL: (appointmentId) =>
+    `/appointments/admin/${appointmentId}/cancel`,
+},
 
   PAYMENT: {
     SUCCESS: "/payments/success",

@@ -6,20 +6,19 @@ import {
   creditReferralRewardToWallet,
   refundAppointmentPaymentToWallet,
 } from "../wallets/wallet.service.js";
-import {
-  validateCouponForAppointment,
-} from "../coupons/coupon.service.js";
+import { validateCouponForAppointment } from "../coupons/coupon.service.js";
 import {
   claimReferralRewardForCompletion,
   createAppointment,
   findAdminAppointmentById,
   findAdminAppointments,
+  findAppointmentByIdForPatient,
   findAppointmentForAdminAction,
   findAppointmentForDoctorAction,
+  findAppointmentForPatientAction,
   findDoctorAppointmentById,
   findDoctorAppointments,
   findDoctorForBooking,
-  findAppointmentByIdForPatient,
   findPatientAppointments,
   findPatientForCompletion,
   findPatientReportsByIds,
@@ -31,11 +30,10 @@ import {
   saveSlotDay,
   updateReportsAsAttached,
 } from "./appointment.repository.js";
-import {
-  getReferralDiscountForAppointment,
-} from "../referrals/referral.service.js";
+import { getReferralDiscountForAppointment } from "../referrals/referral.service.js";
 import {
   validateAppointmentStatusFilter,
+  validateCancelAppointmentInput,
   validateInitiateAppointmentInput,
   validateObjectId,
   validateRejectAppointmentInput,
@@ -55,12 +53,7 @@ const isPatientProfileComplete = (user) => {
 };
 
 const getReportFileUrl = (report) => {
-  return (
-    report?.file?.url ||
-    report?.fileUrl ||
-    report?.url ||
-    ""
-  );
+  return report?.file?.url || report?.fileUrl || report?.url || "";
 };
 
 const normalizeAppointmentReport = (report) => {
@@ -116,28 +109,70 @@ const ensureAppointmentCanBeCompleted = (appointment) => {
   }
 };
 
-const releaseBookedSlot = async ({
-  appointment,
-  session,
-}) => {
+const ensureAppointmentCanBeCancelled = ({ appointment, cancelledBy }) => {
+  if (!appointment) {
+    throw new AppError("Appointment not found", 404);
+  }
+
+  if (appointment.status === "cancelled") {
+    throw new AppError("Appointment is already cancelled", 400);
+  }
+
+  if (appointment.status === "completed") {
+    throw new AppError("Completed appointment cannot be cancelled", 400);
+  }
+
+  if (appointment.status === "rejected") {
+    throw new AppError("Rejected appointment cannot be cancelled", 400);
+  }
+
+  if (appointment.status === "pending_payment") {
+    throw new AppError(
+      "Payment pending appointment cannot be cancelled from here",
+      400
+    );
+  }
+
+  if (cancelledBy === "patient" && !["pending", "approved"].includes(appointment.status)) {
+    throw new AppError(
+      "Patient can cancel only pending or approved appointments",
+      400
+    );
+  }
+
+  if (cancelledBy === "doctor" && appointment.status !== "approved") {
+    throw new AppError(
+      "Doctor can cancel only approved appointments",
+      400
+    );
+  }
+
+  if (cancelledBy === "admin" && !["pending", "approved"].includes(appointment.status)) {
+    throw new AppError(
+      "Admin can cancel only pending or approved appointments",
+      400
+    );
+  }
+};
+
+const releaseAppointmentSlot = async ({ appointment, session }) => {
   const slotDay = await findSlotDayById({
     slotDayId: appointment.slotDayId,
     doctorId: appointment.doctorId,
     session,
   });
 
-  if (!slotDay) {
-    return;
-  }
+  if (!slotDay) return;
 
   const slot = slotDay.slots.id(appointment.slotId);
 
-  if (!slot || slot.isDeleted) {
-    return;
-  }
+  if (!slot || slot.isDeleted) return;
 
-  if (slot.status === "booked") {
+  if (["reserved", "booked", "blocked"].includes(slot.status)) {
     slot.status = "available";
+    slot.reservedBy = null;
+    slot.reservedAppointmentId = null;
+    slot.reservedUntil = null;
 
     await saveSlotDay({
       slotDay,
@@ -174,6 +209,56 @@ const clearExpiredReservationsInSlotDay = async ({ slotDay, session }) => {
       session,
     });
   }
+};
+
+const cancelAppointmentCore = async ({
+  appointment,
+  cancelledBy,
+  body,
+  session,
+}) => {
+  validateCancelAppointmentInput(body);
+
+  ensureAppointmentCanBeCancelled({
+    appointment,
+    cancelledBy,
+  });
+
+  appointment.status = "cancelled";
+
+  appointment.cancellation = {
+    cancelledBy,
+    reasonType: body.reasonType,
+    reason: body.reason.trim(),
+    cancelledAt: new Date(),
+  };
+
+  appointment.approval = {
+    approvedBy: "",
+    approvedAt: null,
+  };
+
+  await releaseAppointmentSlot({
+    appointment,
+    session,
+  });
+
+  if (appointment.paymentStatus === "paid") {
+    appointment.paymentStatus = "refunded";
+
+    await refundAppointmentPaymentToWallet({
+      appointment,
+      reason: `Appointment cancelled by ${cancelledBy}. Refund credited to wallet.`,
+      session,
+    });
+  }
+
+  await saveAppointment({
+    appointment,
+    session,
+  });
+
+  return appointment;
 };
 
 export const initiateAppointmentService = async ({ patientId, body }) => {
@@ -395,10 +480,7 @@ export const getPatientAppointmentDetailsService = async ({
   return appointment;
 };
 
-export const getMyAppointmentsService = async ({
-  patientId,
-  query,
-}) => {
+export const getMyAppointmentsService = async ({ patientId, query }) => {
   validateObjectId(patientId, "patient id");
 
   const { status } = query;
@@ -411,10 +493,41 @@ export const getMyAppointmentsService = async ({
   });
 };
 
-export const getDoctorAppointmentsService = async ({
-  doctorId,
-  query,
+export const cancelAppointmentByPatientService = async ({
+  patientId,
+  appointmentId,
+  body,
 }) => {
+  validateObjectId(patientId, "patient id");
+  validateObjectId(appointmentId, "appointment id");
+
+  const session = await mongoose.startSession();
+
+  try {
+    let updatedAppointment = null;
+
+    await session.withTransaction(async () => {
+      const appointment = await findAppointmentForPatientAction({
+        patientId,
+        appointmentId,
+        session,
+      });
+
+      updatedAppointment = await cancelAppointmentCore({
+        appointment,
+        cancelledBy: "patient",
+        body,
+        session,
+      });
+    });
+
+    return updatedAppointment;
+  } finally {
+    await session.endSession();
+  }
+};
+
+export const getDoctorAppointmentsService = async ({ doctorId, query }) => {
   validateObjectId(doctorId, "doctor id");
 
   const { status } = query;
@@ -438,32 +551,6 @@ export const getDoctorAppointmentDetailsService = async ({
     doctorId,
     appointmentId,
   });
-
-  if (!appointment) {
-    throw new AppError("Appointment not found", 404);
-  }
-
-  return appointment;
-};
-
-export const getAdminAppointmentsService = async ({
-  query,
-}) => {
-  const { status } = query;
-
-  validateAppointmentStatusFilter(status);
-
-  return findAdminAppointments({
-    status,
-  });
-};
-
-export const getAdminAppointmentDetailsService = async ({
-  appointmentId,
-}) => {
-  validateObjectId(appointmentId, "appointment id");
-
-  const appointment = await findAdminAppointmentById(appointmentId);
 
   if (!appointment) {
     throw new AppError("Appointment not found", 404);
@@ -544,7 +631,7 @@ export const rejectAppointmentByDoctorService = async ({
         approvedAt: null,
       };
 
-      await releaseBookedSlot({
+      await releaseAppointmentSlot({
         appointment,
         session,
       });
@@ -618,12 +705,11 @@ export const completeAppointmentByDoctorService = async ({
           firstCompletionResult.modifiedCount === 1;
 
         if (isFirstCompletedAppointment) {
-          const claimedReferral =
-            await claimReferralRewardForCompletion({
-              referredUserId: patient._id,
-              completedAppointmentId: appointment._id,
-              session,
-            });
+          const claimedReferral = await claimReferralRewardForCompletion({
+            referredUserId: patient._id,
+            completedAppointmentId: appointment._id,
+            session,
+          });
 
           if (claimedReferral) {
             await creditReferralRewardToWallet({
@@ -650,9 +736,63 @@ export const completeAppointmentByDoctorService = async ({
   }
 };
 
-export const approveAppointmentByAdminService = async ({
+export const cancelAppointmentByDoctorService = async ({
+  doctorId,
   appointmentId,
+  body,
 }) => {
+  validateObjectId(doctorId, "doctor id");
+  validateObjectId(appointmentId, "appointment id");
+
+  const session = await mongoose.startSession();
+
+  try {
+    let updatedAppointment = null;
+
+    await session.withTransaction(async () => {
+      const appointment = await findAppointmentForDoctorAction({
+        doctorId,
+        appointmentId,
+        session,
+      });
+
+      updatedAppointment = await cancelAppointmentCore({
+        appointment,
+        cancelledBy: "doctor",
+        body,
+        session,
+      });
+    });
+
+    return updatedAppointment;
+  } finally {
+    await session.endSession();
+  }
+};
+
+export const getAdminAppointmentsService = async ({ query }) => {
+  const { status } = query;
+
+  validateAppointmentStatusFilter(status);
+
+  return findAdminAppointments({
+    status,
+  });
+};
+
+export const getAdminAppointmentDetailsService = async ({ appointmentId }) => {
+  validateObjectId(appointmentId, "appointment id");
+
+  const appointment = await findAdminAppointmentById(appointmentId);
+
+  if (!appointment) {
+    throw new AppError("Appointment not found", 404);
+  }
+
+  return appointment;
+};
+
+export const approveAppointmentByAdminService = async ({ appointmentId }) => {
   validateObjectId(appointmentId, "appointment id");
 
   const appointment = await findAppointmentForAdminAction({
@@ -716,7 +856,7 @@ export const rejectAppointmentByAdminService = async ({
         approvedAt: null,
       };
 
-      await releaseBookedSlot({
+      await releaseAppointmentSlot({
         appointment,
         session,
       });
@@ -733,6 +873,37 @@ export const rejectAppointmentByAdminService = async ({
       });
 
       updatedAppointment = appointment;
+    });
+
+    return updatedAppointment;
+  } finally {
+    await session.endSession();
+  }
+};
+
+export const cancelAppointmentByAdminService = async ({
+  appointmentId,
+  body,
+}) => {
+  validateObjectId(appointmentId, "appointment id");
+
+  const session = await mongoose.startSession();
+
+  try {
+    let updatedAppointment = null;
+
+    await session.withTransaction(async () => {
+      const appointment = await findAppointmentForAdminAction({
+        appointmentId,
+        session,
+      });
+
+      updatedAppointment = await cancelAppointmentCore({
+        appointment,
+        cancelledBy: "admin",
+        body,
+        session,
+      });
     });
 
     return updatedAppointment;

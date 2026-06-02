@@ -12,15 +12,19 @@ import {
   VenusAndMars,
   X,
   Upload,
+  XCircle,
 } from "lucide-react";
 import { Link, useParams } from "react-router-dom";
 import toast from "react-hot-toast";
 
 import DashboardLayout from "../../components/layout/DashboardLayout";
 import RejectAppointmentModal from "../../components/appointments/RejectAppointmentModal";
+import CancelAppointmentModal from "../../components/appointments/CancelAppointmentModal";
 import { useAppDispatch, useAppSelector } from "../../app/hooks";
+
 import {
   approveDoctorAppointment,
+  cancelDoctorAppointment,
   clearAppointmentError,
   completeDoctorAppointment,
   fetchDoctorAppointmentDetails,
@@ -73,7 +77,7 @@ const formatText = (value) => {
     .replace(/\b\w/g, (char) => char.toUpperCase());
 };
 
-const formatCompletedAt = (value) => {
+const formatDateTime = (value) => {
   if (!value) return "Not available";
 
   return new Date(value).toLocaleString("en-IN", {
@@ -94,26 +98,36 @@ function DoctorAppointmentDetailsPage() {
     isLoadingDetails,
     isDeciding,
     isCompleting,
+    isCancelling,
     error,
   } = useAppSelector((state) => state.appointments);
 
-   const {
-    appointmentReports,
+  const {
+    appointmentReports = [],
     isLoadingAppointmentReports,
     isUploadingPrescription,
     error: reportError,
   } = useAppSelector((state) => state.reports);
 
-
   const [rejectModalOpen, setRejectModalOpen] = useState(false);
-   const [prescriptionTitle, setPrescriptionTitle] = useState("");
+  const [cancelModalOpen, setCancelModalOpen] = useState(false);
+
+  const [prescriptionTitle, setPrescriptionTitle] = useState("");
   const [prescriptionText, setPrescriptionText] = useState("");
   const [prescriptionDescription, setPrescriptionDescription] = useState("");
   const [prescriptionFile, setPrescriptionFile] = useState(null);
+
   useEffect(() => {
-    if (appointmentId) {
-      dispatch(fetchDoctorAppointmentDetails(appointmentId));
-    }
+    if (!appointmentId) return;
+
+    dispatch(fetchDoctorAppointmentDetails(appointmentId));
+  }, [dispatch, appointmentId]);
+
+  useEffect(() => {
+    if (!appointmentId) return;
+
+    dispatch(clearAppointmentReports());
+    dispatch(fetchDoctorAppointmentReports(appointmentId));
   }, [dispatch, appointmentId]);
 
   useEffect(() => {
@@ -123,14 +137,7 @@ function DoctorAppointmentDetailsPage() {
     dispatch(clearAppointmentError());
   }, [error, dispatch]);
 
-     useEffect(() => {
-    if (!appointmentId) return;
-
-    dispatch(clearAppointmentReports());
-    dispatch(fetchDoctorAppointmentReports(appointmentId));
-  }, [dispatch, appointmentId]);
-
-    useEffect(() => {
+  useEffect(() => {
     if (!reportError) return;
 
     toast.error(reportError);
@@ -138,7 +145,6 @@ function DoctorAppointmentDetailsPage() {
   }, [reportError, dispatch]);
 
   const appointment = selectedAppointment;
-
   const patient = appointment?.patientId;
 
   const patientInfo = useMemo(() => {
@@ -156,6 +162,9 @@ function DoctorAppointmentDetailsPage() {
     };
   }, [appointment, patient]);
 
+  const canCancel =
+    appointment && ["approved"].includes(appointment.status);
+
   const handleApprove = async () => {
     try {
       const result = await dispatch(
@@ -163,6 +172,7 @@ function DoctorAppointmentDetailsPage() {
       ).unwrap();
 
       toast.success(result.message || "Appointment approved");
+      dispatch(fetchDoctorAppointmentDetails(appointmentId));
     } catch (err) {
       toast.error(err || "Failed to approve appointment");
     }
@@ -185,24 +195,52 @@ function DoctorAppointmentDetailsPage() {
 
       toast.success(result.message || "Appointment rejected");
       setRejectModalOpen(false);
+      dispatch(fetchDoctorAppointmentDetails(appointmentId));
     } catch (err) {
       toast.error(err || "Failed to reject appointment");
     }
   };
 
-const handleComplete = async () => {
-  try {
-    const result = await dispatch(
-      completeDoctorAppointment(appointmentId)
-    ).unwrap();
+  const handleCancelAppointment = async ({ reasonType, reason }) => {
+    if (!reason.trim()) {
+      toast.error("Cancellation reason is required");
+      return;
+    }
 
-    toast.success(result.message || "Appointment completed");
+    try {
+      const result = await dispatch(
+        cancelDoctorAppointment({
+          appointmentId,
+          reasonType,
+          reason,
+        })
+      ).unwrap();
 
-    dispatch(fetchDoctorAppointmentDetails(appointmentId));
-  } catch (err) {
-    toast.error(err || "Failed to complete appointment");
-  }
-};
+      toast.success(result.message || "Appointment cancelled");
+      setCancelModalOpen(false);
+
+      dispatch(fetchDoctorAppointmentDetails(appointmentId));
+      dispatch(fetchDoctorAppointmentReports(appointmentId));
+    } catch (err) {
+      toast.error(err || "Failed to cancel appointment");
+    }
+  };
+
+  const handleComplete = async () => {
+    try {
+      const result = await dispatch(
+        completeDoctorAppointment(appointmentId)
+      ).unwrap();
+
+      toast.success(result.message || "Appointment completed");
+
+      dispatch(fetchDoctorAppointmentDetails(appointmentId));
+      dispatch(fetchDoctorAppointmentReports(appointmentId));
+    } catch (err) {
+      toast.error(err || "Failed to complete appointment");
+    }
+  };
+
   const handlePrescriptionUpload = async (event) => {
     event.preventDefault();
 
@@ -247,6 +285,7 @@ const handleComplete = async () => {
       toast.error(err || "Failed to upload prescription");
     }
   };
+
   return (
     <DashboardLayout title="Appointment Details">
       <Link
@@ -305,7 +344,7 @@ const handleComplete = async () => {
                 </p>
 
                 <p className="mt-2 text-sm leading-7 text-[#374151]">
-                  {appointment.reason}
+                  {appointment.reason || "No reason provided"}
                 </p>
               </div>
 
@@ -317,8 +356,32 @@ const handleComplete = async () => {
                   </p>
 
                   <p className="mt-2 text-xs font-bold text-green-600">
-                    Completed at {formatCompletedAt(appointment.completedAt)}
+                    Completed at {formatDateTime(appointment.completedAt)}
                   </p>
+                </div>
+              )}
+
+              {appointment.status === "cancelled" && (
+                <div className="mt-5 rounded-2xl bg-slate-100 p-5">
+                  <p className="flex items-center gap-2 text-sm font-extrabold text-slate-700">
+                    <XCircle size={18} />
+                    Appointment cancelled
+                  </p>
+
+                  <p className="mt-2 text-xs font-bold text-slate-600">
+                    Cancelled by{" "}
+                    {appointment.cancellation?.cancelledBy || "N/A"}
+                  </p>
+
+                  <p className="mt-3 text-sm leading-6 text-slate-700">
+                    {appointment.cancellation?.reason || "No reason provided"}
+                  </p>
+
+                  {appointment.paymentStatus === "refunded" && (
+                    <p className="mt-3 rounded-xl bg-green-50 px-4 py-3 text-xs font-extrabold text-green-700">
+                      Refund credited to patient wallet.
+                    </p>
+                  )}
                 </div>
               )}
             </div>
@@ -391,8 +454,11 @@ const handleComplete = async () => {
 
               {appointment.reports?.length > 0 ? (
                 <div className="mt-5 grid gap-4 md:grid-cols-2">
-                  {appointment.reports.map((report) => (
-                    <ReportCard key={report.reportId} report={report} />
+                  {appointment.reports.map((report, index) => (
+                    <ReportCard
+                      key={report.reportId || `${report.title}-${index}`}
+                      report={report}
+                    />
                   ))}
                 </div>
               ) : (
@@ -401,7 +467,8 @@ const handleComplete = async () => {
                 </p>
               )}
             </div>
-               {appointment.status === "completed" && (
+
+            {appointment.status === "completed" && (
               <PrescriptionSection
                 reports={appointmentReports}
                 isLoading={isLoadingAppointmentReports}
@@ -418,7 +485,7 @@ const handleComplete = async () => {
               />
             )}
           </section>
-                
+
           <aside className="h-fit rounded-3xl border border-[#EEF0F6] bg-white p-6 shadow-[0_18px_48px_rgba(17,24,39,0.06)]">
             <h2 className="text-xl font-extrabold text-[#111827]">
               Decision
@@ -449,7 +516,7 @@ const handleComplete = async () => {
               {appointment.completedAt && (
                 <InfoRow
                   label="Completed At"
-                  value={formatCompletedAt(appointment.completedAt)}
+                  value={formatDateTime(appointment.completedAt)}
                 />
               )}
             </div>
@@ -479,7 +546,7 @@ const handleComplete = async () => {
             )}
 
             {appointment.status === "approved" && (
-              <div className="mt-6">
+              <div className="mt-6 space-y-3">
                 <button
                   type="button"
                   disabled={isCompleting}
@@ -490,7 +557,19 @@ const handleComplete = async () => {
                   {isCompleting ? "Completing..." : "Mark as Completed"}
                 </button>
 
-                <p className="mt-3 rounded-2xl bg-orange-50 p-3 text-xs font-bold leading-5 text-orange-600">
+                {canCancel && (
+                  <button
+                    type="button"
+                    disabled={isCancelling}
+                    onClick={() => setCancelModalOpen(true)}
+                    className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-2xl bg-red-50 text-sm font-extrabold text-red-600 transition hover:bg-red-100 disabled:opacity-60"
+                  >
+                    <XCircle size={17} />
+                    {isCancelling ? "Cancelling..." : "Cancel Appointment"}
+                  </button>
+                )}
+
+                <p className="rounded-2xl bg-orange-50 p-3 text-xs font-bold leading-5 text-orange-600">
                   Completing this appointment may trigger referral reward credit
                   if this is the patient's first completed appointment.
                 </p>
@@ -520,6 +599,18 @@ const handleComplete = async () => {
                 </p>
               </div>
             )}
+
+            {appointment.status === "cancelled" && (
+              <div className="mt-6 rounded-2xl bg-slate-100 p-4">
+                <p className="text-xs font-bold uppercase text-slate-600">
+                  Cancelled by {appointment.cancellation?.cancelledBy || "N/A"}
+                </p>
+
+                <p className="mt-2 text-sm leading-6 text-slate-700">
+                  {appointment.cancellation?.reason || "No reason provided"}
+                </p>
+              </div>
+            )}
           </aside>
         </div>
       )}
@@ -530,6 +621,15 @@ const handleComplete = async () => {
         appointment={appointment}
         onClose={() => setRejectModalOpen(false)}
         onConfirm={handleReject}
+      />
+
+      <CancelAppointmentModal
+        open={cancelModalOpen}
+        loading={isCancelling}
+        actor="doctor"
+        appointment={appointment}
+        onClose={() => setCancelModalOpen(false)}
+        onConfirm={handleCancelAppointment}
       />
     </DashboardLayout>
   );
@@ -577,6 +677,7 @@ function InfoRow({ label, value }) {
   return (
     <div className="flex justify-between gap-4 border-b border-[#EEF0F6] pb-3 last:border-0">
       <span className="text-[#6B7280]">{label}</span>
+
       <span className="text-right font-extrabold capitalize text-[#111827]">
         {value}
       </span>
@@ -590,11 +691,11 @@ function ReportCard({ report }) {
       <FileText size={18} className="text-[#9381FF]" />
 
       <p className="mt-3 text-sm font-extrabold text-[#111827]">
-        {report.title}
+        {report.title || "Untitled report"}
       </p>
 
       <p className="mt-1 text-xs capitalize text-[#6B7280]">
-        {report.reportType?.replace("_", " ")}
+        {report.reportType?.replace("_", " ") || "Other"}
       </p>
 
       {report.fileUrl && (
@@ -612,7 +713,7 @@ function ReportCard({ report }) {
 }
 
 function PrescriptionSection({
-  reports,
+  reports = [],
   isLoading,
   isUploading,
   title,
@@ -641,7 +742,8 @@ function PrescriptionSection({
         </h2>
 
         <p className="mt-2 text-sm leading-6 text-[#6B7280]">
-          Prescription upload is allowed only after the appointment is completed.
+          Prescription upload is allowed only after the appointment is
+          completed.
         </p>
       </div>
 
@@ -758,12 +860,14 @@ function PrescriptionCard({ report }) {
 
         <div className="min-w-0 flex-1">
           <h4 className="text-sm font-extrabold text-[#111827]">
-            {report.title}
+            {report.title || "Prescription"}
           </h4>
 
-          <p className="mt-2 whitespace-pre-line rounded-2xl bg-white p-4 text-sm leading-7 text-[#374151]">
-            {report.prescriptionText}
-          </p>
+          {report.prescriptionText && (
+            <p className="mt-2 whitespace-pre-line rounded-2xl bg-white p-4 text-sm leading-7 text-[#374151]">
+              {report.prescriptionText}
+            </p>
+          )}
 
           {report.description && (
             <p className="mt-3 text-xs font-semibold leading-5 text-[#6B7280]">

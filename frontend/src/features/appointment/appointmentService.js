@@ -52,6 +52,22 @@ export const getMyAppointmentDetailsApi = async (appointmentId) => {
   return response.data;
 };
 
+export const cancelMyAppointmentApi = async ({
+  appointmentId,
+  reasonType,
+  reason,
+}) => {
+  const response = await axiosInstance.patch(
+    API_ENDPOINTS.APPOINTMENT.MY_CANCEL(appointmentId),
+    {
+      reasonType,
+      reason,
+    }
+  );
+
+  return response.data;
+};
+
 export const getDoctorAppointmentsApi = async (params) => {
   const response = await axiosInstance.get(
     API_ENDPOINTS.APPOINTMENT.DOCTOR_LIST,
@@ -103,6 +119,22 @@ export const completeDoctorAppointmentApi = async (appointmentId) => {
   return response.data;
 };
 
+export const cancelDoctorAppointmentApi = async ({
+  appointmentId,
+  reasonType,
+  reason,
+}) => {
+  const response = await axiosInstance.patch(
+    API_ENDPOINTS.APPOINTMENT.DOCTOR_CANCEL(appointmentId),
+    {
+      reasonType,
+      reason,
+    }
+  );
+
+  return response.data;
+};
+
 export const getAdminAppointmentsApi = async (params) => {
   const response = await axiosInstance.get(
     API_ENDPOINTS.APPOINTMENT.ADMIN_LIST,
@@ -137,6 +169,22 @@ export const rejectAdminAppointmentApi = async ({
 }) => {
   const response = await axiosInstance.patch(
     API_ENDPOINTS.APPOINTMENT.ADMIN_REJECT(appointmentId),
+    {
+      reasonType,
+      reason,
+    }
+  );
+
+  return response.data;
+};
+
+export const cancelAdminAppointmentApi = async ({
+  appointmentId,
+  reasonType,
+  reason,
+}) => {
+  const response = await axiosInstance.patch(
+    API_ENDPOINTS.APPOINTMENT.ADMIN_CANCEL(appointmentId),
     {
       reasonType,
       reason,

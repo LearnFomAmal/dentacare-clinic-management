@@ -19,30 +19,13 @@ import {
 } from "../../utils/appointmentUi";
 
 const STATUS_TABS = [
-  {
-    label: "All",
-    value: "",
-  },
-  {
-    label: "Pending",
-    value: "pending",
-  },
-  {
-    label: "Approved",
-    value: "approved",
-  },
-  {
-    label: "Completed",
-    value: "completed",
-  },
-  {
-    label: "Rejected",
-    value: "rejected",
-  },
-  {
-    label: "Payment Pending",
-    value: "pending_payment",
-  },
+  { label: "All", value: "" },
+  { label: "Pending", value: "pending" },
+  { label: "Approved", value: "approved" },
+  { label: "Completed", value: "completed" },
+  { label: "Cancelled", value: "cancelled" },
+  { label: "Rejected", value: "rejected" },
+  { label: "Payment Pending", value: "pending_payment" },
 ];
 
 function MyAppointmentsPage() {
@@ -75,6 +58,8 @@ function MyAppointmentsPage() {
         .length,
       completed: myAppointments.filter((item) => item.status === "completed")
         .length,
+      cancelled: myAppointments.filter((item) => item.status === "cancelled")
+        .length,
     };
   }, [myAppointments]);
 
@@ -91,16 +76,17 @@ function MyAppointmentsPage() {
           </h1>
 
           <p className="mt-3 max-w-[680px] text-base leading-7 text-[#6B7280] dark:text-slate-400">
-            View pending, approved, completed, rejected, and payment pending
-            appointment requests.
+            View pending, approved, completed, cancelled, rejected, and payment
+            pending appointment requests.
           </p>
         </section>
 
-        <section className="mb-6 grid gap-4 md:grid-cols-4">
+        <section className="mb-6 grid gap-4 md:grid-cols-5">
           <StatCard label="Total" value={stats.total} />
           <StatCard label="Pending" value={stats.pending} />
           <StatCard label="Approved" value={stats.approved} />
           <StatCard label="Completed" value={stats.completed} />
+          <StatCard label="Cancelled" value={stats.cancelled} />
         </section>
 
         <section className="mb-6 flex flex-wrap gap-3">
@@ -202,27 +188,29 @@ function AppointmentCard({ appointment, onView }) {
       </div>
 
       {appointment.status === "completed" && (
-        <div className="mt-5 rounded-2xl bg-green-50 p-4 dark:bg-green-500/10">
-          <p className="text-xs font-bold uppercase text-green-600">
-            Completed
-          </p>
+        <StatusNote
+          title="Completed"
+          text="Your consultation has been completed."
+          className="bg-green-50 text-green-700 dark:bg-green-500/10 dark:text-green-300"
+        />
+      )}
 
-          <p className="mt-1 text-sm font-medium text-green-700 dark:text-green-300">
-            Your consultation has been completed.
-          </p>
-        </div>
+      {appointment.status === "cancelled" && (
+        <StatusNote
+          title={`Cancelled by ${
+            appointment.cancellation?.cancelledBy || "N/A"
+          }`}
+          text={appointment.cancellation?.reason || "No reason provided"}
+          className="bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300"
+        />
       )}
 
       {appointment.status === "rejected" && (
-        <div className="mt-5 rounded-2xl bg-red-50 p-4 dark:bg-red-500/10">
-          <p className="text-xs font-bold uppercase text-red-500">
-            Rejection reason
-          </p>
-
-          <p className="mt-1 line-clamp-2 text-sm font-medium text-red-700 dark:text-red-300">
-            {appointment.rejection?.reason || "No reason provided"}
-          </p>
-        </div>
+        <StatusNote
+          title="Rejection reason"
+          text={appointment.rejection?.reason || "No reason provided"}
+          className="bg-red-50 text-red-700 dark:bg-red-500/10 dark:text-red-300"
+        />
       )}
 
       <button
@@ -234,6 +222,16 @@ function AppointmentCard({ appointment, onView }) {
         View Details
       </button>
     </article>
+  );
+}
+
+function StatusNote({ title, text, className }) {
+  return (
+    <div className={`mt-5 rounded-2xl p-4 ${className}`}>
+      <p className="text-xs font-bold uppercase">{title}</p>
+
+      <p className="mt-1 line-clamp-2 text-sm font-medium">{text}</p>
+    </div>
   );
 }
 

@@ -1,25 +1,31 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import {
   ArrowLeft,
-  CalendarDays,
   CheckCircle2,
   FileText,
   Gift,
   IndianRupee,
+  XCircle,
 } from "lucide-react";
 import { Link, useParams } from "react-router-dom";
 import toast from "react-hot-toast";
+
+import PatientLayout from "../../components/patient/PatientLayout";
+import CancelAppointmentModal from "../../components/appointments/CancelAppointmentModal";
+import { useAppDispatch, useAppSelector } from "../../app/hooks";
+
+import {
+  cancelMyAppointment,
+  clearAppointmentError,
+  fetchMyAppointmentDetails,
+} from "../../features/appointment/appointmentSlice";
+
 import {
   clearAppointmentReports,
   clearReportError,
   fetchPatientAppointmentReports,
 } from "../../features/reports/reportSlice";
-import PatientLayout from "../../components/patient/PatientLayout";
-import { useAppDispatch, useAppSelector } from "../../app/hooks";
-import {
-  clearAppointmentError,
-  fetchMyAppointmentDetails,
-} from "../../features/appointment/appointmentSlice";
+
 import {
   formatAppointmentDate,
   formatAppointmentTime,
@@ -45,19 +51,32 @@ function MyAppointmentDetailsPage() {
   const { appointmentId } = useParams();
   const dispatch = useAppDispatch();
 
-  const { selectedAppointment, isLoadingDetails, error } = useAppSelector(
-    (state) => state.appointments
-  );
-   const {
-    appointmentReports,
+  const [cancelModalOpen, setCancelModalOpen] = useState(false);
+
+  const {
+    selectedAppointment,
+    isLoadingDetails,
+    isCancelling,
+    error,
+  } = useAppSelector((state) => state.appointments);
+
+  const {
+    appointmentReports = [],
     isLoadingAppointmentReports,
     error: reportError,
   } = useAppSelector((state) => state.reports);
 
   useEffect(() => {
-    if (appointmentId) {
-      dispatch(fetchMyAppointmentDetails(appointmentId));
-    }
+    if (!appointmentId) return;
+
+    dispatch(fetchMyAppointmentDetails(appointmentId));
+  }, [dispatch, appointmentId]);
+
+  useEffect(() => {
+    if (!appointmentId) return;
+
+    dispatch(clearAppointmentReports());
+    dispatch(fetchPatientAppointmentReports(appointmentId));
   }, [dispatch, appointmentId]);
 
   useEffect(() => {
@@ -67,19 +86,42 @@ function MyAppointmentDetailsPage() {
     dispatch(clearAppointmentError());
   }, [error, dispatch]);
 
-  const appointment = selectedAppointment;
-   useEffect(() => {
-    if (!appointmentId) return;
-
-    dispatch(clearAppointmentReports());
-    dispatch(fetchPatientAppointmentReports(appointmentId));
-  }, [dispatch, appointmentId]);
-    useEffect(() => {
+  useEffect(() => {
     if (!reportError) return;
 
     toast.error(reportError);
     dispatch(clearReportError());
   }, [reportError, dispatch]);
+
+  const appointment = selectedAppointment;
+
+  const handleCancelAppointment = async ({ reasonType, reason }) => {
+    if (!reason.trim()) {
+      toast.error("Cancellation reason is required");
+      return;
+    }
+
+    try {
+      const result = await dispatch(
+        cancelMyAppointment({
+          appointmentId,
+          reasonType,
+          reason,
+        })
+      ).unwrap();
+
+      toast.success(result.message || "Appointment cancelled");
+      setCancelModalOpen(false);
+
+      dispatch(fetchMyAppointmentDetails(appointmentId));
+      dispatch(fetchPatientAppointmentReports(appointmentId));
+    } catch (err) {
+      toast.error(err || "Failed to cancel appointment");
+    }
+  };
+
+  const canCancel =
+    appointment && ["pending", "approved"].includes(appointment.status);
 
   return (
     <PatientLayout>
@@ -147,6 +189,31 @@ function MyAppointmentDetailsPage() {
                     </p>
                   </div>
                 )}
+
+                {appointment.status === "cancelled" && (
+                  <div className="mt-6 rounded-2xl bg-slate-100 p-5">
+                    <p className="flex items-center gap-2 text-sm font-extrabold text-slate-700">
+                      <XCircle size={18} />
+                      Appointment cancelled
+                    </p>
+
+                    <p className="mt-2 text-xs font-bold text-slate-600">
+                      Cancelled by{" "}
+                      {appointment.cancellation?.cancelledBy || "N/A"}
+                    </p>
+
+                    <p className="mt-3 text-sm leading-6 text-slate-700">
+                      {appointment.cancellation?.reason ||
+                        "No reason provided"}
+                    </p>
+
+                    {appointment.paymentStatus === "refunded" && (
+                      <p className="mt-3 rounded-xl bg-green-50 px-4 py-3 text-xs font-extrabold text-green-700">
+                        Refund credited to wallet.
+                      </p>
+                    )}
+                  </div>
+                )}
               </div>
 
               <div className="rounded-3xl border border-[#EEF0F6] bg-white p-7 shadow-[0_18px_48px_rgba(17,24,39,0.05)]">
@@ -155,7 +222,7 @@ function MyAppointmentDetailsPage() {
                 </h2>
 
                 <p className="mt-3 rounded-2xl bg-[#F8FAFC] p-5 text-sm leading-7 text-[#374151]">
-                  {appointment.reason}
+                  {appointment.reason || "No reason provided"}
                 </p>
               </div>
 
@@ -188,8 +255,11 @@ function MyAppointmentDetailsPage() {
 
                 {appointment.reports?.length > 0 ? (
                   <div className="mt-5 grid gap-4 md:grid-cols-2">
-                    {appointment.reports.map((report) => (
-                      <ReportCard key={report.reportId} report={report} />
+                    {appointment.reports.map((report, index) => (
+                      <ReportCard
+                        key={report.reportId || `${report.title}-${index}`}
+                        report={report}
+                      />
                     ))}
                   </div>
                 ) : (
@@ -198,14 +268,14 @@ function MyAppointmentDetailsPage() {
                   </p>
                 )}
               </div>
-                            {appointment.status === "completed" && (
+
+              {appointment.status === "completed" && (
                 <PrescriptionViewSection
                   reports={appointmentReports}
                   isLoading={isLoadingAppointmentReports}
                 />
               )}
             </section>
-
 
             <aside className="h-fit rounded-3xl border border-[#EEF0F6] bg-white p-6 shadow-[0_18px_48px_rgba(17,24,39,0.06)]">
               <h2 className="text-xl font-extrabold text-[#111827]">
@@ -261,7 +331,7 @@ function MyAppointmentDetailsPage() {
 
                 <SummaryRow
                   label="Payment Status"
-                  value={appointment.paymentStatus}
+                  value={appointment.paymentStatus || "N/A"}
                 />
 
                 <SummaryRow
@@ -284,14 +354,38 @@ function MyAppointmentDetailsPage() {
                 />
               </div>
 
+              {canCancel && (
+                <button
+                  type="button"
+                  disabled={isCancelling}
+                  onClick={() => setCancelModalOpen(true)}
+                  className="mt-6 inline-flex h-12 w-full items-center justify-center rounded-2xl bg-red-50 text-sm font-extrabold text-red-600 transition hover:bg-red-100 disabled:opacity-60"
+                >
+                  {isCancelling ? "Cancelling..." : "Cancel Appointment"}
+                </button>
+              )}
+
               {appointment.status === "rejected" && (
                 <div className="mt-6 rounded-2xl bg-red-50 p-4">
                   <p className="text-xs font-bold uppercase text-red-500">
-                    Rejected by {appointment.rejection?.rejectedBy}
+                    Rejected by {appointment.rejection?.rejectedBy || "N/A"}
                   </p>
 
                   <p className="mt-2 text-sm leading-6 text-red-700">
-                    {appointment.rejection?.reason}
+                    {appointment.rejection?.reason || "No reason provided"}
+                  </p>
+                </div>
+              )}
+
+              {appointment.status === "cancelled" && (
+                <div className="mt-6 rounded-2xl bg-slate-100 p-4">
+                  <p className="text-xs font-bold uppercase text-slate-600">
+                    Cancelled by{" "}
+                    {appointment.cancellation?.cancelledBy || "N/A"}
+                  </p>
+
+                  <p className="mt-2 text-sm leading-6 text-slate-700">
+                    {appointment.cancellation?.reason || "No reason provided"}
                   </p>
                 </div>
               )}
@@ -310,6 +404,15 @@ function MyAppointmentDetailsPage() {
             </aside>
           </div>
         )}
+
+        <CancelAppointmentModal
+          open={cancelModalOpen}
+          loading={isCancelling}
+          actor="patient"
+          appointment={appointment}
+          onClose={() => setCancelModalOpen(false)}
+          onConfirm={handleCancelAppointment}
+        />
       </main>
     </PatientLayout>
   );
@@ -337,11 +440,11 @@ function ReportCard({ report }) {
       </div>
 
       <p className="text-sm font-extrabold text-[#111827]">
-        {report.title}
+        {report.title || "Untitled report"}
       </p>
 
       <p className="mt-1 text-xs capitalize text-[#6B7280]">
-        {report.reportType?.replace("_", " ")}
+        {report.reportType?.replace("_", " ") || "Other"}
       </p>
 
       {report.fileUrl && (
@@ -374,7 +477,8 @@ function SummaryRow({ label, value, highlight = false }) {
     </div>
   );
 }
-function PrescriptionViewSection({ reports, isLoading }) {
+
+function PrescriptionViewSection({ reports = [], isLoading }) {
   const prescriptions = reports.filter(
     (report) => report.reportType === "prescription"
   );
@@ -416,12 +520,14 @@ function PatientPrescriptionCard({ report }) {
       </div>
 
       <h3 className="text-sm font-extrabold text-[#111827]">
-        {report.title}
+        {report.title || "Prescription"}
       </h3>
 
-      <p className="mt-3 whitespace-pre-line rounded-2xl bg-white p-4 text-sm leading-7 text-[#374151]">
-        {report.prescriptionText}
-      </p>
+      {report.prescriptionText && (
+        <p className="mt-3 whitespace-pre-line rounded-2xl bg-white p-4 text-sm leading-7 text-[#374151]">
+          {report.prescriptionText}
+        </p>
+      )}
 
       {report.description && (
         <p className="mt-3 text-xs font-semibold leading-5 text-[#6B7280]">

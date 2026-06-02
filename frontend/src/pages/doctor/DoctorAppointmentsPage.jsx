@@ -18,26 +18,12 @@ import {
 } from "../../utils/appointmentUi";
 
 const STATUS_TABS = [
-  {
-    label: "All",
-    value: "",
-  },
-  {
-    label: "Pending Requests",
-    value: "pending",
-  },
-  {
-    label: "Approved",
-    value: "approved",
-  },
-  {
-    label: "Completed",
-    value: "completed",
-  },
-  {
-    label: "Rejected",
-    value: "rejected",
-  },
+  { label: "All", value: "" },
+  { label: "Pending Requests", value: "pending" },
+  { label: "Approved", value: "approved" },
+  { label: "Completed", value: "completed" },
+  { label: "Cancelled", value: "cancelled" },
+  { label: "Rejected", value: "rejected" },
 ];
 
 function DoctorAppointmentsPage() {
@@ -70,18 +56,23 @@ function DoctorAppointmentsPage() {
         .length,
       approved: doctorAppointments.filter((item) => item.status === "approved")
         .length,
-      completed: doctorAppointments.filter((item) => item.status === "completed")
-        .length,
+      completed: doctorAppointments.filter(
+        (item) => item.status === "completed"
+      ).length,
+      cancelled: doctorAppointments.filter(
+        (item) => item.status === "cancelled"
+      ).length,
     };
   }, [doctorAppointments]);
 
   return (
     <DashboardLayout title="Doctor Appointments">
-      <section className="mb-6 grid gap-4 md:grid-cols-4">
+      <section className="mb-6 grid gap-4 md:grid-cols-5">
         <StatCard label="Total" value={stats.total} />
         <StatCard label="Pending" value={stats.pending} />
         <StatCard label="Approved" value={stats.approved} />
         <StatCard label="Completed" value={stats.completed} />
+        <StatCard label="Cancelled" value={stats.cancelled} />
       </section>
 
       <section className="mb-6 flex flex-wrap gap-3">
@@ -159,8 +150,20 @@ function DoctorAppointmentCard({ appointment, onView }) {
           </p>
 
           <p className="mt-3 line-clamp-2 text-sm leading-6 text-[#6B7280]">
-            {appointment.reason}
+            {appointment.reason || "No reason provided"}
           </p>
+
+          {appointment.status === "cancelled" && (
+            <div className="mt-4 rounded-2xl bg-slate-100 p-4">
+              <p className="text-xs font-bold uppercase text-slate-600">
+                Cancelled by {appointment.cancellation?.cancelledBy || "N/A"}
+              </p>
+
+              <p className="mt-1 line-clamp-2 text-sm font-medium text-slate-700">
+                {appointment.cancellation?.reason || "No reason provided"}
+              </p>
+            </div>
+          )}
         </div>
 
         <div className="flex shrink-0 flex-col gap-3 md:items-end">

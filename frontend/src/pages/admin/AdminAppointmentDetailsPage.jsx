@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import {
   ArrowLeft,
+  CalendarDays,
   Check,
   FileText,
   Mail,
@@ -8,7 +9,6 @@ import {
   UserRound,
   VenusAndMars,
   Droplet,
-  CalendarDays,
   X,
 } from "lucide-react";
 import { Link, useParams } from "react-router-dom";
@@ -16,13 +16,17 @@ import toast from "react-hot-toast";
 
 import DashboardLayout from "../../components/layout/DashboardLayout";
 import RejectAppointmentModal from "../../components/appointments/RejectAppointmentModal";
+import CancelAppointmentModal from "../../components/appointments/CancelAppointmentModal";
 import { useAppDispatch, useAppSelector } from "../../app/hooks";
+
 import {
   approveAdminAppointment,
+  cancelAdminAppointment,
   clearAppointmentError,
   fetchAdminAppointmentDetails,
   rejectAdminAppointment,
 } from "../../features/appointment/appointmentSlice";
+
 import {
   formatAppointmentDate,
   formatAppointmentTime,
@@ -81,7 +85,6 @@ const calculateAge = (dateValue) => {
   const today = new Date();
 
   let age = today.getFullYear() - dob.getFullYear();
-
   const monthDiff = today.getMonth() - dob.getMonth();
 
   if (
@@ -94,19 +97,37 @@ const calculateAge = (dateValue) => {
   return `${age} years`;
 };
 
+const formatDateTime = (value) => {
+  if (!value) return "N/A";
+
+  return new Date(value).toLocaleString("en-IN", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+};
+
 function AdminAppointmentDetailsPage() {
   const { appointmentId } = useParams();
   const dispatch = useAppDispatch();
 
-  const { selectedAppointment, isLoadingDetails, isDeciding, error } =
-    useAppSelector((state) => state.appointments);
+  const {
+    selectedAppointment,
+    isLoadingDetails,
+    isDeciding,
+    isCancelling,
+    error,
+  } = useAppSelector((state) => state.appointments);
 
   const [rejectModalOpen, setRejectModalOpen] = useState(false);
+  const [cancelModalOpen, setCancelModalOpen] = useState(false);
 
   useEffect(() => {
-    if (appointmentId) {
-      dispatch(fetchAdminAppointmentDetails(appointmentId));
-    }
+    if (!appointmentId) return;
+
+    dispatch(fetchAdminAppointmentDetails(appointmentId));
   }, [dispatch, appointmentId]);
 
   useEffect(() => {
@@ -126,6 +147,7 @@ function AdminAppointmentDetailsPage() {
       ).unwrap();
 
       toast.success(result.message || "Appointment approved");
+      dispatch(fetchAdminAppointmentDetails(appointmentId));
     } catch (err) {
       toast.error(err || "Failed to approve appointment");
     }
@@ -148,10 +170,37 @@ function AdminAppointmentDetailsPage() {
 
       toast.success(result.message || "Appointment rejected");
       setRejectModalOpen(false);
+      dispatch(fetchAdminAppointmentDetails(appointmentId));
     } catch (err) {
       toast.error(err || "Failed to reject appointment");
     }
   };
+
+  const handleCancelAppointment = async ({ reasonType, reason }) => {
+    if (!reason.trim()) {
+      toast.error("Cancellation reason is required");
+      return;
+    }
+
+    try {
+      const result = await dispatch(
+        cancelAdminAppointment({
+          appointmentId,
+          reasonType,
+          reason,
+        })
+      ).unwrap();
+
+      toast.success(result.message || "Appointment cancelled");
+      setCancelModalOpen(false);
+      dispatch(fetchAdminAppointmentDetails(appointmentId));
+    } catch (err) {
+      toast.error(err || "Failed to cancel appointment");
+    }
+  };
+
+  const canCancel =
+    appointment && ["pending", "approved"].includes(appointment.status);
 
   return (
     <DashboardLayout title="Appointment Details">
@@ -175,14 +224,26 @@ function AdminAppointmentDetailsPage() {
         <div className="grid gap-6 lg:grid-cols-[1fr_330px]">
           <section className="space-y-6">
             <div className="rounded-3xl border border-[#EEF0F6] bg-white p-7 shadow-[0_18px_48px_rgba(17,24,39,0.05)]">
-              <h2 className="text-2xl font-extrabold text-[#111827]">
-                {getPatientName(appointment)}
-              </h2>
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                <div>
+                  <h2 className="text-2xl font-extrabold text-[#111827]">
+                    {getPatientName(appointment)}
+                  </h2>
 
-              <p className="mt-2 text-sm font-bold text-[#6B7280]">
-                Doctor: Dr. {getDoctorName(appointment)} ·{" "}
-                {getSpecialtyName(appointment)}
-              </p>
+                  <p className="mt-2 text-sm font-bold text-[#6B7280]">
+                    Doctor: Dr. {getDoctorName(appointment)} ·{" "}
+                    {getSpecialtyName(appointment)}
+                  </p>
+                </div>
+
+                <span
+                  className={`w-fit rounded-full border px-4 py-2 text-sm font-extrabold capitalize ${getStatusBadgeClass(
+                    appointment.status
+                  )}`}
+                >
+                  {getCleanStatus(appointment.status)}
+                </span>
+              </div>
 
               <div className="mt-5 grid gap-4 md:grid-cols-3">
                 <InfoBox
@@ -263,6 +324,11 @@ function AdminAppointmentDetailsPage() {
                 label="Reports"
                 value={`${appointment.reports?.length || 0}`}
               />
+
+              <InfoRow
+                label="Completed At"
+                value={formatDateTime(appointment.completedAt)}
+              />
             </div>
 
             {appointment.status === "pending" && (
@@ -288,6 +354,60 @@ function AdminAppointmentDetailsPage() {
                 </button>
               </div>
             )}
+
+            {canCancel && (
+              <button
+                type="button"
+                disabled={isCancelling}
+                onClick={() => setCancelModalOpen(true)}
+                className="mt-3 inline-flex h-11 w-full items-center justify-center gap-2 rounded-2xl bg-red-50 text-sm font-extrabold text-red-600 transition hover:bg-red-100 disabled:opacity-60"
+              >
+                <X size={16} />
+                {isCancelling ? "Cancelling..." : "Cancel Appointment"}
+              </button>
+            )}
+
+            {appointment.status === "rejected" && (
+              <div className="mt-6 rounded-2xl bg-red-50 p-4">
+                <p className="text-xs font-bold uppercase text-red-500">
+                  Rejected by {appointment.rejection?.rejectedBy || "N/A"}
+                </p>
+
+                <p className="mt-2 text-sm leading-6 text-red-700">
+                  {appointment.rejection?.reason || "No reason provided"}
+                </p>
+              </div>
+            )}
+
+            {appointment.status === "cancelled" && (
+              <div className="mt-6 rounded-2xl bg-slate-100 p-4">
+                <p className="text-xs font-bold uppercase text-slate-600">
+                  Cancelled by {appointment.cancellation?.cancelledBy || "N/A"}
+                </p>
+
+                <p className="mt-2 text-sm leading-6 text-slate-700">
+                  {appointment.cancellation?.reason || "No reason provided"}
+                </p>
+
+                {appointment.paymentStatus === "refunded" && (
+                  <p className="mt-3 rounded-xl bg-green-50 px-4 py-3 text-xs font-extrabold text-green-700">
+                    Refund credited to patient wallet.
+                  </p>
+                )}
+              </div>
+            )}
+
+            {appointment.status === "completed" && (
+              <div className="mt-6 rounded-2xl bg-green-50 p-4">
+                <p className="text-xs font-bold uppercase text-green-600">
+                  Completed
+                </p>
+
+                <p className="mt-2 text-sm leading-6 text-green-700">
+                  This appointment has already been completed.
+                </p>
+              </div>
+            )}
           </aside>
         </div>
       )}
@@ -298,6 +418,15 @@ function AdminAppointmentDetailsPage() {
         appointment={appointment}
         onClose={() => setRejectModalOpen(false)}
         onConfirm={handleReject}
+      />
+
+      <CancelAppointmentModal
+        open={cancelModalOpen}
+        loading={isCancelling}
+        actor="admin"
+        appointment={appointment}
+        onClose={() => setCancelModalOpen(false)}
+        onConfirm={handleCancelAppointment}
       />
     </DashboardLayout>
   );
@@ -323,29 +452,27 @@ function PatientDetailsCard({ patient }) {
 
   return (
     <div className="rounded-3xl border border-[#EEF0F6] bg-white p-7 shadow-[0_18px_48px_rgba(17,24,39,0.05)]">
-      <div className="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-center gap-4">
-          <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-[#F0F1FF] text-lg font-extrabold text-[#9381FF]">
-            {profileImage ? (
-              <img
-                src={profileImage}
-                alt={patient.username || "Patient"}
-                className="h-full w-full object-cover"
-              />
-            ) : (
-              <UserRound size={24} />
-            )}
-          </div>
+      <div className="flex items-center gap-4">
+        <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-[#F0F1FF] text-lg font-extrabold text-[#9381FF]">
+          {profileImage ? (
+            <img
+              src={profileImage}
+              alt={patient.username || "Patient"}
+              className="h-full w-full object-cover"
+            />
+          ) : (
+            <UserRound size={24} />
+          )}
+        </div>
 
-          <div>
-            <h2 className="text-xl font-extrabold text-[#111827]">
-              Patient Details
-            </h2>
+        <div>
+          <h2 className="text-xl font-extrabold text-[#111827]">
+            Patient Details
+          </h2>
 
-            <p className="mt-1 text-sm font-semibold text-[#6B7280]">
-              Medical and contact information of the patient.
-            </p>
-          </div>
+          <p className="mt-1 text-sm font-semibold text-[#6B7280]">
+            Medical and contact information of the patient.
+          </p>
         </div>
       </div>
 

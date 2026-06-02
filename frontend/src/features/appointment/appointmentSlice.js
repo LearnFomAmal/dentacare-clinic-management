@@ -16,6 +16,9 @@ import {
   markPaymentSuccessApi,
   rejectAdminAppointmentApi,
   rejectDoctorAppointmentApi,
+  cancelAdminAppointmentApi,
+  cancelDoctorAppointmentApi,
+  cancelMyAppointmentApi,
 } from "./appointmentService";
 
 const INITIATED_APPOINTMENT_KEY = "dentacare_initiated_appointment";
@@ -165,7 +168,61 @@ export const confirmPaymentFailed = createAsyncThunk(
     }
   }
 );
+export const cancelMyAppointment = createAsyncThunk(
+  "appointments/cancelMyAppointment",
+  async (payload, { rejectWithValue }) => {
+    try {
+      const response = await cancelMyAppointmentApi(payload);
 
+      return {
+        appointment: response.data,
+        message: response.message || "Appointment cancelled successfully",
+      };
+    } catch (error) {
+      return rejectWithValue(
+        getErrorMessage(error, "Failed to cancel appointment")
+      );
+    }
+  }
+);
+
+export const cancelDoctorAppointment = createAsyncThunk(
+  "appointments/cancelDoctorAppointment",
+  async (payload, { rejectWithValue }) => {
+    try {
+      const response = await cancelDoctorAppointmentApi(payload);
+
+      return {
+        appointment: response.data,
+        message:
+          response.message || "Appointment cancelled by doctor successfully",
+      };
+    } catch (error) {
+      return rejectWithValue(
+        getErrorMessage(error, "Failed to cancel appointment")
+      );
+    }
+  }
+);
+
+export const cancelAdminAppointment = createAsyncThunk(
+  "appointments/cancelAdminAppointment",
+  async (payload, { rejectWithValue }) => {
+    try {
+      const response = await cancelAdminAppointmentApi(payload);
+
+      return {
+        appointment: response.data,
+        message:
+          response.message || "Appointment cancelled by admin successfully",
+      };
+    } catch (error) {
+      return rejectWithValue(
+        getErrorMessage(error, "Failed to cancel appointment")
+      );
+    }
+  }
+);
 export const fetchMyAppointments = createAsyncThunk(
   "appointments/fetchMyAppointments",
   async (params = {}, { rejectWithValue }) => {
@@ -370,6 +427,7 @@ const appointmentSlice = createSlice({
     isPaying: false,
     isDeciding: false,
     isCompleting: false,
+    isCancelling: false,
 
     error: null,
   },
@@ -678,7 +736,67 @@ const appointmentSlice = createSlice({
       .addCase(rejectAdminAppointment.rejected, (state, action) => {
         state.isDeciding = false;
         state.error = action.payload;
-      });
+      })
+
+      .addCase(cancelMyAppointment.pending, (state) => {
+  state.isCancelling = true;
+  state.error = null;
+})
+
+.addCase(cancelMyAppointment.fulfilled, (state, action) => {
+  state.isCancelling = false;
+  state.selectedAppointment = action.payload.appointment;
+  state.myAppointments = updateAppointmentInList(
+    state.myAppointments,
+    action.payload.appointment
+  );
+  state.error = null;
+})
+
+.addCase(cancelMyAppointment.rejected, (state, action) => {
+  state.isCancelling = false;
+  state.error = action.payload;
+})
+
+.addCase(cancelDoctorAppointment.pending, (state) => {
+  state.isCancelling = true;
+  state.error = null;
+})
+
+.addCase(cancelDoctorAppointment.fulfilled, (state, action) => {
+  state.isCancelling = false;
+  state.selectedAppointment = action.payload.appointment;
+  state.doctorAppointments = updateAppointmentInList(
+    state.doctorAppointments,
+    action.payload.appointment
+  );
+  state.error = null;
+})
+
+.addCase(cancelDoctorAppointment.rejected, (state, action) => {
+  state.isCancelling = false;
+  state.error = action.payload;
+})
+
+.addCase(cancelAdminAppointment.pending, (state) => {
+  state.isCancelling = true;
+  state.error = null;
+})
+
+.addCase(cancelAdminAppointment.fulfilled, (state, action) => {
+  state.isCancelling = false;
+  state.selectedAppointment = action.payload.appointment;
+  state.adminAppointments = updateAppointmentInList(
+    state.adminAppointments,
+    action.payload.appointment
+  );
+  state.error = null;
+})
+
+.addCase(cancelAdminAppointment.rejected, (state, action) => {
+  state.isCancelling = false;
+  state.error = action.payload;
+});
   },
 });
 

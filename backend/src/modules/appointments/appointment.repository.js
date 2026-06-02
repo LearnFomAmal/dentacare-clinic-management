@@ -24,31 +24,6 @@ export const findDoctorForBooking = (doctorId) => {
   );
 };
 
-export const findSlotDayForBooking = ({ slotDayId, doctorId }) => {
-  return DoctorSlot.findOne({
-    _id: slotDayId,
-    doctorId,
-  });
-};
-
-export const findExistingPendingPaymentAppointment = ({
-  patientId,
-  doctorId,
-  appointmentDate,
-  slotId,
-}) => {
-  return Appointment.findOne({
-    patientId,
-    doctorId,
-    appointmentDate,
-    slotId,
-    status: "pending_payment",
-    paymentStatus: {
-      $in: ["unpaid", "failed"],
-    },
-  });
-};
-
 export const findPatientReportsByIds = ({ patientId, reportIds }) => {
   return Report.find({
     _id: { $in: reportIds },
@@ -61,10 +36,7 @@ export const createAppointment = async ({ payload, session = null }) => {
   return appointments[0];
 };
 
-export const findAppointmentByIdForPatient = ({
-  appointmentId,
-  patientId,
-}) => {
+export const findAppointmentByIdForPatient = ({ appointmentId, patientId }) => {
   return Appointment.findOne({
     _id: appointmentId,
     patientId,
@@ -73,10 +45,7 @@ export const findAppointmentByIdForPatient = ({
     .lean();
 };
 
-export const findPatientAppointments = ({
-  patientId,
-  status,
-}) => {
+export const findPatientAppointments = ({ patientId, status }) => {
   const filter = {
     patientId,
   };
@@ -95,10 +64,7 @@ export const findPatientAppointments = ({
     .lean();
 };
 
-export const findDoctorAppointments = ({
-  doctorId,
-  status,
-}) => {
+export const findDoctorAppointments = ({ doctorId, status }) => {
   const filter = {
     doctorId,
     paymentStatus: {
@@ -120,10 +86,7 @@ export const findDoctorAppointments = ({
     .lean();
 };
 
-export const findDoctorAppointmentById = ({
-  doctorId,
-  appointmentId,
-}) => {
+export const findDoctorAppointmentById = ({ doctorId, appointmentId }) => {
   return Appointment.findOne({
     _id: appointmentId,
     doctorId,
@@ -132,9 +95,7 @@ export const findDoctorAppointmentById = ({
     .lean();
 };
 
-export const findAdminAppointments = ({
-  status,
-}) => {
+export const findAdminAppointments = ({ status }) => {
   const filter = {};
 
   if (status) {
@@ -157,6 +118,17 @@ export const findAdminAppointmentById = (appointmentId) => {
     .lean();
 };
 
+export const findAppointmentForPatientAction = ({
+  patientId,
+  appointmentId,
+  session = null,
+}) => {
+  return Appointment.findOne({
+    _id: appointmentId,
+    patientId,
+  }).session(session);
+};
+
 export const findAppointmentForDoctorAction = ({
   doctorId,
   appointmentId,
@@ -175,29 +147,11 @@ export const findAppointmentForAdminAction = ({
   return Appointment.findById(appointmentId).session(session);
 };
 
-export const findSlotDayById = ({
-  slotDayId,
-  doctorId,
-  session = null,
-}) => {
+export const findSlotDayById = ({ slotDayId, doctorId, session = null }) => {
   return DoctorSlot.findOne({
     _id: slotDayId,
     doctorId,
   }).session(session);
-};
-
-export const saveAppointment = ({
-  appointment,
-  session = null,
-}) => {
-  return appointment.save({ session });
-};
-
-export const saveSlotDay = ({
-  slotDay,
-  session = null,
-}) => {
-  return slotDay.save({ session });
 };
 
 export const findSlotDayForBookingWithSession = ({
@@ -209,6 +163,14 @@ export const findSlotDayForBookingWithSession = ({
     _id: slotDayId,
     doctorId,
   }).session(session);
+};
+
+export const saveAppointment = ({ appointment, session = null }) => {
+  return appointment.save({ session });
+};
+
+export const saveSlotDay = ({ slotDay, session = null }) => {
+  return slotDay.save({ session });
 };
 
 export const updateReportsAsAttached = ({
@@ -230,12 +192,9 @@ export const updateReportsAsAttached = ({
 };
 
 // ==============================
-// DAY 18 COMPLETION HELPERS
+// COMPLETION HELPERS
 // ==============================
-export const findPatientForCompletion = ({
-  patientId,
-  session = null,
-}) => {
+export const findPatientForCompletion = ({ patientId, session = null }) => {
   return User.findById(patientId)
     .select("_id username email referral accountStatus walletSummary")
     .session(session);
@@ -282,10 +241,7 @@ export const claimReferralRewardForCompletion = ({
   );
 };
 
-export const markReferralRewardCredited = ({
-  referralId,
-  session = null,
-}) => {
+export const markReferralRewardCredited = ({ referralId, session = null }) => {
   return Referral.findOneAndUpdate(
     {
       _id: referralId,

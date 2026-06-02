@@ -4,6 +4,9 @@ import { sendResponse } from "../../shared/utils/response.js";
 import {
   approveAppointmentByAdminService,
   approveAppointmentByDoctorService,
+  cancelAppointmentByAdminService,
+  cancelAppointmentByDoctorService,
+  cancelAppointmentByPatientService,
   completeAppointmentByDoctorService,
   getAdminAppointmentDetailsService,
   getAdminAppointmentsService,
@@ -24,24 +27,22 @@ const getDoctorId = (req) => {
   return req.doctor?.doctorId || req.doctor?._id || req.doctor?.id;
 };
 
-export const initiateAppointmentController = asyncHandler(
-  async (req, res) => {
-    const patientId = getPatientId(req);
+export const initiateAppointmentController = asyncHandler(async (req, res) => {
+  const patientId = getPatientId(req);
 
-    const appointment = await initiateAppointmentService({
-      patientId,
-      body: req.body,
-    });
+  const appointment = await initiateAppointmentService({
+    patientId,
+    body: req.body,
+  });
 
-    sendResponse(
-      res,
-      201,
-      true,
-      "Appointment initiated successfully",
-      appointment
-    );
-  }
-);
+  sendResponse(
+    res,
+    201,
+    true,
+    "Appointment initiated successfully",
+    appointment
+  );
+});
 
 export const getPatientAppointmentDetailsController = asyncHandler(
   async (req, res) => {
@@ -62,21 +63,39 @@ export const getPatientAppointmentDetailsController = asyncHandler(
   }
 );
 
-export const getMyAppointmentsController = asyncHandler(
+export const getMyAppointmentsController = asyncHandler(async (req, res) => {
+  const patientId = getPatientId(req);
+
+  const appointments = await getMyAppointmentsService({
+    patientId,
+    query: req.query,
+  });
+
+  sendResponse(
+    res,
+    200,
+    true,
+    "My appointments fetched successfully",
+    appointments
+  );
+});
+
+export const cancelAppointmentByPatientController = asyncHandler(
   async (req, res) => {
     const patientId = getPatientId(req);
 
-    const appointments = await getMyAppointmentsService({
+    const appointment = await cancelAppointmentByPatientService({
       patientId,
-      query: req.query,
+      appointmentId: req.params.appointmentId,
+      body: req.body,
     });
 
     sendResponse(
       res,
       200,
       true,
-      "My appointments fetched successfully",
-      appointments
+      "Appointment cancelled successfully",
+      appointment
     );
   }
 );
@@ -119,38 +138,6 @@ export const getDoctorAppointmentDetailsController = asyncHandler(
   }
 );
 
-export const getAdminAppointmentsController = asyncHandler(
-  async (req, res) => {
-    const appointments = await getAdminAppointmentsService({
-      query: req.query,
-    });
-
-    sendResponse(
-      res,
-      200,
-      true,
-      "Admin appointments fetched successfully",
-      appointments
-    );
-  }
-);
-
-export const getAdminAppointmentDetailsController = asyncHandler(
-  async (req, res) => {
-    const appointment = await getAdminAppointmentDetailsService({
-      appointmentId: req.params.appointmentId,
-    });
-
-    sendResponse(
-      res,
-      200,
-      true,
-      "Admin appointment details fetched successfully",
-      appointment
-    );
-  }
-);
-
 export const approveAppointmentByDoctorController = asyncHandler(
   async (req, res) => {
     const doctorId = getDoctorId(req);
@@ -160,13 +147,7 @@ export const approveAppointmentByDoctorController = asyncHandler(
       appointmentId: req.params.appointmentId,
     });
 
-    sendResponse(
-      res,
-      200,
-      true,
-      "Appointment approved successfully",
-      appointment
-    );
+    sendResponse(res, 200, true, "Appointment approved successfully", appointment);
   }
 );
 
@@ -180,13 +161,7 @@ export const rejectAppointmentByDoctorController = asyncHandler(
       body: req.body,
     });
 
-    sendResponse(
-      res,
-      200,
-      true,
-      "Appointment rejected successfully",
-      appointment
-    );
+    sendResponse(res, 200, true, "Appointment rejected successfully", appointment);
   }
 );
 
@@ -204,6 +179,56 @@ export const completeAppointmentByDoctorController = asyncHandler(
       200,
       true,
       "Appointment marked as completed successfully",
+      appointment
+    );
+  }
+);
+
+export const cancelAppointmentByDoctorController = asyncHandler(
+  async (req, res) => {
+    const doctorId = getDoctorId(req);
+
+    const appointment = await cancelAppointmentByDoctorService({
+      doctorId,
+      appointmentId: req.params.appointmentId,
+      body: req.body,
+    });
+
+    sendResponse(
+      res,
+      200,
+      true,
+      "Appointment cancelled by doctor successfully",
+      appointment
+    );
+  }
+);
+
+export const getAdminAppointmentsController = asyncHandler(async (req, res) => {
+  const appointments = await getAdminAppointmentsService({
+    query: req.query,
+  });
+
+  sendResponse(
+    res,
+    200,
+    true,
+    "Admin appointments fetched successfully",
+    appointments
+  );
+});
+
+export const getAdminAppointmentDetailsController = asyncHandler(
+  async (req, res) => {
+    const appointment = await getAdminAppointmentDetailsService({
+      appointmentId: req.params.appointmentId,
+    });
+
+    sendResponse(
+      res,
+      200,
+      true,
+      "Admin appointment details fetched successfully",
       appointment
     );
   }
@@ -237,6 +262,23 @@ export const rejectAppointmentByAdminController = asyncHandler(
       200,
       true,
       "Appointment rejected by admin successfully",
+      appointment
+    );
+  }
+);
+
+export const cancelAppointmentByAdminController = asyncHandler(
+  async (req, res) => {
+    const appointment = await cancelAppointmentByAdminService({
+      appointmentId: req.params.appointmentId,
+      body: req.body,
+    });
+
+    sendResponse(
+      res,
+      200,
+      true,
+      "Appointment cancelled by admin successfully",
       appointment
     );
   }

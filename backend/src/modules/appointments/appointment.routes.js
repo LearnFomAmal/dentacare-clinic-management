@@ -7,6 +7,9 @@ import { protectAdmin } from "../../middlewares/adminAuth.middleware.js";
 import {
   approveAppointmentByAdminController,
   approveAppointmentByDoctorController,
+  cancelAppointmentByAdminController,
+  cancelAppointmentByDoctorController,
+  cancelAppointmentByPatientController,
   completeAppointmentByDoctorController,
   getAdminAppointmentDetailsController,
   getAdminAppointmentsController,
@@ -24,17 +27,9 @@ const router = express.Router();
 // ==============================
 // PATIENT ROUTES
 // ==============================
-router.post(
-  "/initiate",
-  protect,
-  initiateAppointmentController
-);
+router.post("/initiate", protect, initiateAppointmentController);
 
-router.get(
-  "/my",
-  protect,
-  getMyAppointmentsController
-);
+router.get("/my", protect, getMyAppointmentsController);
 
 router.get(
   "/my/:appointmentId",
@@ -42,14 +37,16 @@ router.get(
   getPatientAppointmentDetailsController
 );
 
+router.patch(
+  "/my/:appointmentId/cancel",
+  protect,
+  cancelAppointmentByPatientController
+);
+
 // ==============================
 // DOCTOR ROUTES
 // ==============================
-router.get(
-  "/doctor",
-  protectDoctor,
-  getDoctorAppointmentsController
-);
+router.get("/doctor", protectDoctor, getDoctorAppointmentsController);
 
 router.get(
   "/doctor/:appointmentId",
@@ -75,14 +72,16 @@ router.patch(
   completeAppointmentByDoctorController
 );
 
+router.patch(
+  "/doctor/:appointmentId/cancel",
+  protectDoctor,
+  cancelAppointmentByDoctorController
+);
+
 // ==============================
 // ADMIN ROUTES
 // ==============================
-router.get(
-  "/admin",
-  protectAdmin,
-  getAdminAppointmentsController
-);
+router.get("/admin", protectAdmin, getAdminAppointmentsController);
 
 router.get(
   "/admin/:appointmentId",
@@ -100,6 +99,12 @@ router.patch(
   "/admin/:appointmentId/reject",
   protectAdmin,
   rejectAppointmentByAdminController
+);
+
+router.patch(
+  "/admin/:appointmentId/cancel",
+  protectAdmin,
+  cancelAppointmentByAdminController
 );
 
 // ==============================
