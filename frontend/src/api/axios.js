@@ -17,10 +17,6 @@ const axiosInstance = axios.create({
   },
 });
 
-/**
- * Separate axios instance without interceptors.
- * Used only for refresh-token calls to avoid interceptor recursion.
- */
 const refreshAxios = axios.create({
   baseURL: API_BASE_URL,
   withCredentials: true,
@@ -44,7 +40,7 @@ const getRoleFromPath = () => {
 };
 
 const getCurrentAccountType = () => {
-  return getRoleFromPath();
+  return getAccountType() || getRoleFromPath();
 };
 
 const getRefreshEndpoint = (accountType) => {
@@ -72,6 +68,22 @@ const isAuthFreeRequest = (url = "") => {
     url.includes("/forgot-password") ||
     url.includes("/reset-password") ||
     url.includes("/verify")
+  );
+};
+
+const isBlockedOrDeletedResponse = (error) => {
+  const status = error?.response?.status;
+  const message = String(error?.response?.data?.message || "").toLowerCase();
+
+  if (status !== 403 && status !== 401) {
+    return false;
+  }
+
+  return (
+    message.includes("blocked") ||
+    message.includes("deleted") ||
+    message.includes("account blocked") ||
+    message.includes("account deleted")
   );
 };
 
@@ -110,6 +122,15 @@ axiosInstance.interceptors.response.use(
 
     const status = error?.response?.status;
     const requestUrl = originalRequest?.url || "";
+    const accountType = getCurrentAccountType();
+
+    // Important:
+    // If backend says account is blocked/deleted, do not refresh token.
+    // Immediately clear frontend auth and redirect.
+    if (isBlockedOrDeletedResponse(error)) {
+      forceLogout(accountType);
+      return Promise.reject(error);
+    }
 
     const shouldTryRefresh =
       status === 401 &&
@@ -122,7 +143,6 @@ axiosInstance.interceptors.response.use(
 
     originalRequest._retry = true;
 
-    const accountType = getCurrentAccountType();
     const refreshEndpoint = getRefreshEndpoint(accountType);
 
     if (!refreshEndpoint) {

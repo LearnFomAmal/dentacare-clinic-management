@@ -95,14 +95,36 @@ const updateAppointmentInList = (list, updatedAppointment) => {
   );
 };
 
+const removeAppointmentFromList = (list, appointmentId) => {
+  if (!appointmentId) return list;
+
+  return list.filter(
+    (appointment) => String(appointment._id) !== String(appointmentId)
+  );
+};
+
 export const initiateAppointment = createAsyncThunk(
   "appointments/initiateAppointment",
   async (payload, { rejectWithValue }) => {
     try {
       const response = await initiateAppointmentApi(payload);
 
+      const data = response.data;
+
+      if (data?.requiresTimeConflictConfirmation) {
+        return {
+          requiresTimeConflictConfirmation: true,
+          conflictAppointment: data.conflictAppointment,
+          requestedSlot: data.requestedSlot,
+          message:
+            data.message ||
+            response.message ||
+            "You already have another appointment at this time.",
+        };
+      }
+
       return {
-        appointment: response.data,
+        appointment: data,
         message: response.message || "Appointment initiated successfully",
       };
     } catch (error) {
@@ -159,9 +181,12 @@ export const confirmPaymentFailed = createAsyncThunk(
       const response = await markPaymentFailedApi(payload);
 
       return {
-        appointment: response.data?.appointment,
-        payment: response.data?.payment,
-        message: response.message || "Payment failure recorded",
+        deletedAppointmentId: response.data?.deletedAppointmentId || payload.appointmentId,
+        shouldBookAgain: response.data?.shouldBookAgain ?? true,
+        message:
+          response.data?.message ||
+          response.message ||
+          "Payment failed. Please book again.",
       };
     } catch (error) {
       return rejectWithValue(
@@ -170,6 +195,7 @@ export const confirmPaymentFailed = createAsyncThunk(
     }
   }
 );
+
 export const cancelMyAppointment = createAsyncThunk(
   "appointments/cancelMyAppointment",
   async (payload, { rejectWithValue }) => {
@@ -509,13 +535,18 @@ const appointmentSlice = createSlice({
         state.error = null;
       })
 
-      .addCase(initiateAppointment.fulfilled, (state, action) => {
-        state.isInitiating = false;
-        state.initiatedAppointment = action.payload.appointment;
-        state.error = null;
+    .addCase(initiateAppointment.fulfilled, (state, action) => {
+       state.isInitiating = false;
+         state.error = null;
 
-        saveInitiatedAppointment(action.payload.appointment);
-      })
+   if (action.payload.requiresTimeConflictConfirmation) {
+      return;
+    }
+
+    state.initiatedAppointment = action.payload.appointment;
+
+    saveInitiatedAppointment(action.payload.appointment);
+})
 
       .addCase(initiateAppointment.rejected, (state, action) => {
         state.isInitiating = false;
@@ -569,14 +600,23 @@ const appointmentSlice = createSlice({
       })
 
       .addCase(confirmPaymentFailed.fulfilled, (state, action) => {
-        state.isPaying = false;
-        state.initiatedAppointment = action.payload.appointment;
-        state.selectedAppointment = action.payload.appointment;
-        state.latestPayment = action.payload.payment;
-        state.error = null;
+  state.isPaying = false;
 
-        saveInitiatedAppointment(action.payload.appointment);
-      })
+  const deletedAppointmentId = action.payload.deletedAppointmentId;
+
+  state.initiatedAppointment = null;
+  state.selectedAppointment = null;
+  state.latestPayment = null;
+  state.latestRazorpayOrder = null;
+  state.error = null;
+
+  state.myAppointments = removeAppointmentFromList(
+    state.myAppointments,
+    deletedAppointmentId
+  );
+
+  clearStoredInitiatedAppointment();
+})
 
       .addCase(confirmPaymentFailed.rejected, (state, action) => {
         state.isPaying = false;

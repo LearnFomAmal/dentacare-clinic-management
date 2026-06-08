@@ -1,7 +1,8 @@
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   CalendarCheck,
   Clock,
+  IndianRupee,
   Settings,
   ShieldCheck,
   Stethoscope,
@@ -17,6 +18,7 @@ import {
   clearAppointmentError,
   fetchDoctorAppointments,
 } from "../../features/appointment/appointmentSlice";
+import { getMyDoctorEarningsApi } from "../../features/earnings/earningService";
 
 function DoctorDashboardPage() {
   const dispatch = useAppDispatch();
@@ -25,8 +27,34 @@ function DoctorDashboardPage() {
     (state) => state.appointments
   );
 
+  const [earnings, setEarnings] = useState(null);
+  const [isLoadingEarnings, setIsLoadingEarnings] = useState(false);
+
+  const fetchEarnings = async () => {
+    try {
+      setIsLoadingEarnings(true);
+
+      const response = await getMyDoctorEarningsApi({
+        page: 1,
+        limit: 3,
+      });
+
+      setEarnings(response.data);
+    } catch (error) {
+      const message =
+        error?.response?.data?.message ||
+        error?.message ||
+        "Failed to fetch earnings";
+
+      toast.error(message);
+    } finally {
+      setIsLoadingEarnings(false);
+    }
+  };
+
   useEffect(() => {
     dispatch(fetchDoctorAppointments());
+    fetchEarnings();
   }, [dispatch]);
 
   useEffect(() => {
@@ -48,13 +76,15 @@ function DoctorDashboardPage() {
     };
   }, [doctorAppointments]);
 
+  const totalEarned = earnings?.summary?.totalEarned || 0;
+
   return (
     <DashboardLayout
       title="Doctor Dashboard"
       description="Manage appointment requests and consultation slots."
     >
       <div className="space-y-6">
-        <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
           <DashboardStatCard
             label="Total Appointments"
             value={stats.total}
@@ -78,21 +108,27 @@ function DoctorDashboardPage() {
             value={stats.rejected}
             icon={XCircle}
           />
+
+          <DashboardStatCard
+            label="Total Earnings"
+            value={isLoadingEarnings ? "..." : `₹${totalEarned}`}
+            icon={IndianRupee}
+          />
         </section>
 
         <section className="grid gap-6 xl:grid-cols-[1fr_1fr]">
-          {/* <QuickActionCard
-            to={ROUTES.DOCTOR_APPOINTMENTS}
-            icon={CalendarCheck}
-            title="Review Appointments"
-            description="Approve or reject paid appointment requests from patients."
-          /> */}
-
           <QuickActionCard
             to={ROUTES.DOCTOR_SLOTS}
             icon={Stethoscope}
             title="Manage Slots"
             description="Add, edit, and manage your consultation availability."
+          />
+
+          <QuickActionCard
+            to={ROUTES.DOCTOR_EARNINGS}
+            icon={IndianRupee}
+            title="View Earnings"
+            description="Track completed appointment earnings and transaction history."
           />
 
           <QuickActionCard
@@ -150,14 +186,14 @@ function DoctorDashboardPage() {
                     <p className="mt-1 text-sm text-[#6B7280] dark:text-slate-400">
                       {appointment.appointmentDate
                         ? new Date(
-                            appointment.appointmentDate
+                            `${appointment.appointmentDate}T00:00:00`
                           ).toLocaleDateString("en-IN")
                         : "Date not available"}
                     </p>
                   </div>
 
                   <span className="rounded-full bg-[#F0F1FF] px-3 py-1 text-xs font-extrabold capitalize text-[#9381FF]">
-                    {appointment.status}
+                    {String(appointment.status || "").replace("_", " ")}
                   </span>
                 </div>
               ))}

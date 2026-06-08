@@ -1,36 +1,10 @@
-import { useEffect } from "react";
-import { AlertTriangle, RefreshCcw } from "lucide-react";
-import { Link, useParams } from "react-router-dom";
-import toast from "react-hot-toast";
+import { AlertTriangle } from "lucide-react";
+import { Link } from "react-router-dom";
 
 import PatientLayout from "../../components/patient/PatientLayout";
-import { useAppDispatch, useAppSelector } from "../../app/hooks";
-import {
-  clearAppointmentError,
-  fetchMyAppointmentDetails,
-} from "../../features/appointment/appointmentSlice";
+import { ROUTES } from "../../constants/routes";
 
 function PaymentFailedPage() {
-  const { appointmentId } = useParams();
-  const dispatch = useAppDispatch();
-
-  const { selectedAppointment, isLoadingDetails, error } = useAppSelector(
-    (state) => state.appointments
-  );
-
-  useEffect(() => {
-    if (appointmentId) {
-      dispatch(fetchMyAppointmentDetails(appointmentId));
-    }
-  }, [dispatch, appointmentId]);
-
-  useEffect(() => {
-    if (!error) return;
-
-    toast.error(error);
-    dispatch(clearAppointmentError());
-  }, [error, dispatch]);
-
   return (
     <PatientLayout>
       <main className="mx-auto flex min-h-[calc(100vh-78px)] max-w-[560px] items-center px-6 py-10">
@@ -44,37 +18,24 @@ function PaymentFailedPage() {
           </h1>
 
           <p className="mt-3 text-sm leading-6 text-[#6B7280]">
-            Your payment was not completed. No amount has been confirmed as
-            paid.
+            Your payment was not completed. The temporary appointment has been
+            removed and the slot has been released.
           </p>
 
-          {isLoadingDetails ? (
-            <div className="mt-6 rounded-2xl bg-[#F8FAFC] p-5 text-sm font-bold text-[#6B7280]">
-              Loading details...
-            </div>
-          ) : selectedAppointment ? (
-            <div className="mt-6 rounded-2xl border border-red-100 bg-red-50 p-5 text-left">
-              <p className="text-sm font-extrabold text-red-700">
-                Possible reason
-              </p>
-
-              <p className="mt-2 text-sm leading-6 text-red-600">
-                The payment was cancelled, declined, or interrupted. Try again
-                from the payment page.
-              </p>
-            </div>
-          ) : null}
+          <p className="mt-4 rounded-2xl border border-red-100 bg-red-50 p-5 text-sm font-bold leading-6 text-red-700">
+            Please go back to the doctor page, select an available slot again,
+            and start a new booking.
+          </p>
 
           <Link
-            to={`/payment/${appointmentId}`}
-            className="mt-6 inline-flex h-12 w-full items-center justify-center gap-2 rounded-2xl bg-[#9381FF] text-sm font-extrabold text-white shadow-[0_14px_30px_rgba(147,129,255,0.26)] transition hover:bg-[#7E6EF2]"
+            to={ROUTES.FIND_DOCTORS}
+            className="mt-6 inline-flex h-12 w-full items-center justify-center rounded-2xl bg-[#9381FF] text-sm font-extrabold text-white shadow-[0_14px_30px_rgba(147,129,255,0.26)] transition hover:bg-[#7E6EF2]"
           >
-            <RefreshCcw size={17} />
-            Try Payment Again
+            Book Again
           </Link>
 
           <Link
-            to="/my-appointments"
+            to={ROUTES.MY_APPOINTMENTS}
             className="mt-3 inline-flex h-12 w-full items-center justify-center rounded-2xl border border-red-200 text-sm font-extrabold text-red-600 transition hover:bg-red-50"
           >
             Back to Appointments

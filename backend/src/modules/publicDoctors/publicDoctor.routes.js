@@ -1,5 +1,7 @@
 import express from "express";
 
+import { protect } from "../../middlewares/auth.middleware.js";
+
 import {
   getPublicDoctorAvailableSlotsController,
   getPublicDoctorDetailsController,
@@ -12,6 +14,7 @@ router.get("/", getPublicDoctorsController);
 
 router.get(
   "/:doctorId/available-slots",
+  protect,
   getPublicDoctorAvailableSlotsController
 );
 

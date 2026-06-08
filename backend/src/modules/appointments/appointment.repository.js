@@ -4,7 +4,8 @@ import DoctorSlot from "../../models/DoctorSlot.js";
 import Referral from "../../models/Referral.js";
 import Report from "../../models/Report.js";
 import User from "../../models/User.js";
-
+import Payment from "../../models/Payment.js";
+import DoctorEarning from "../../models/DoctorEarning.js";
 const appointmentPopulate = [
   {
     path: "patientId",
@@ -61,6 +62,58 @@ export const findPatientAppointments = ({ patientId, status }) => {
       startTime: -1,
       createdAt: -1,
     })
+    .lean();
+};
+
+export const findPatientOverlappingAppointments = ({
+  patientId,
+  appointmentDate,
+  startTime,
+  endTime,
+  excludeDoctorId = null,
+  session = null,
+}) => {
+  const filter = {
+    patientId,
+    appointmentDate,
+
+    status: {
+      $in: ["pending_payment", "pending", "approved"],
+    },
+
+    paymentStatus: {
+      $in: ["unpaid", "paid"],
+    },
+
+    startTime: {
+      $lt: endTime,
+    },
+
+    endTime: {
+      $gt: startTime,
+    },
+  };
+
+  if (excludeDoctorId) {
+    filter.doctorId = {
+      $ne: excludeDoctorId,
+    };
+  }
+
+  return Appointment.find(filter)
+    .populate([
+      {
+        path: "doctorId",
+        select:
+          "firstName lastName specialization professionalInfo accountStatus",
+      },
+    ])
+    .sort({
+      appointmentDate: 1,
+      startTime: 1,
+      createdAt: -1,
+    })
+    .session(session)
     .lean();
 };
 
@@ -256,4 +309,71 @@ export const markReferralRewardCredited = ({ referralId, session = null }) => {
       session,
     }
   );
+};
+
+export const findAutoExpirablePendingAppointments = ({ nowDate, nowTime }) => {
+  return Appointment.find({
+    status: "pending",
+    paymentStatus: "paid",
+    $or: [
+      {
+        appointmentDate: {
+          $lt: nowDate,
+        },
+      },
+      {
+        appointmentDate: nowDate,
+        endTime: {
+          $lte: nowTime,
+        },
+      },
+    ],
+  });
+};
+
+export const findPendingPaymentAppointmentForReservedSlot = ({
+  appointmentId,
+  patientId,
+  doctorId,
+  slotDayId,
+  slotId,
+  session = null,
+}) => {
+  return Appointment.findOne({
+    _id: appointmentId,
+    patientId,
+    doctorId,
+    slotDayId,
+    slotId,
+    status: "pending_payment",
+    paymentStatus: "unpaid",
+    "reservation.reservedUntil": {
+      $gt: new Date(),
+    },
+  }).session(session);
+};
+
+export const findPaidPaymentForAppointment = ({
+  appointmentId,
+  session = null,
+}) => {
+  return Payment.findOne({
+    appointmentId,
+    status: "paid",
+  }).session(session);
+};
+
+export const findDoctorEarningByAppointmentId = ({
+  appointmentId,
+  session = null,
+}) => {
+  return DoctorEarning.findOne({
+    appointmentId,
+  }).session(session);
+};
+
+export const createDoctorEarning = async ({ payload, session = null }) => {
+  const earnings = await DoctorEarning.create([payload], { session });
+
+  return earnings[0];
 };

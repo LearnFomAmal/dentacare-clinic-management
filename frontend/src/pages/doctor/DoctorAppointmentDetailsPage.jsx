@@ -32,11 +32,15 @@ import {
 } from "../../features/appointment/appointmentSlice";
 
 import {
+  canCompleteAppointment,
+  canDecideAppointment,
   formatAppointmentDate,
   formatAppointmentTime,
+  getAppointmentDisplayStatus,
   getCleanStatus,
   getPatientName,
   getStatusBadgeClass,
+  isAppointmentEndTimePast,
 } from "../../utils/appointmentUi";
 
 import {
@@ -182,9 +186,14 @@ function DoctorAppointmentDetailsPage() {
       (report) => report.reportType !== "prescription"
     ) || [];
 
-  const canApproveOrReject = appointment?.status === "pending";
-  const canComplete = appointment?.status === "approved";
+  const canApproveOrReject = canDecideAppointment(appointment);
+  const canComplete = canCompleteAppointment(appointment);
   const canUploadPrescription = appointment?.status === "completed";
+  const isPastAppointment = isAppointmentEndTimePast(appointment);
+  const isApprovedButNotReadyToComplete =
+    appointment?.status === "approved" && !isPastAppointment;
+  const isApprovedAwaitingCompletion =
+    appointment?.status === "approved" && isPastAppointment;
 
   const handleApprove = async () => {
     try {
@@ -350,7 +359,7 @@ function DoctorAppointmentDetailsPage() {
                   appointment.status
                 )}`}
               >
-                {getCleanStatus(appointment.status)}
+                {getAppointmentDisplayStatus(appointment)}
               </span>
             </div>
 
@@ -419,7 +428,13 @@ function DoctorAppointmentDetailsPage() {
                 </button>
               </div>
             )}
-
+               {isPastAppointment && appointment.status === "pending" && (
+  <StatusMessage
+    type="warning"
+    title="Appointment time over"
+    message="This pending appointment can no longer be approved or rejected. It will be marked as expired automatically."
+  />
+)}
             {canComplete && (
               <div className="mt-6 space-y-3">
                 <button
@@ -438,7 +453,23 @@ function DoctorAppointmentDetailsPage() {
                 </p>
               </div>
             )}
+           
+                       {isApprovedButNotReadyToComplete && (
+              <StatusMessage
+                type="warning"
+                title="Consultation not finished yet"
+                message="This appointment is approved, but it can be completed only after the consultation end time."
+              />
+            )}
 
+            {isApprovedAwaitingCompletion && (
+              <StatusMessage
+                type="warning"
+                title="Approved - Awaiting Completion"
+                message="The consultation time is over. Please complete the appointment after checking the patient physically."
+              />
+            )}
+            
             {appointment.status === "completed" && (
               <StatusMessage
                 type="success"
@@ -523,7 +554,7 @@ function AppointmentHeaderCard({ appointment, patientInfo }) {
             appointment.status
           )}`}
         >
-          {getCleanStatus(appointment.status)}
+       {getAppointmentDisplayStatus(appointment)}
         </span>
       </div>
 

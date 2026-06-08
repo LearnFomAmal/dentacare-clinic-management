@@ -7,25 +7,19 @@ import {
   getPublicDoctorsService,
 } from "./publicDoctor.service.js";
 
-export const getPublicDoctorsController = asyncHandler(
-  async (req, res) => {
-    const data = await getPublicDoctorsService(req.query);
+const getPatientId = (req) => {
+  return req.user?.userId || req.user?._id || req.user?.id;
+};
 
-    sendResponse(
-      res,
-      200,
-      true,
-      "Doctors fetched successfully",
-      data
-    );
-  }
-);
+export const getPublicDoctorsController = asyncHandler(async (req, res) => {
+  const data = await getPublicDoctorsService(req.query);
+
+  sendResponse(res, 200, true, "Doctors fetched successfully", data);
+});
 
 export const getPublicDoctorDetailsController = asyncHandler(
   async (req, res) => {
-    const doctor = await getPublicDoctorDetailsService(
-      req.params.doctorId
-    );
+    const doctor = await getPublicDoctorDetailsService(req.params.doctorId);
 
     sendResponse(
       res,
@@ -37,12 +31,15 @@ export const getPublicDoctorDetailsController = asyncHandler(
   }
 );
 
-export const getPublicDoctorAvailableSlotsController =
-  asyncHandler(async (req, res) => {
-    const data = await getPublicDoctorAvailableSlotsService(
-      req.params.doctorId,
-      req.query
-    );
+export const getPublicDoctorAvailableSlotsController = asyncHandler(
+  async (req, res) => {
+    const patientId = getPatientId(req);
+
+    const data = await getPublicDoctorAvailableSlotsService({
+      doctorId: req.params.doctorId,
+      query: req.query,
+      patientId,
+    });
 
     sendResponse(
       res,
@@ -51,4 +48,5 @@ export const getPublicDoctorAvailableSlotsController =
       "Available slots fetched successfully",
       data
     );
-  });
+  }
+);

@@ -155,6 +155,11 @@ PAYMENT: {
   FAILED: "/payments/failed",
 },
 
+EARNINGS: {
+  DOCTOR_ME: "/earnings/doctor/me",
+  ADMIN_DOCTOR: (doctorId) => `/earnings/admin/doctors/${doctorId}`,
+},
+
   COUPON: {
   AVAILABLE: "/coupons/available",
   VALIDATE: "/coupons/validate",

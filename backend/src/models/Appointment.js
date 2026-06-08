@@ -167,14 +167,15 @@ const appointmentSchema = new mongoose.Schema(
 
     status: {
       type: String,
-      enum: [
-        "pending_payment",
-        "pending",
-        "approved",
-        "rejected",
-        "cancelled",
-        "completed",
-      ],
+     enum: [
+  "pending_payment",
+  "pending",
+  "approved",
+  "rejected",
+  "cancelled",
+  "completed",
+  "expired",
+],
       default: "pending_payment",
       index: true,
     },
@@ -330,7 +331,7 @@ const appointmentSchema = new mongoose.Schema(
     cancellation: {
       cancelledBy: {
         type: String,
-        enum: ["patient", "doctor", "admin", ""],
+        enum: ["patient",  "admin", ""],
         default: "",
       },
 
@@ -350,6 +351,23 @@ const appointmentSchema = new mongoose.Schema(
         type: Date,
         default: null,
       },
+      refundEligible: {
+  type: Boolean,
+  default: false,
+},
+
+refundStatus: {
+  type: String,
+  enum: ["not_applicable", "eligible", "not_eligible", "refunded", "not_refunded"],
+  default: "not_applicable",
+},
+
+refundPolicy: {
+  type: String,
+  default: "",
+  trim: true,
+},
+
     },
 
     reschedule: {
@@ -380,6 +398,10 @@ const appointmentSchema = new mongoose.Schema(
       type: Date,
       default: null,
     },
+    expiredAt: {
+     type: Date,
+     default: null,
+   },
   },
   { timestamps: true }
 );

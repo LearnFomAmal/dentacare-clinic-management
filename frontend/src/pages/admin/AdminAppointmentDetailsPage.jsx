@@ -28,13 +28,16 @@ import {
 } from "../../features/appointment/appointmentSlice";
 
 import {
+  canCancelAppointment,
+  canDecideAppointment,
   formatAppointmentDate,
   formatAppointmentTime,
-  getCleanStatus,
+  getAppointmentDisplayStatus,
   getDoctorName,
   getPatientName,
   getSpecialtyName,
   getStatusBadgeClass,
+  isAppointmentEndTimePast,
 } from "../../utils/appointmentUi";
 
 const getPatient = (appointment) => {
@@ -199,8 +202,9 @@ function AdminAppointmentDetailsPage() {
     }
   };
 
-  const canCancel =
-    appointment && ["pending", "approved"].includes(appointment.status);
+  const canCancel = canCancelAppointment(appointment);
+const canApproveOrReject = canDecideAppointment(appointment);
+const isPastAppointment = isAppointmentEndTimePast(appointment);
 
   return (
     <DashboardLayout title="Appointment Details">
@@ -241,7 +245,7 @@ function AdminAppointmentDetailsPage() {
                     appointment.status
                   )}`}
                 >
-                  {getCleanStatus(appointment.status)}
+                  {getAppointmentDisplayStatus(appointment)}
                 </span>
               </div>
 
@@ -310,7 +314,7 @@ function AdminAppointmentDetailsPage() {
                   appointment.status
                 )}`}
               >
-                {getCleanStatus(appointment.status)}
+                {getAppointmentDisplayStatus(appointment)}
               </span>
             </div>
 
@@ -331,7 +335,7 @@ function AdminAppointmentDetailsPage() {
               />
             </div>
 
-            {appointment.status === "pending" && (
+            {canApproveOrReject &&  (
               <div className="mt-6 grid gap-3">
                 <button
                   type="button"
@@ -366,7 +370,34 @@ function AdminAppointmentDetailsPage() {
                 {isCancelling ? "Cancelling..." : "Cancel Appointment"}
               </button>
             )}
+             
+{isPastAppointment && appointment.status === "pending" && (
+  <div className="mt-6 rounded-2xl bg-orange-50 p-4">
+    <p className="text-xs font-bold uppercase text-orange-600">
+      Appointment time over
+    </p>
 
+    <p className="mt-2 text-sm leading-6 text-orange-700">
+      This pending appointment can no longer be approved, rejected, cancelled,
+      or rescheduled. It will be marked as expired and refunded automatically
+      when appointment data is refreshed.
+    </p>
+  </div>
+)}
+
+{isPastAppointment && appointment.status === "approved" && (
+  <div className="mt-6 rounded-2xl bg-orange-50 p-4">
+    <p className="text-xs font-bold uppercase text-orange-600">
+      Approved - Awaiting Completion
+    </p>
+
+    <p className="mt-2 text-sm leading-6 text-orange-700">
+      This approved appointment time has passed. It should remain approved until
+      the doctor physically checks the patient and marks it as completed.
+    </p>
+  </div>
+)}
+  
             {appointment.status === "rejected" && (
               <div className="mt-6 rounded-2xl bg-red-50 p-4">
                 <p className="text-xs font-bold uppercase text-red-500">

@@ -9,6 +9,7 @@ import {
   countCompletedCouponUsageByUser,
   createCouponUsage,
   createPayment,
+  deleteAppointmentById,
   findActiveReferralConfigForPayment,
   findCouponForPayment,
   findPatientAppointmentById,
@@ -22,9 +23,7 @@ import {
   saveSlotDay,
 } from "./payment.repository.js";
 
-import {
-  processBookingWalletDebit,
-} from "../wallets/wallet.service.js";
+import { processBookingWalletDebit } from "../wallets/wallet.service.js";
 
 import {
   validateCreateRazorpayOrderInput,
@@ -32,6 +31,9 @@ import {
   validatePaymentSuccessInput,
   validateVerifyRazorpayPaymentInput,
 } from "./payment.validator.js";
+
+const PAYMENT_RESERVATION_EXPIRED_MESSAGE =
+  "Payment time expired. Please select the slot again.";
 
 const getRazorpayInstance = () => {
   if (!env.RAZORPAY_KEY_ID || !env.RAZORPAY_KEY_SECRET) {
@@ -94,25 +96,58 @@ const ensureAppointmentPayable = (appointment) => {
   }
 
   if (appointment.status !== "pending_payment") {
-    throw new AppError(
-      "Only pending payment appointments can be paid",
-      400
-    );
+    throw new AppError("Only pending payment appointments can be paid", 400);
   }
 
   if (appointment.paymentStatus === "paid") {
     throw new AppError("Appointment already paid", 400);
   }
 
+  if (appointment.paymentStatus === "failed") {
+    throw new AppError(
+      "This payment attempt failed. Please book the appointment again.",
+      400
+    );
+  }
+
   if (
     appointment.reservation?.reservedUntil &&
     appointment.reservation.reservedUntil < new Date()
   ) {
-    throw new AppError(
-      "Payment time expired. Please select the slot again.",
-      400
-    );
+    throw new AppError(PAYMENT_RESERVATION_EXPIRED_MESSAGE, 400);
   }
+};
+
+const releaseReservedSlot = async ({ appointment, session }) => {
+  const slotDay = await findSlotDayById({
+    slotDayId: appointment.slotDayId,
+    doctorId: getAppointmentDoctorId(appointment),
+    session,
+  });
+
+  if (!slotDay) {
+    return null;
+  }
+
+  const slot = slotDay.slots.id(appointment.slotId);
+
+  if (
+    slot &&
+    slot.status === "reserved" &&
+    slot.reservedAppointmentId?.toString() === appointment._id.toString()
+  ) {
+    slot.status = "available";
+    slot.reservedBy = null;
+    slot.reservedAppointmentId = null;
+    slot.reservedUntil = null;
+
+    await saveSlotDay({
+      slotDay,
+      session,
+    });
+  }
+
+  return slotDay;
 };
 
 const verifySlotReservation = async ({
@@ -130,6 +165,13 @@ const verifySlotReservation = async ({
     throw new AppError("Slot day not found", 404);
   }
 
+  if (slotDay.isHoliday) {
+    throw new AppError(
+      "This slot date is now marked as holiday. Please book another slot.",
+      400
+    );
+  }
+
   const slot = slotDay.slots.id(appointment.slotId);
 
   if (!slot || slot.isDeleted) {
@@ -137,7 +179,10 @@ const verifySlotReservation = async ({
   }
 
   if (slot.status !== "reserved") {
-    throw new AppError("Selected slot is not reserved", 400);
+    throw new AppError(
+      "This slot is no longer reserved. Please book again.",
+      400
+    );
   }
 
   if (
@@ -172,10 +217,7 @@ const verifySlotReservation = async ({
       session,
     });
 
-    throw new AppError(
-      "Slot reservation expired. Please book again.",
-      400
-    );
+    throw new AppError(PAYMENT_RESERVATION_EXPIRED_MESSAGE, 400);
   }
 
   return {
@@ -221,7 +263,10 @@ const applyCouponUsageAfterPayment = async ({
     session,
   });
 
-  if (userUsageCount >= coupon.maxUsagePerUser) {
+  if (
+    Number(coupon.maxUsagePerUser || 0) > 0 &&
+    userUsageCount >= coupon.maxUsagePerUser
+  ) {
     throw new AppError("Coupon usage limit reached for this user", 400);
   }
 
@@ -267,10 +312,7 @@ const markReferralDiscountAfterPayment = async ({
   });
 
   if (!referral) {
-    throw new AppError(
-      "Referral discount is no longer available",
-      400
-    );
+    throw new AppError("Referral discount is no longer available", 400);
   }
 
   const referralConfig = await findActiveReferralConfigForPayment({
@@ -278,10 +320,7 @@ const markReferralDiscountAfterPayment = async ({
   });
 
   if (!referralConfig) {
-    throw new AppError(
-      "Referral discount is no longer active",
-      400
-    );
+    throw new AppError("Referral discount is no longer active", 400);
   }
 
   const updatedReferral = await markReferralDiscountUsedForPayment({
@@ -520,29 +559,14 @@ export const markPaymentSuccessService = async ({ patientId, body }) => {
 export const markPaymentFailedService = async ({ patientId, body }) => {
   validatePaymentFailedInput(body);
 
-  const {
-    appointmentId,
-    paymentMethod,
-    transactionId,
-    failureReason,
-  } = body;
+  const { appointmentId } = body;
 
   const session = await mongoose.startSession();
 
   try {
-    let finalAppointment = null;
-    let finalPayment = null;
+    let deletedAppointmentId = null;
 
     await session.withTransaction(async () => {
-      const duplicatePayment = await findPaymentByTransactionId({
-        transactionId: transactionId.trim(),
-        session,
-      });
-
-      if (duplicatePayment) {
-        throw new AppError("Duplicate transaction id", 400);
-      }
-
       const appointment = await findPatientAppointmentById({
         appointmentId,
         patientId,
@@ -550,75 +574,36 @@ export const markPaymentFailedService = async ({ patientId, body }) => {
       });
 
       if (!appointment) {
-        throw new AppError("Appointment not found", 404);
+        return;
       }
 
       if (appointment.status !== "pending_payment") {
-        throw new AppError(
-          "Failed payment can only be recorded for pending payment appointment",
-          400
-        );
+        return;
       }
 
       if (appointment.paymentStatus === "paid") {
         throw new AppError("Appointment is already paid", 400);
       }
 
-      const payment = await createPayment({
-        payload: buildPaymentPayload({
-          appointment,
-          paymentMethod,
-          transactionId,
-          status: "failed",
-          failureReason: failureReason.trim(),
-        }),
-        session,
-      });
-
-      const slotDay = await findSlotDayById({
-        slotDayId: appointment.slotDayId,
-        doctorId: getAppointmentDoctorId(appointment),
-        session,
-      });
-
-      if (slotDay) {
-        const slot = slotDay.slots.id(appointment.slotId);
-
-        if (
-          slot &&
-          slot.status === "reserved" &&
-          slot.reservedAppointmentId?.toString() === appointment._id.toString()
-        ) {
-          slot.status = "available";
-          slot.reservedBy = null;
-          slot.reservedAppointmentId = null;
-          slot.reservedUntil = null;
-
-          await saveSlotDay({
-            slotDay,
-            session,
-          });
-        }
-      }
-
-      appointment.paymentStatus = "failed";
-      appointment.reservation = {
-        reservedUntil: appointment.reservation?.reservedUntil || null,
-        releasedAt: new Date(),
-      };
-
-      await saveAppointment({
+      await releaseReservedSlot({
         appointment,
         session,
       });
 
-      finalPayment = payment;
-      finalAppointment = appointment;
+      await deleteAppointmentById({
+        appointmentId: appointment._id,
+        patientId,
+        session,
+      });
+
+      deletedAppointmentId = appointment._id;
     });
 
     return {
-      appointment: finalAppointment,
-      payment: finalPayment,
+      deletedAppointmentId,
+      shouldBookAgain: true,
+      message:
+        "Payment failed. Temporary appointment was removed. Please book again.",
     };
   } finally {
     await session.endSession();

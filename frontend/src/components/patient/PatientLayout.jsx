@@ -1,4 +1,4 @@
-import { Link, NavLink, useNavigate } from "react-router-dom";
+import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
 import { LogOut, ShieldPlus, UserRound } from "lucide-react";
 import toast from "react-hot-toast";
 
@@ -12,14 +12,28 @@ const patientTopLinks = [
     label: "Home",
     to: ROUTES.HOME,
     end: true,
+    match: (pathname) => pathname === ROUTES.HOME,
   },
   {
     label: "Dashboard",
     to: ROUTES.PATIENT_DASHBOARD,
+    match: (pathname) =>
+      pathname === ROUTES.PATIENT_DASHBOARD ||
+      pathname.startsWith("/my-appointments") ||
+      pathname.startsWith("/wallet") ||
+      pathname.startsWith("/referrals") ||
+      pathname.startsWith("/settings"),
   },
   {
     label: "Find Doctors",
     to: ROUTES.FIND_DOCTORS,
+    match: (pathname) =>
+      pathname === ROUTES.FIND_DOCTORS ||
+      pathname.startsWith("/doctors") ||
+      pathname.startsWith("/book-appointment") ||
+      pathname.startsWith("/payment") ||
+      pathname.startsWith("/payment-success") ||
+      pathname.startsWith("/payment-failed"),
   },
 ];
 
@@ -84,9 +98,14 @@ function PatientLayout({ children }) {
 
           <nav className="hidden items-center gap-8 md:flex">
             {patientTopLinks.map((item) => (
-              <TopNavLink key={item.label} to={item.to} end={item.end}>
-                {item.label}
-              </TopNavLink>
+              <TopNavLink
+  key={item.label}
+  to={item.to}
+  end={item.end}
+  match={item.match}
+>
+  {item.label}
+</TopNavLink>
             ))}
           </nav>
 
@@ -128,7 +147,12 @@ function PatientLayout({ children }) {
 
         <nav className="flex gap-2 overflow-x-auto border-t border-[#F3F4F6] px-4 py-3 md:hidden">
           {patientTopLinks.map((item) => (
-            <MobileTopLink key={item.label} to={item.to} end={item.end}>
+            <MobileTopLink
+              key={item.label}
+              to={item.to}
+              end={item.end}
+              match={item.match}
+            >
               {item.label}
             </MobileTopLink>
           ))}
@@ -140,36 +164,48 @@ function PatientLayout({ children }) {
   );
 }
 
-function TopNavLink({ to, children, end = false }) {
+function TopNavLink({ to, children, end = false, match }) {
+  const location = useLocation();
+
+  const active = match
+    ? match(location.pathname)
+    : end
+      ? location.pathname === to
+      : location.pathname === to || location.pathname.startsWith(`${to}/`);
+
   return (
     <NavLink
       to={to}
       end={end}
-      className={({ isActive }) =>
-        `text-sm font-extrabold transition ${
-          isActive
-            ? "text-[#9381FF]"
-            : "text-[#2D333B] hover:text-[#9381FF]"
-        }`
-      }
+      className={`text-sm font-extrabold transition ${
+        active
+          ? "text-[#9381FF]"
+          : "text-[#2D333B] hover:text-[#9381FF]"
+      }`}
     >
       {children}
     </NavLink>
   );
 }
 
-function MobileTopLink({ to, children, end = false }) {
+function MobileTopLink({ to, children, end = false, match }) {
+  const location = useLocation();
+
+  const active = match
+    ? match(location.pathname)
+    : end
+      ? location.pathname === to
+      : location.pathname === to || location.pathname.startsWith(`${to}/`);
+
   return (
     <NavLink
       to={to}
       end={end}
-      className={({ isActive }) =>
-        `flex shrink-0 rounded-xl px-4 py-2 text-sm font-bold transition ${
-          isActive
-            ? "bg-[#9381FF] text-white"
-            : "bg-[#F8FAFC] text-[#6B7280]"
-        }`
-      }
+      className={`flex shrink-0 rounded-xl px-4 py-2 text-sm font-bold transition ${
+        active
+          ? "bg-[#9381FF] text-white"
+          : "bg-[#F8FAFC] text-[#6B7280]"
+      }`}
     >
       {children}
     </NavLink>

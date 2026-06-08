@@ -38,6 +38,17 @@ const RESCHEDULE_REASONS = [
   },
 ];
 
+const getMaxBookingDateString = (daysAhead = 5) => {
+  const date = new Date();
+  date.setDate(date.getDate() + daysAhead - 1);
+
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+
+  return `${year}-${month}-${day}`;
+};
+
 function RescheduleAppointmentModal({
   open,
   loading = false,
@@ -172,16 +183,17 @@ function RescheduleAppointmentModal({
           <div className="mt-2 flex items-center gap-3 rounded-2xl border border-[#E5E7EB] px-4 py-3">
             <CalendarDays size={18} className="text-[#9381FF]" />
 
-            <input
-              type="date"
-              value={selectedDate}
-              min={getLocalDateString()}
-              onChange={(event) => {
-                dispatch(setSelectedDate(event.target.value));
-                setSelectedSlot(null);
-              }}
-              className="w-full bg-transparent text-sm font-bold text-[#111827] outline-none"
-            />
+         <input
+  type="date"
+  value={selectedDate}
+  min={getLocalDateString()}
+  max={getMaxBookingDateString(5)}
+  onChange={(event) => {
+    dispatch(setSelectedDate(event.target.value));
+    setSelectedSlot(null);
+  }}
+  className="w-full bg-transparent text-sm font-bold text-[#111827] outline-none"
+/>
           </div>
         </section>
 

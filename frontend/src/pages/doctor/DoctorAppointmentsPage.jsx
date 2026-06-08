@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState,useRef} from "react";
 import { CalendarDays, Eye, UserRound } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
@@ -12,9 +12,10 @@ import {
 import {
   formatAppointmentDate,
   formatAppointmentTime,
-  getCleanStatus,
+  getAppointmentDisplayStatus,
   getPatientName,
   getStatusBadgeClass,
+  isApprovedAwaitingCompletion,
 } from "../../utils/appointmentUi";
 
 const STATUS_TABS = [
@@ -24,6 +25,7 @@ const STATUS_TABS = [
   { label: "Completed", value: "completed" },
   { label: "Cancelled", value: "cancelled" },
   { label: "Rejected", value: "rejected" },
+  { label: "Expired", value: "expired" },
 ];
 
 function DoctorAppointmentsPage() {
@@ -41,38 +43,49 @@ function DoctorAppointmentsPage() {
       fetchDoctorAppointments(activeStatus ? { status: activeStatus } : {})
     );
   }, [dispatch, activeStatus]);
+const lastErrorRef = useRef("");
+ useEffect(() => {
+  if (!error) return;
 
-  useEffect(() => {
-    if (!error) return;
-
+  if (lastErrorRef.current !== error) {
     toast.error(error);
-    dispatch(clearAppointmentError());
-  }, [error, dispatch]);
+    lastErrorRef.current = error;
+  }
+
+  dispatch(clearAppointmentError());
+}, [error, dispatch]);
 
   const stats = useMemo(() => {
     return {
       total: doctorAppointments.length,
       pending: doctorAppointments.filter((item) => item.status === "pending")
         .length,
-      approved: doctorAppointments.filter((item) => item.status === "approved")
-        .length,
+      approved: doctorAppointments.filter(
+       (item) => item.status === "approved" && !isApprovedAwaitingCompletion(item)
+    ).length,
+   awaitingCompletion: doctorAppointments.filter((item) =>
+     isApprovedAwaitingCompletion(item)
+    ).length,
       completed: doctorAppointments.filter(
         (item) => item.status === "completed"
       ).length,
       cancelled: doctorAppointments.filter(
         (item) => item.status === "cancelled"
       ).length,
+      expired: doctorAppointments.filter((item) => item.status === "expired").length,
     };
   }, [doctorAppointments]);
 
   return (
     <DashboardLayout title="Doctor Appointments">
-      <section className="mb-6 grid gap-4 md:grid-cols-5">
+      <section className="mb-6 grid gap-4 md:grid-cols-2 xl:grid-cols-7">
         <StatCard label="Total" value={stats.total} />
         <StatCard label="Pending" value={stats.pending} />
         <StatCard label="Approved" value={stats.approved} />
+        <StatCard label="Awaiting Completion" value={stats.awaitingCompletion} />
         <StatCard label="Completed" value={stats.completed} />
         <StatCard label="Cancelled" value={stats.cancelled} />
+        <StatCard label="Expired" value={stats.expired} />
       </section>
 
       <section className="mb-6 flex flex-wrap gap-3">
@@ -164,6 +177,30 @@ function DoctorAppointmentCard({ appointment, onView }) {
               </p>
             </div>
           )}
+
+          {appointment.status === "expired" && (
+  <div className="mt-4 rounded-2xl bg-zinc-100 p-4">
+    <p className="text-xs font-bold uppercase text-zinc-600">
+      Expired
+    </p>
+
+    <p className="mt-1 line-clamp-2 text-sm font-medium text-zinc-700">
+      Appointment time passed without approval. Refund was credited to patient wallet.
+    </p>
+  </div>
+)}
+          {isApprovedAwaitingCompletion(appointment) && (
+            <div className="mt-4 rounded-2xl bg-orange-50 p-4">
+              <p className="text-xs font-bold uppercase text-orange-600">
+                Awaiting Completion
+              </p>
+
+              <p className="mt-1 line-clamp-2 text-sm font-medium text-orange-700">
+                Consultation time is over. Open details and mark this appointment
+                as completed after physical consultation.
+              </p>
+            </div>
+          )}
         </div>
 
         <div className="flex shrink-0 flex-col gap-3 md:items-end">
@@ -172,7 +209,7 @@ function DoctorAppointmentCard({ appointment, onView }) {
               appointment.status
             )}`}
           >
-            {getCleanStatus(appointment.status)}
+            {getAppointmentDisplayStatus(appointment)}
           </span>
 
           <button

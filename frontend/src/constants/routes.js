@@ -31,7 +31,7 @@ export const ROUTES = {
   DOCTOR_SLOTS: "/doctor/slots",
   DOCTOR_APPOINTMENTS: "/doctor/appointments",
   DOCTOR_APPOINTMENT_DETAILS: "/doctor/appointments/:appointmentId",
-
+  DOCTOR_EARNINGS: "/doctor/earnings",
   // ADMIN
   ADMIN_DASHBOARD: "/admin/dashboard",
   ADMIN_PROFILE: "/admin/profile",

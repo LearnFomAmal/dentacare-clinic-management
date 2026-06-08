@@ -17,6 +17,18 @@ export const findPatientAppointmentById = ({
   }).session(session);
 };
 
+export const deleteAppointmentById = ({
+  appointmentId,
+  patientId,
+  session = null,
+}) => {
+  return Appointment.deleteOne({
+    _id: appointmentId,
+    patientId,
+    status: "pending_payment",
+  }).session(session);
+};
+
 export const findPaymentByTransactionId = ({
   transactionId,
   session = null,
@@ -37,7 +49,6 @@ export const findPaymentByRazorpayOrderId = ({
 
 export const createPayment = async ({ payload, session = null }) => {
   const payments = await Payment.create([payload], { session });
-
   return payments[0];
 };
 
@@ -84,7 +95,6 @@ export const countCompletedCouponUsageByUser = ({
 
 export const createCouponUsage = async ({ payload, session = null }) => {
   const usages = await CouponUsage.create([payload], { session });
-
   return usages[0];
 };
 
@@ -124,6 +134,8 @@ export const findReferralForPayment = ({
     _id: referralId,
     referredUserId,
     status: "pending",
+    discountUsedAt: null,
+    firstAppointmentId: null,
   }).session(session);
 };
 
@@ -150,6 +162,8 @@ export const markReferralDiscountUsedForPayment = ({
       _id: referralId,
       referredUserId,
       status: "pending",
+      discountUsedAt: null,
+      firstAppointmentId: null,
     },
     {
       status: "discount_used",

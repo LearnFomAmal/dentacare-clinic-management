@@ -50,15 +50,16 @@ export const validateDateString = (date) => {
 };
 
 export const validateInitiateAppointmentInput = (body) => {
-  const {
-    doctorId,
-    slotDayId,
-    slotId,
-    appointmentDate,
-    reason,
-    reportIds = [],
-    couponCode = "",
-  } = body;
+const {
+  doctorId,
+  slotDayId,
+  slotId,
+  appointmentDate,
+  reason,
+  reportIds = [],
+  couponCode = "",
+  allowTimeConflict = false,
+} = body;
 
   if (!doctorId) {
     throw new AppError("Doctor id is required", 400);
@@ -97,19 +98,23 @@ export const validateInitiateAppointmentInput = (body) => {
   if (couponCode && typeof couponCode !== "string") {
     throw new AppError("Coupon code must be a string", 400);
   }
+  if (typeof allowTimeConflict !== "boolean") {
+  throw new AppError("Invalid time conflict confirmation value", 400);
+}
 };
 
 export const validateAppointmentStatusFilter = (status) => {
   if (!status) return;
 
-  const allowedStatuses = [
-    "pending_payment",
-    "pending",
-    "approved",
-    "rejected",
-    "cancelled",
-    "completed",
-  ];
+const allowedStatuses = [
+  "pending_payment",
+  "pending",
+  "approved",
+  "rejected",
+  "cancelled",
+  "completed",
+  "expired",
+];
 
   if (!allowedStatuses.includes(status)) {
     throw new AppError("Invalid appointment status filter", 400);

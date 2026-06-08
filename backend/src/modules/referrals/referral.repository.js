@@ -1,3 +1,4 @@
+import Appointment from "../../models/Appointment.js";
 import Referral from "../../models/Referral.js";
 import ReferralConfig from "../../models/ReferralConfig.js";
 import User from "../../models/User.js";
@@ -22,6 +23,28 @@ export const findPendingReferralByReferredUser = ({
   return Referral.findOne({
     referredUserId,
     status: "pending",
+    discountUsedAt: null,
+    firstAppointmentId: null,
+  }).session(session);
+};
+
+export const hasSuccessfulReferralDiscountAppointment = ({
+  referredUserId,
+  referralId,
+  session = null,
+}) => {
+  return Appointment.exists({
+    patientId: referredUserId,
+    "pricing.appliedReferralId": referralId,
+    "pricing.referralDiscount": {
+      $gt: 0,
+    },
+    paymentStatus: {
+      $in: ["paid", "refunded"],
+    },
+    status: {
+      $in: ["pending", "approved", "completed", "cancelled", "rejected", "expired"],
+    },
   }).session(session);
 };
 
@@ -34,6 +57,8 @@ export const findReferralForPayment = ({
     _id: referralId,
     referredUserId,
     status: "pending",
+    discountUsedAt: null,
+    firstAppointmentId: null,
   }).session(session);
 };
 
@@ -50,6 +75,8 @@ export const markReferralDiscountUsed = ({
       _id: referralId,
       referredUserId,
       status: "pending",
+      discountUsedAt: null,
+      firstAppointmentId: null,
     },
     {
       status: "discount_used",
@@ -130,7 +157,10 @@ export const findMyReferralHistory = (userId) => {
     referrerId: userId,
   })
     .populate("referredUserId", "username email personalInfo createdAt")
-    .populate("firstAppointmentId", "appointmentDate status paymentStatus pricing")
+    .populate(
+      "firstAppointmentId",
+      "appointmentDate status paymentStatus pricing"
+    )
     .sort({ createdAt: -1 })
     .lean();
 };
@@ -143,7 +173,10 @@ export const findAdminReferrals = ({
   return Referral.find(filter)
     .populate("referrerId", "username email personalInfo")
     .populate("referredUserId", "username email personalInfo")
-    .populate("firstAppointmentId", "appointmentDate status paymentStatus pricing")
+    .populate(
+      "firstAppointmentId",
+      "appointmentDate status paymentStatus pricing"
+    )
     .sort({ createdAt: -1 })
     .skip(skip)
     .limit(limit)
@@ -171,4 +204,16 @@ export const findUserByIdForReferral = (userId) => {
   return User.findById(userId).select(
     "_id username email referral accountStatus"
   );
+};
+
+export const findReferralByReferredUserForProfile = ({
+  referredUserId,
+}) => {
+  return Referral.findOne({
+    referredUserId,
+  })
+    .select(
+      "_id status firstAppointmentId discountUsedAt refereeDiscount rewardStatus"
+    )
+    .lean();
 };

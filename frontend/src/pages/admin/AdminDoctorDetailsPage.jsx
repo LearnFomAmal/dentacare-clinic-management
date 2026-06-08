@@ -24,14 +24,15 @@ import {
   getDoctorDetailsApi,
   unblockDoctorApi,
 } from "../../features/admin/doctorManagementService";
-
+import { getAdminDoctorEarningsApi } from "../../features/earnings/earningService";
 function AdminDoctorDetailsPage() {
   const { id } = useParams();
   const navigate = useNavigate();
 
   const [doctor, setDoctor] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
-
+  const [earnings, setEarnings] = useState(null);
+  const [isLoadingEarnings, setIsLoadingEarnings] = useState(true);
   const [statusModal, setStatusModal] = useState({
     open: false,
     action: null,
@@ -61,10 +62,36 @@ function AdminDoctorDetailsPage() {
       setIsLoading(false);
     }
   };
+ 
+  const fetchDoctorEarnings = async () => {
+  try {
+    setIsLoadingEarnings(true);
 
-  useEffect(() => {
-    fetchDoctorDetails();
-  }, [id]);
+    const response = await getAdminDoctorEarningsApi({
+      doctorId: id,
+      params: {
+        page: 1,
+        limit: 10,
+      },
+    });
+
+    setEarnings(response.data);
+  } catch (error) {
+    const message =
+      error?.response?.data?.message ||
+      error?.message ||
+      "Failed to fetch doctor earnings";
+
+    toast.error(message);
+  } finally {
+    setIsLoadingEarnings(false);
+  }
+};
+
+ useEffect(() => {
+  fetchDoctorDetails();
+  fetchDoctorEarnings();
+}, [id]);
 
   const openStatusModal = () => {
     setStatusModal({
@@ -113,7 +140,7 @@ function AdminDoctorDetailsPage() {
   const getEditFeePath = () => {
     return ROUTES.ADMIN_EDIT_DOCTOR_FEE.replace(":id", id);
   };
-
+  
   if (isLoading) {
     return (
       <DashboardLayout title="Doctor Details">
@@ -281,7 +308,10 @@ function AdminDoctorDetailsPage() {
           </SettingsSection>
         </div>
       </div>
-
+     <DoctorEarningsSection
+  earnings={earnings}
+  isLoading={isLoadingEarnings}
+/>
       <ConfirmModal
         open={statusModal.open}
         title={
@@ -335,6 +365,180 @@ function StatusRow({ label, value, danger = false }) {
         {value}
       </span>
     </div>
+  );
+}
+
+function DoctorEarningsSection({ earnings, isLoading }) {
+  const summary = earnings?.summary || {
+    totalEarned: 0,
+    todayEarned: 0,
+    monthlyEarned: 0,
+    totalTransactions: 0,
+  };
+
+  return (
+    <div className="mt-6 rounded-3xl border border-[#EEF0F6] bg-white p-7 shadow-[0_18px_48px_rgba(17,24,39,0.05)]">
+      <div className="mb-6">
+        <p className="text-sm font-bold uppercase tracking-[1px] text-[#9381FF]">
+          Doctor Earnings
+        </p>
+
+        <h2 className="mt-2 text-2xl font-extrabold text-[#111827]">
+          Earning History
+        </h2>
+
+        <p className="mt-2 text-sm leading-6 text-[#6B7280]">
+          Earnings are created only after completed appointments.
+        </p>
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <AdminEarningCard
+          label="Today"
+          value={`₹${summary.todayEarned || 0}`}
+        />
+
+        <AdminEarningCard
+          label="This Month"
+          value={`₹${summary.monthlyEarned || 0}`}
+        />
+
+        <AdminEarningCard
+          label="Total Earned"
+          value={`₹${summary.totalEarned || 0}`}
+        />
+
+        <AdminEarningCard
+          label="Transactions"
+          value={summary.totalTransactions || 0}
+        />
+      </div>
+
+      {isLoading ? (
+        <p className="mt-6 rounded-2xl bg-[#F8FAFC] p-6 text-sm font-bold text-[#6B7280]">
+          Loading earning transactions...
+        </p>
+      ) : earnings?.transactions?.length > 0 ? (
+        <div className="mt-6 overflow-x-auto">
+          <table className="w-full min-w-[900px] text-left">
+            <thead>
+              <tr className="border-b border-[#EEF0F6] text-xs uppercase tracking-[0.7px] text-[#9CA3AF]">
+                <th className="px-4 py-3">Patient</th>
+                <th className="px-4 py-3">Appointment</th>
+                <th className="px-4 py-3">Transaction</th>
+                <th className="px-4 py-3">Amount</th>
+                <th className="px-4 py-3">Payment</th>
+                <th className="px-4 py-3">Earning Status</th>
+              </tr>
+            </thead>
+
+            <tbody>
+              {earnings.transactions.map((transaction) => (
+                <AdminDoctorTransactionRow
+                  key={transaction._id}
+                  transaction={transaction}
+                />
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <p className="mt-6 rounded-2xl border border-dashed border-[#D1D5DB] bg-[#F8FAFC] p-8 text-center text-sm font-bold text-[#6B7280]">
+          No earnings found for this doctor.
+        </p>
+      )}
+    </div>
+  );
+}
+
+function AdminEarningCard({ label, value }) {
+  return (
+    <div className="rounded-2xl bg-[#F8FAFC] p-5">
+      <p className="text-xs font-bold uppercase tracking-[0.6px] text-[#9CA3AF]">
+        {label}
+      </p>
+
+      <p className="mt-2 text-2xl font-extrabold text-[#111827]">
+        {value}
+      </p>
+    </div>
+  );
+}
+
+function AdminDoctorTransactionRow({ transaction }) {
+  const patientName =
+    transaction.patient?.username || transaction.patient?.email || "Patient";
+
+  const appointmentDate =
+    transaction.appointment?.appointmentDate ||
+    transaction.appointmentDate ||
+    "N/A";
+
+  const appointmentStatus = String(
+    transaction.appointment?.status || "completed"
+  ).replace("_", " ");
+
+  const earningStatus = String(transaction.earningStatus || "earned").replace(
+    "_",
+    " "
+  );
+
+  return (
+    <tr className="border-b border-[#EEF0F6] last:border-0">
+      <td className="px-4 py-4">
+        <p className="text-sm font-extrabold text-[#111827]">
+          {patientName}
+        </p>
+
+        <p className="mt-1 text-xs text-[#6B7280]">
+          {transaction.patient?.email || "No email"}
+        </p>
+      </td>
+
+      <td className="px-4 py-4">
+        <p className="text-sm font-bold text-[#374151]">
+          {appointmentDate}
+        </p>
+
+        <p className="mt-1 text-xs capitalize text-[#6B7280]">
+          {appointmentStatus}
+        </p>
+      </td>
+
+      <td className="px-4 py-4">
+        <p className="break-all text-xs font-bold text-[#374151]">
+          {transaction.transactionId || "N/A"}
+        </p>
+
+        <p className="mt-1 text-xs capitalize text-[#6B7280]">
+          {String(transaction.paymentMethod || "N/A").replace("_", " ")}
+        </p>
+      </td>
+
+      <td className="px-4 py-4">
+        <p className="text-sm font-extrabold text-[#111827]">
+          ₹{transaction.earnedAmount || transaction.finalAmount || 0}
+        </p>
+
+        {transaction.totalDiscount > 0 && (
+          <p className="mt-1 text-xs text-green-600">
+            Discount ₹{transaction.totalDiscount}
+          </p>
+        )}
+      </td>
+
+      <td className="px-4 py-4">
+        <span className="rounded-full bg-[#F0F1FF] px-3 py-1 text-xs font-extrabold capitalize text-[#9381FF]">
+          Paid
+        </span>
+      </td>
+
+      <td className="px-4 py-4">
+        <span className="rounded-full bg-green-50 px-3 py-1 text-xs font-extrabold capitalize text-green-700">
+          {earningStatus}
+        </span>
+      </td>
+    </tr>
   );
 }
 

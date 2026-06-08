@@ -45,6 +45,7 @@ import AdminLoginPage from "../pages/public/AdminLoginPage";
 import AdminCouponsPage from "../pages/admin/AdminCouponsPage";
 import AdminCouponFormPage from "../pages/admin/AdminCouponFormPage";
 import WalletPage from "../pages/patient/WalletPage";
+import DoctorEarningsPage from "../pages/doctor/DoctorEarningsPage";
 
 function AppRoutes() {
   return (
@@ -381,6 +382,15 @@ function AppRoutes() {
   element={
     <ProtectedRoute allowedRoles={["admin"]}>
       <AdminCouponFormPage />
+    </ProtectedRoute>
+  }
+/>
+
+<Route
+  path={ROUTES.DOCTOR_EARNINGS}
+  element={
+    <ProtectedRoute allowedRoles={["doctor"]}>
+      <DoctorEarningsPage />
     </ProtectedRoute>
   }
 />

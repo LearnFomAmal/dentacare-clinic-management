@@ -25,6 +25,7 @@ const STATUS_TABS = [
   { label: "Completed", value: "completed" },
   { label: "Cancelled", value: "cancelled" },
   { label: "Rejected", value: "rejected" },
+  { label: "Expired", value: "expired" },
 ];
 
 function AdminAppointmentsPage() {
@@ -61,17 +62,20 @@ function AdminAppointmentsPage() {
         .length,
       cancelled: adminAppointments.filter((item) => item.status === "cancelled")
         .length,
+      expired: adminAppointments.filter((item) => item.status === "expired")
+        .length,
     };
   }, [adminAppointments]);
 
   return (
     <DashboardLayout title="Admin Appointments">
-      <section className="mb-6 grid gap-4 md:grid-cols-5">
+      <section className="mb-6 grid gap-4 md:grid-cols-6">
         <StatCard label="Total" value={stats.total} />
         <StatCard label="Pending" value={stats.pending} />
         <StatCard label="Approved" value={stats.approved} />
         <StatCard label="Completed" value={stats.completed} />
         <StatCard label="Cancelled" value={stats.cancelled} />
+        <StatCard label="Expired" value={stats.expired} />
       </section>
 
       <section className="mb-6 flex flex-wrap gap-3">
@@ -171,6 +175,19 @@ function AdminAppointmentCard({ appointment, onView }) {
               </p>
             </div>
           )}
+
+          {appointment.status === "expired" && (
+  <div className="mt-4 rounded-2xl bg-zinc-100 p-4">
+    <p className="text-xs font-bold uppercase text-zinc-600">
+      Expired
+    </p>
+
+    <p className="mt-1 line-clamp-2 text-sm font-medium text-zinc-700">
+      Appointment time passed without approval. Refund was credited to patient wallet.
+    </p>
+  </div>
+)}
+
         </div>
 
         <div className="flex shrink-0 flex-col gap-3 md:items-end">

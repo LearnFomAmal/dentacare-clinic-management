@@ -1,5 +1,5 @@
 import { createAsyncThunk, createSlice } from "@reduxjs/toolkit";
-import { loginApi, logoutApi, googleLoginApi } from "./authService";
+import { loginApi, logoutApi, googleLoginApi, getCurrentUserApi } from "./authService";
 import {
   clearAuthStorage,
   getAccountType,
@@ -198,6 +198,52 @@ export const logoutUser = createAsyncThunk(
   }
 );
 
+export const verifyCurrentUser = createAsyncThunk(
+  "auth/verifyCurrentUser",
+  async (accountType, { rejectWithValue }) => {
+    try {
+      if (!VALID_ACCOUNT_TYPES.includes(accountType)) {
+        return rejectWithValue({
+          message: "Invalid account type",
+          accountType,
+        });
+      }
+
+      const response = await getCurrentUserApi(accountType);
+
+      const backendUser = response.data || {};
+
+      const normalizedUser = normalizeUser({
+        backendUser,
+        email: backendUser.email,
+        accountType,
+      });
+
+      saveAccountType(accountType);
+      saveAuthUser(normalizedUser, accountType);
+
+      return {
+        user: normalizedUser,
+        accountType,
+        role: accountType,
+        message: response.message || "Session verified",
+      };
+    } catch (error) {
+      const message =
+        error?.response?.data?.message ||
+        error?.message ||
+        "Session verification failed";
+
+      clearAuthStorage(accountType);
+
+      return rejectWithValue({
+        message,
+        accountType,
+      });
+    }
+  }
+);
+
 // ==============================
 // SLICE
 // ==============================
@@ -334,6 +380,30 @@ const authSlice = createSlice({
         state.isAuthenticated = false;
         state.isLoading = false;
         state.error = action.payload?.message || null;
+      })
+
+            // VERIFY CURRENT USER
+      .addCase(verifyCurrentUser.pending, (state) => {
+        state.isLoading = true;
+        state.error = null;
+      })
+
+      .addCase(verifyCurrentUser.fulfilled, (state, action) => {
+        state.isLoading = false;
+        state.user = action.payload.user;
+        state.accountType = action.payload.accountType;
+        state.role = action.payload.role;
+        state.isAuthenticated = true;
+        state.error = null;
+      })
+
+      .addCase(verifyCurrentUser.rejected, (state, action) => {
+        state.user = null;
+        state.accountType = null;
+        state.role = null;
+        state.isAuthenticated = false;
+        state.isLoading = false;
+        state.error = action.payload?.message || "Session expired";
       });
   },
 });

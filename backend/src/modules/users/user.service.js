@@ -86,9 +86,13 @@ const sanitizeUserResponse = (user) => {
 export const getMyProfileService = async (userId) => {
   const user = await findUserById(userId);
 
-  if (!user || user.accountStatus.isDeleted) {
-    throw new AppError("User not found", 404);
-  }
+if (!user || user.accountStatus.isDeleted) {
+  throw new AppError("User not found", 404);
+}
+
+if (user.accountStatus.isBlocked) {
+  throw new AppError("Account blocked", 403);
+}
 
   return sanitizeUserResponse(user);
 };
@@ -97,9 +101,13 @@ export const getMyProfileService = async (userId) => {
 export const updateMyProfileService = async (userId, payload) => {
   const user = await findUserById(userId);
 
-  if (!user || user.accountStatus.isDeleted) {
-    throw new AppError("User not found", 404);
-  }
+if (!user || user.accountStatus.isDeleted) {
+  throw new AppError("User not found", 404);
+}
+
+if (user.accountStatus.isBlocked) {
+  throw new AppError("Account blocked", 403);
+}
 
   const allowedUpdate = {};
 
@@ -129,8 +137,12 @@ export const changePasswordService = async (
   const user = await findUserById(userId).select("+password");
 
   if (!user || user.accountStatus.isDeleted) {
-    throw new AppError("User not found", 404);
-  }
+  throw new AppError("User not found", 404);
+}
+
+if (user.accountStatus.isBlocked) {
+  throw new AppError("Account blocked", 403);
+}
 
   if (user.authProvider === "google" && !user.password) {
     throw new AppError(
@@ -182,8 +194,12 @@ export const deleteMyAccountService = async (userId) => {
   const user = await findUserById(userId);
 
   if (!user || user.accountStatus.isDeleted) {
-    throw new AppError("User not found", 404);
-  }
+  throw new AppError("User not found", 404);
+}
+
+if (user.accountStatus.isBlocked) {
+  throw new AppError("Account blocked", 403);
+}
 
   await softDeleteUserById(userId);
 await revokeAllSessionsByUserId(user._id, "user");
@@ -196,7 +212,9 @@ export const getMySessionInfoService = async (userId) => {
   if (!user || user.accountStatus.isDeleted) {
     throw new AppError("User not found", 404);
   }
-
+  if (user.accountStatus.isBlocked) {
+    throw new AppError("Account blocked", 403);
+  }
   const count = await countActiveSessionsByUserId(
   user._id,
   "user"
@@ -213,6 +231,10 @@ export const updateThemeService = async (userId, theme) => {
 
   if (!user || user.accountStatus.isDeleted) {
     throw new AppError("User not found", 404);
+  }
+
+  if (user.accountStatus.isBlocked) {
+    throw new AppError("Account blocked", 403);
   }
 
   const updatedUser = await updateUserById(userId, {
@@ -331,8 +353,12 @@ export const updatePatientProfileImageService = async (
   const user = await findUserById(userId);
 
   if (!user || user.accountStatus.isDeleted) {
-    throw new AppError("User not found", 404);
-  }
+  throw new AppError("User not found", 404);
+}
+
+if (user.accountStatus.isBlocked) {
+  throw new AppError("Account blocked", 403);
+}
 
   if (!file) {
     throw new AppError("Profile image is required", 400);

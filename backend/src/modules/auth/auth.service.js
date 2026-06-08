@@ -101,8 +101,10 @@ export const registerRequestService = async (data) => {
 let normalizedReferralCode = "";
 
 if (referralCode && referralCode.trim()) {
+  const cleanReferralCode = referralCode.trim().toUpperCase();
+
   const referralUser = await validateReferralCodeForRegistration({
-    referralCode,
+    referralCode: cleanReferralCode,
     email,
   });
 
@@ -230,10 +232,17 @@ const user = await createUser({
 });
 
 if (temp.referredBy) {
+  if (!temp.referralCodeUsed || !temp.referralCodeUsed.trim()) {
+    throw new AppError(
+      "Referral data is incomplete. Please register again with a valid referral code.",
+      400
+    );
+  }
+
   await createReferralAfterRegistration({
     referrerId: temp.referredBy,
     referredUserId: user._id,
-    referralCode: temp.referralCodeUsed,
+    referralCode: temp.referralCodeUsed.trim().toUpperCase(),
   });
 }
  

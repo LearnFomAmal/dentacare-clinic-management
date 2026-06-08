@@ -10,6 +10,7 @@ import { validateCouponForAppointment } from "../coupons/coupon.service.js";
 import {
   claimReferralRewardForCompletion,
   createAppointment,
+  createDoctorEarning,
   findAdminAppointmentById,
   findAdminAppointments,
   findAppointmentByIdForPatient,
@@ -18,7 +19,9 @@ import {
   findAppointmentForPatientAction,
   findDoctorAppointmentById,
   findDoctorAppointments,
+  findDoctorEarningByAppointmentId,
   findDoctorForBooking,
+  findPaidPaymentForAppointment,
   findPatientAppointments,
   findPatientForCompletion,
   findPatientReportsByIds,
@@ -29,7 +32,11 @@ import {
   saveAppointment,
   saveSlotDay,
   updateReportsAsAttached,
+  findAutoExpirablePendingAppointments,
+  findPendingPaymentAppointmentForReservedSlot,
+  findPatientOverlappingAppointments,
 } from "./appointment.repository.js";
+
 import { getReferralDiscountForAppointment } from "../referrals/referral.service.js";
 import {
   validateAppointmentStatusFilter,
@@ -41,6 +48,8 @@ import {
 } from "./appointment.validator.js";
 
 const RESERVATION_MINUTES = 10;
+const MIN_BOOKING_LEAD_MINUTES = 120;
+const CANCELLATION_REFUND_CUTOFF_HOURS = 4;
 
 const isPatientProfileComplete = (user) => {
   return Boolean(
@@ -65,10 +74,76 @@ const normalizeAppointmentReport = (report) => {
     fileUrl: getReportFileUrl(report),
   };
 };
+const createDoctorEarningAfterCompletion = async ({
+  appointment,
+  session,
+}) => {
+  const existingEarning = await findDoctorEarningByAppointmentId({
+    appointmentId: appointment._id,
+    session,
+  });
 
+  if (existingEarning) {
+    return existingEarning;
+  }
+
+  const payment = await findPaidPaymentForAppointment({
+    appointmentId: appointment._id,
+    session,
+  });
+
+  if (!payment) {
+    throw new AppError(
+      "Paid payment record not found for this appointment",
+      404
+    );
+  }
+
+  const earnedAmount = Number(appointment.pricing?.finalAmount || 0);
+
+  if (earnedAmount <= 0) {
+    throw new AppError(
+      "Invalid earning amount for this appointment",
+      400
+    );
+  }
+
+  return createDoctorEarning({
+    payload: {
+      doctorId: appointment.doctorId,
+      appointmentId: appointment._id,
+      paymentId: payment._id,
+      patientId: appointment.patientId,
+
+      consultationFee: Number(appointment.pricing?.consultationFee || 0),
+      couponDiscount: Number(appointment.pricing?.couponDiscount || 0),
+      referralDiscount: Number(appointment.pricing?.referralDiscount || 0),
+      rewardDiscount: Number(appointment.pricing?.rewardDiscount || 0),
+      totalDiscount: Number(appointment.pricing?.totalDiscount || 0),
+
+      finalAmount: earnedAmount,
+      earnedAmount,
+
+      paymentMethod: payment.paymentMethod,
+      transactionId: payment.transactionId,
+
+      appointmentDate: appointment.appointmentDate,
+      startTime: appointment.startTime,
+      endTime: appointment.endTime,
+
+      earningStatus: "earned",
+      earnedAt: new Date(),
+    },
+    session,
+  });
+};
 const ensurePendingAppointmentForDecision = (appointment) => {
   if (!appointment) {
     throw new AppError("Appointment not found", 404);
+  }
+
+  if (appointment.status === "expired") {
+    throw new AppError("Expired appointment cannot be approved or rejected", 400);
   }
 
   if (appointment.status !== "pending") {
@@ -84,6 +159,8 @@ const ensurePendingAppointmentForDecision = (appointment) => {
       400
     );
   }
+
+  ensureAppointmentTimeNotOver(appointment);
 };
 
 const ensureAppointmentCanBeCompleted = (appointment) => {
@@ -93,6 +170,18 @@ const ensureAppointmentCanBeCompleted = (appointment) => {
 
   if (appointment.status === "completed") {
     throw new AppError("Appointment is already completed", 400);
+  }
+
+  if (appointment.status === "expired") {
+    throw new AppError("Expired appointment cannot be completed", 400);
+  }
+
+  if (appointment.status === "cancelled") {
+    throw new AppError("Cancelled appointment cannot be completed", 400);
+  }
+
+  if (appointment.status === "rejected") {
+    throw new AppError("Rejected appointment cannot be completed", 400);
   }
 
   if (appointment.status !== "approved") {
@@ -108,12 +197,25 @@ const ensureAppointmentCanBeCompleted = (appointment) => {
       400
     );
   }
+
+  if (!isAppointmentEndTimePast(appointment)) {
+    throw new AppError(
+      "Appointment can be completed only after the consultation end time",
+      400
+    );
+  }
 };
 
 const ensureAppointmentCanBeCancelled = ({ appointment, cancelledBy }) => {
   if (!appointment) {
     throw new AppError("Appointment not found", 404);
   }
+
+   if (appointment.status === "expired") {
+  throw new AppError("Expired appointment cannot be cancelled", 400);
+}
+
+ensureAppointmentTimeNotOver(appointment);
 
   if (appointment.status === "cancelled") {
     throw new AppError("Appointment is already cancelled", 400);
@@ -228,6 +330,11 @@ const cancelAppointmentCore = async ({
     cancelledBy,
   });
 
+  const refundDecision = getCancellationRefundDecision({
+    appointment,
+    cancelledBy,
+  });
+
   appointment.status = "cancelled";
 
   appointment.cancellation = {
@@ -235,6 +342,10 @@ const cancelAppointmentCore = async ({
     reasonType: body.reasonType,
     reason: body.reason.trim(),
     cancelledAt: new Date(),
+
+    refundEligible: refundDecision.refundEligible,
+    refundStatus: refundDecision.refundStatus,
+    refundPolicy: refundDecision.refundPolicy,
   };
 
   appointment.approval = {
@@ -247,8 +358,9 @@ const cancelAppointmentCore = async ({
     session,
   });
 
-  if (appointment.paymentStatus === "paid") {
+  if (appointment.paymentStatus === "paid" && refundDecision.refundEligible) {
     appointment.paymentStatus = "refunded";
+    appointment.cancellation.refundStatus = "refunded";
 
     await refundAppointmentPaymentToWallet({
       appointment,
@@ -257,12 +369,338 @@ const cancelAppointmentCore = async ({
     });
   }
 
+  if (appointment.paymentStatus === "paid" && !refundDecision.refundEligible) {
+    appointment.cancellation.refundStatus = "not_refunded";
+  }
+
   await saveAppointment({
     appointment,
     session,
   });
 
   return appointment;
+};
+
+const getLocalDateAndTime = () => {
+  const now = new Date();
+
+  const localDate = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Kolkata",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(now);
+
+  const localTime = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Asia/Kolkata",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).format(now);
+
+  return {
+    now,
+    localDate,
+    localTime,
+  };
+};
+
+const buildAppointmentDateTime = ({ appointmentDate, time }) => {
+  return new Date(`${appointmentDate}T${time}:00+05:30`);
+};
+
+const buildAppointmentStartDateTime = (appointment) => {
+  if (!appointment?.appointmentDate || !appointment?.startTime) {
+    return null;
+  }
+
+  const appointmentStart = buildAppointmentDateTime({
+    appointmentDate: appointment.appointmentDate,
+    time: appointment.startTime,
+  });
+
+  if (Number.isNaN(appointmentStart.getTime())) {
+    return null;
+  }
+
+  return appointmentStart;
+};
+
+const getCancellationRefundDecision = ({ appointment, cancelledBy }) => {
+  if (appointment.paymentStatus !== "paid") {
+    return {
+      refundEligible: false,
+      refundStatus: "not_applicable",
+      refundPolicy: "No paid payment found for refund.",
+    };
+  }
+
+  // Admin-side cancellation should refund the patient.
+  if (cancelledBy === "admin") {
+    return {
+      refundEligible: true,
+      refundStatus: "eligible",
+      refundPolicy:
+        "Refund eligible because the appointment was cancelled by admin.",
+    };
+  }
+
+  const appointmentStart = buildAppointmentStartDateTime(appointment);
+
+  if (!appointmentStart) {
+    return {
+      refundEligible: false,
+      refundStatus: "not_eligible",
+      refundPolicy: "Refund not eligible because appointment time is invalid.",
+    };
+  }
+
+  const now = new Date();
+
+  const refundCutoffTime = new Date(
+    appointmentStart.getTime() -
+      CANCELLATION_REFUND_CUTOFF_HOURS * 60 * 60 * 1000
+  );
+
+  if (now <= refundCutoffTime) {
+    return {
+      refundEligible: true,
+      refundStatus: "eligible",
+      refundPolicy: `Refund eligible because cancellation was made at least ${CANCELLATION_REFUND_CUTOFF_HOURS} hours before the appointment.`,
+    };
+  }
+
+  return {
+    refundEligible: false,
+    refundStatus: "not_eligible",
+    refundPolicy: `No refund because cancellation was made within ${CANCELLATION_REFUND_CUTOFF_HOURS} hours of the appointment.`,
+  };
+};
+
+const isAppointmentEndTimePast = (appointment) => {
+  if (!appointment?.appointmentDate || !appointment?.endTime) {
+    return false;
+  }
+
+  const appointmentEnd = buildAppointmentDateTime({
+    appointmentDate: appointment.appointmentDate,
+    time: appointment.endTime,
+  });
+
+  return appointmentEnd <= new Date();
+};
+
+const ensureAppointmentTimeNotOver = (appointment) => {
+  if (isAppointmentEndTimePast(appointment)) {
+    throw new AppError(
+      "Appointment time is already over. This appointment cannot be approved, rejected, cancelled, or rescheduled.",
+      400
+    );
+  }
+};
+
+const ensureSlotHasEnoughLeadTime = ({ appointmentDate, startTime }) => {
+  const slotStart = buildAppointmentDateTime({
+    appointmentDate,
+    time: startTime,
+  });
+
+  const now = new Date();
+
+  const minAllowedStart = new Date(
+    now.getTime() + MIN_BOOKING_LEAD_MINUTES * 60 * 1000
+  );
+
+  if (slotStart <= now) {
+    throw new AppError(
+      "This slot has already passed. Please choose another slot.",
+      400
+    );
+  }
+
+  if (slotStart < minAllowedStart) {
+    throw new AppError(
+      `Please choose a slot at least ${
+        MIN_BOOKING_LEAD_MINUTES / 60
+      } hours from now.`,
+      400
+    );
+  }
+};
+
+const expirePendingAppointmentCore = async ({ appointment, session }) => {
+  if (!appointment) return null;
+
+  if (appointment.status !== "pending") return appointment;
+
+  if (appointment.paymentStatus !== "paid") return appointment;
+
+  if (!isAppointmentEndTimePast(appointment)) return appointment;
+
+  appointment.status = "expired";
+  appointment.expiredAt = new Date();
+
+  appointment.approval = {
+    approvedBy: "",
+    approvedAt: null,
+  };
+
+  appointment.rejection = {
+    rejectedBy: "",
+    reasonType: "appointment_expired",
+    reason:
+      "Appointment expired because the scheduled time passed without approval.",
+    rejectedAt: null,
+  };
+
+  await releaseAppointmentSlot({
+    appointment,
+    session,
+  });
+
+  appointment.paymentStatus = "refunded";
+
+  await refundAppointmentPaymentToWallet({
+    appointment,
+    reason:
+      "Appointment expired because the scheduled time passed without approval. Refund credited to wallet.",
+    session,
+  });
+
+  await saveAppointment({
+    appointment,
+    session,
+  });
+
+  return appointment;
+};
+
+const completeAppointmentCore = async ({ appointment, session }) => {
+  if (!appointment) {
+    return null;
+  }
+
+  if (appointment.status === "completed") {
+    return appointment;
+  }
+
+  if (appointment.status !== "approved") {
+    return appointment;
+  }
+
+  if (appointment.paymentStatus !== "paid") {
+    return appointment;
+  }
+
+  appointment.status = "completed";
+  appointment.completedAt = new Date();
+
+  await saveAppointment({
+    appointment,
+    session,
+  });
+
+  await createDoctorEarningAfterCompletion({
+    appointment,
+    session,
+  });
+
+  const patient = await findPatientForCompletion({
+    patientId: appointment.patientId,
+    session,
+  });
+
+  if (!patient || patient.accountStatus?.isDeleted) {
+    throw new AppError("Patient not found", 404);
+  }
+
+  if (!patient.referral?.hasCompletedFirstAppointment) {
+    const firstCompletionResult =
+      await markPatientFirstAppointmentCompleted({
+        patientId: patient._id,
+        session,
+      });
+
+    const isFirstCompletedAppointment =
+      firstCompletionResult.modifiedCount === 1;
+
+    if (isFirstCompletedAppointment) {
+      const claimedReferral = await claimReferralRewardForCompletion({
+        referredUserId: patient._id,
+        completedAppointmentId: appointment._id,
+        session,
+      });
+
+      if (claimedReferral) {
+        await creditReferralRewardToWallet({
+          userId: claimedReferral.referrerId,
+          referralId: claimedReferral._id,
+          amount: claimedReferral.referrerReward,
+          session,
+        });
+
+        await markReferralRewardCredited({
+          referralId: claimedReferral._id,
+          session,
+        });
+      }
+    }
+  }
+
+  return appointment;
+};
+
+const autoExpirePastPendingAppointments = async () => {
+  const { localDate, localTime } = getLocalDateAndTime();
+
+  const appointments = await findAutoExpirablePendingAppointments({
+    nowDate: localDate,
+    nowTime: localTime,
+  });
+
+  if (!appointments.length) return;
+
+  const session = await mongoose.startSession();
+
+  try {
+    await session.withTransaction(async () => {
+      for (const appointment of appointments) {
+        await expirePendingAppointmentCore({
+          appointment,
+          session,
+        });
+      }
+    });
+  } finally {
+    await session.endSession();
+  }
+};
+
+const syncPastAppointmentStates = async () => {
+  await autoExpirePastPendingAppointments();
+};
+
+const normalizeTimeConflictAppointment = (appointment) => {
+  const doctor = appointment?.doctorId;
+
+  return {
+    _id: appointment._id,
+    appointmentDate: appointment.appointmentDate,
+    startTime: appointment.startTime,
+    endTime: appointment.endTime,
+    status: appointment.status,
+    paymentStatus: appointment.paymentStatus,
+
+    doctor: doctor
+      ? {
+          _id: doctor._id,
+          firstName: doctor.firstName,
+          lastName: doctor.lastName,
+          specialization: doctor.specialization,
+          profileImage: doctor.professionalInfo?.profileImage || "",
+        }
+      : null,
+  };
 };
 
 export const initiateAppointmentService = async ({ patientId, body }) => {
@@ -281,16 +719,16 @@ export const initiateAppointmentService = async ({ patientId, body }) => {
       400
     );
   }
-
-  const {
-    doctorId,
-    slotDayId,
-    slotId,
-    appointmentDate,
-    reason,
-    reportIds = [],
-    couponCode = "",
-  } = body;
+const {
+  doctorId,
+  slotDayId,
+  slotId,
+  appointmentDate,
+  reason,
+  reportIds = [],
+  couponCode = "",
+  allowTimeConflict = false,
+} = body;
 
   const doctor = await findDoctorForBooking(doctorId);
 
@@ -395,11 +833,94 @@ export const initiateAppointmentService = async ({ patientId, body }) => {
         throw new AppError("Selected slot not found", 404);
       }
 
-      if (selectedSlot.status !== "available") {
-        throw new AppError("Selected slot is not available", 400);
-      }
+      if (selectedSlot.status === "reserved") {
+  const isReservedBySamePatient =
+    selectedSlot.reservedBy &&
+    selectedSlot.reservedBy.toString() === patientId.toString();
 
-      const appointment = await createAppointment({
+  const hasValidReservedAppointment =
+    selectedSlot.reservedAppointmentId &&
+    selectedSlot.reservedUntil &&
+    selectedSlot.reservedUntil > new Date();
+
+  if (!isReservedBySamePatient || !hasValidReservedAppointment) {
+    throw new AppError("Selected slot is reserved by another patient", 400);
+  }
+
+  const existingAppointment =
+    await findPendingPaymentAppointmentForReservedSlot({
+      appointmentId: selectedSlot.reservedAppointmentId,
+      patientId,
+      doctorId,
+      slotDayId,
+      slotId,
+      session,
+    });
+
+  if (!existingAppointment) {
+    selectedSlot.status = "available";
+    selectedSlot.reservedBy = null;
+    selectedSlot.reservedAppointmentId = null;
+    selectedSlot.reservedUntil = null;
+
+    await saveSlotDay({
+      slotDay,
+      session,
+    });
+
+    throw new AppError(
+      "Previous reservation was invalid. Please select this slot again.",
+      400
+    );
+  }
+
+  finalAppointment = existingAppointment;
+  return;
+}
+
+if (selectedSlot.status !== "available") {
+  throw new AppError("Selected slot is not available", 400);
+}
+      
+ensureSlotHasEnoughLeadTime({
+  appointmentDate,
+  startTime: selectedSlot.startTime,
+});
+
+if (!allowTimeConflict) {
+  const overlappingAppointments =
+    await findPatientOverlappingAppointments({
+      patientId,
+      appointmentDate,
+      startTime: selectedSlot.startTime,
+      endTime: selectedSlot.endTime,
+      excludeDoctorId: new mongoose.Types.ObjectId(doctorId),
+      session,
+    });
+
+  if (overlappingAppointments.length > 0) {
+    finalAppointment = {
+      requiresTimeConflictConfirmation: true,
+      message:
+        "You already have another appointment at this time. Do you want to proceed?",
+      conflictAppointment: normalizeTimeConflictAppointment(
+        overlappingAppointments[0]
+      ),
+      requestedSlot: {
+        doctorId,
+        slotDayId,
+        slotId,
+        appointmentDate,
+        startTime: selectedSlot.startTime,
+        endTime: selectedSlot.endTime,
+      },
+    };
+
+    return;
+  }
+}
+
+const appointment = await createAppointment({
         payload: {
           patientId: new mongoose.Types.ObjectId(patientId),
           doctorId: new mongoose.Types.ObjectId(doctorId),
@@ -472,6 +993,8 @@ export const getPatientAppointmentDetailsService = async ({
   validateObjectId(patientId, "patient id");
   validateObjectId(appointmentId, "appointment id");
 
+  await syncPastAppointmentStates();
+
   const appointment = await findAppointmentByIdForPatient({
     patientId,
     appointmentId,
@@ -484,12 +1007,15 @@ export const getPatientAppointmentDetailsService = async ({
   return appointment;
 };
 
+
 export const getMyAppointmentsService = async ({ patientId, query }) => {
   validateObjectId(patientId, "patient id");
 
   const { status } = query;
 
   validateAppointmentStatusFilter(status);
+
+  await syncPastAppointmentStates();
 
   return findPatientAppointments({
     patientId,
@@ -504,7 +1030,7 @@ export const cancelAppointmentByPatientService = async ({
 }) => {
   validateObjectId(patientId, "patient id");
   validateObjectId(appointmentId, "appointment id");
-
+  await syncPastAppointmentStates();
   const session = await mongoose.startSession();
 
   try {
@@ -538,6 +1064,8 @@ export const getDoctorAppointmentsService = async ({ doctorId, query }) => {
 
   validateAppointmentStatusFilter(status);
 
+  await syncPastAppointmentStates();
+
   return findDoctorAppointments({
     doctorId,
     status,
@@ -550,6 +1078,8 @@ export const getDoctorAppointmentDetailsService = async ({
 }) => {
   validateObjectId(doctorId, "doctor id");
   validateObjectId(appointmentId, "appointment id");
+
+  await syncPastAppointmentStates();
 
   const appointment = await findDoctorAppointmentById({
     doctorId,
@@ -566,10 +1096,10 @@ export const getDoctorAppointmentDetailsService = async ({
 export const approveAppointmentByDoctorService = async ({
   doctorId,
   appointmentId,
-}) => {
+}) => { 
   validateObjectId(doctorId, "doctor id");
   validateObjectId(appointmentId, "appointment id");
-
+   await syncPastAppointmentStates();
   const appointment = await findAppointmentForDoctorAction({
     doctorId,
     appointmentId,
@@ -605,7 +1135,7 @@ export const rejectAppointmentByDoctorService = async ({
   validateObjectId(doctorId, "doctor id");
   validateObjectId(appointmentId, "appointment id");
   validateRejectAppointmentInput(body);
-
+    await syncPastAppointmentStates()
   const session = await mongoose.startSession();
 
   try {
@@ -666,7 +1196,7 @@ export const completeAppointmentByDoctorService = async ({
 }) => {
   validateObjectId(doctorId, "doctor id");
   validateObjectId(appointmentId, "appointment id");
-
+   await syncPastAppointmentStates();
   const session = await mongoose.startSession();
 
   try {
@@ -681,57 +1211,10 @@ export const completeAppointmentByDoctorService = async ({
 
       ensureAppointmentCanBeCompleted(appointment);
 
-      appointment.status = "completed";
-      appointment.completedAt = new Date();
-
-      await saveAppointment({
+      updatedAppointment = await completeAppointmentCore({
         appointment,
         session,
       });
-
-      const patient = await findPatientForCompletion({
-        patientId: appointment.patientId,
-        session,
-      });
-
-      if (!patient || patient.accountStatus?.isDeleted) {
-        throw new AppError("Patient not found", 404);
-      }
-
-      if (!patient.referral?.hasCompletedFirstAppointment) {
-        const firstCompletionResult =
-          await markPatientFirstAppointmentCompleted({
-            patientId: patient._id,
-            session,
-          });
-
-        const isFirstCompletedAppointment =
-          firstCompletionResult.modifiedCount === 1;
-
-        if (isFirstCompletedAppointment) {
-          const claimedReferral = await claimReferralRewardForCompletion({
-            referredUserId: patient._id,
-            completedAppointmentId: appointment._id,
-            session,
-          });
-
-          if (claimedReferral) {
-            await creditReferralRewardToWallet({
-              userId: claimedReferral.referrerId,
-              referralId: claimedReferral._id,
-              amount: claimedReferral.referrerReward,
-              session,
-            });
-
-            await markReferralRewardCredited({
-              referralId: claimedReferral._id,
-              session,
-            });
-          }
-        }
-      }
-
-      updatedAppointment = appointment;
     });
 
     return updatedAppointment;
@@ -746,6 +1229,8 @@ export const getAdminAppointmentsService = async ({ query }) => {
 
   validateAppointmentStatusFilter(status);
 
+  await syncPastAppointmentStates();
+
   return findAdminAppointments({
     status,
   });
@@ -753,6 +1238,8 @@ export const getAdminAppointmentsService = async ({ query }) => {
 
 export const getAdminAppointmentDetailsService = async ({ appointmentId }) => {
   validateObjectId(appointmentId, "appointment id");
+
+  await syncPastAppointmentStates();
 
   const appointment = await findAdminAppointmentById(appointmentId);
 
@@ -765,7 +1252,7 @@ export const getAdminAppointmentDetailsService = async ({ appointmentId }) => {
 
 export const approveAppointmentByAdminService = async ({ appointmentId }) => {
   validateObjectId(appointmentId, "appointment id");
-
+   await syncPastAppointmentStates();
   const appointment = await findAppointmentForAdminAction({
     appointmentId,
   });
@@ -798,7 +1285,7 @@ export const rejectAppointmentByAdminService = async ({
 }) => {
   validateObjectId(appointmentId, "appointment id");
   validateRejectAppointmentInput(body);
-
+      await syncPastAppointmentStates();
   const session = await mongoose.startSession();
 
   try {
@@ -857,7 +1344,7 @@ export const cancelAppointmentByAdminService = async ({
   body,
 }) => {
   validateObjectId(appointmentId, "appointment id");
-
+  await syncPastAppointmentStates();
   const session = await mongoose.startSession();
 
   try {
@@ -887,6 +1374,12 @@ const ensureAppointmentCanBeRescheduled = (appointment) => {
   if (!appointment) {
     throw new AppError("Appointment not found", 404);
   }
+
+  if (appointment.status === "expired") {
+  throw new AppError("Expired appointment cannot be rescheduled", 400);
+}
+
+ensureAppointmentTimeNotOver(appointment);
 
   if (!["pending", "approved"].includes(appointment.status)) {
     throw new AppError(
@@ -979,7 +1472,11 @@ export const rescheduleAppointmentByPatientService = async ({
       if (newSlot.status !== "available") {
         throw new AppError("New selected slot is not available", 400);
       }
-
+      
+      ensureSlotHasEnoughLeadTime({
+  appointmentDate: newAppointmentDate,
+  startTime: newSlot.startTime,
+});
       if (oldSlotDay) {
         const oldSlot = oldSlotDay.slots.id(appointment.slotId);
 

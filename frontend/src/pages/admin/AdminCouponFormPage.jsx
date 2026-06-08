@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from "react";
+import { useEffect, useState } from "react";
 import {
   ArrowLeft,
   BadgePercent,
@@ -23,6 +23,7 @@ import { getActiveSpecialtiesApi } from "../../features/admin/specialtyService";
 
 import {
   clearCouponError,
+  clearSelectedCoupon,
   createCoupon,
   fetchAdminCouponDetails,
   updateCoupon,
@@ -47,6 +48,67 @@ const toISOStringFromLocal = (value) => {
   return new Date(value).toISOString();
 };
 
+const normalizeSpecialtiesResponse = (response) => {
+  const data = response?.data;
+
+  if (Array.isArray(data)) {
+    return data;
+  }
+
+  if (Array.isArray(data?.specialties)) {
+    return data.specialties;
+  }
+
+  return [];
+};
+
+function useActiveSpecialties() {
+  const [specialties, setSpecialties] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const fetchSpecialties = async () => {
+      try {
+        setIsLoading(true);
+
+        const response = await getActiveSpecialtiesApi();
+
+        if (!isMounted) return;
+
+        setSpecialties(normalizeSpecialtiesResponse(response));
+      } catch (error) {
+        const message =
+          error?.response?.data?.message ||
+          error?.message ||
+          "Failed to fetch active specialties";
+
+        toast.error(message);
+
+        if (isMounted) {
+          setSpecialties([]);
+        }
+      } finally {
+        if (isMounted) {
+          setIsLoading(false);
+        }
+      }
+    };
+
+    fetchSpecialties();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  return {
+    specialties,
+    isLoading,
+  };
+}
+
 function AdminCouponFormPage() {
   const { couponId } = useParams();
   const isEditMode = Boolean(couponId);
@@ -54,14 +116,11 @@ function AdminCouponFormPage() {
   const navigate = useNavigate();
   const dispatch = useAppDispatch();
 
-  const {
-    selectedCoupon,
-    isLoading,
-    isSaving,
-    error,
-  } = useAppSelector((state) => state.coupons);
+  const { selectedCoupon, isLoading, isSaving, error } = useAppSelector(
+    (state) => state.coupons
+  );
 
-  const [specialtiesState, setSpecialtiesState] = ReactUseSpecialties();
+  const specialtiesState = useActiveSpecialties();
 
   const {
     register,
@@ -91,7 +150,9 @@ function AdminCouponFormPage() {
   const discountType = watch("discountType");
 
   useEffect(() => {
-    if (isEditMode) {
+    dispatch(clearSelectedCoupon());
+
+    if (isEditMode && couponId) {
       dispatch(fetchAdminCouponDetails(couponId));
     }
   }, [dispatch, couponId, isEditMode]);
@@ -460,42 +521,6 @@ function AdminCouponFormPage() {
       </main>
     </DashboardLayout>
   );
-}
-
-function ReactUseSpecialties() {
-  const [specialties, setSpecialties] = React.useState([]);
-  const [isLoading, setIsLoading] = React.useState(true);
-
-  React.useEffect(() => {
-    const fetchSpecialties = async () => {
-      try {
-        setIsLoading(true);
-
-        const response = await getActiveSpecialtiesApi();
-
-        setSpecialties(response.data || []);
-      } catch (error) {
-        const message =
-          error?.response?.data?.message ||
-          error?.message ||
-          "Failed to fetch active specialties";
-
-        toast.error(message);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    fetchSpecialties();
-  }, []);
-
-  return [
-    {
-      specialties,
-      isLoading,
-    },
-    setSpecialties,
-  ];
 }
 
 export default AdminCouponFormPage;

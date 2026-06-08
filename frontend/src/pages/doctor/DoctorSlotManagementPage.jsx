@@ -53,7 +53,12 @@ const RECURRING_OPTIONS = [
 ];
 
 const getTodayDateString = () => {
-  return new Date().toISOString().split("T")[0];
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Kolkata",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date());
 };
 
 const formatDateShort = (dateString) => {
@@ -113,6 +118,16 @@ const isValidSlotTime = (startTime, endTime) => {
   return duration >= 15 && duration <= 120;
 };
 
+const buildSlotDateTime = ({ date, time }) => {
+  return new Date(`${date}T${time}:00+05:30`);
+};
+
+const isSlotExpiredOnFrontend = ({ date, endTime }) => {
+  if (!date || !endTime) return false;
+
+  return buildSlotDateTime({ date, time: endTime }) <= new Date();
+};
+
 const getActiveSlots = (slotDay) => {
   return (
     slotDay?.slots?.filter(
@@ -127,6 +142,50 @@ const hasBookedSlot = (slotDay) => {
       (slot) => !slot.isDeleted && slot.status === "booked"
     )
   );
+};
+
+const getSlotStatusMeta = ({ slotDay, slot }) => {
+  const expired =
+    slot.isExpired ||
+    slot.displayStatus === "expired" ||
+    isSlotExpiredOnFrontend({
+      date: slotDay?.date,
+      endTime: slot.endTime,
+    });
+
+  if (expired) {
+    return {
+      label: "Expired",
+      className: "bg-zinc-100 text-zinc-700",
+      canEdit: false,
+      canDelete: false,
+    };
+  }
+
+  if (slot.status === "booked" || slot.displayStatus === "booked") {
+    return {
+      label: "Booked",
+      className: "bg-red-50 text-red-600",
+      canEdit: false,
+      canDelete: false,
+    };
+  }
+
+  if (slot.status === "reserved" || slot.displayStatus === "reserved") {
+    return {
+      label: "Reserved",
+      className: "bg-orange-50 text-orange-600",
+      canEdit: false,
+      canDelete: false,
+    };
+  }
+
+  return {
+    label: "Available",
+    className: "bg-[#DCFCE7] text-[#15803D]",
+    canEdit: slot.canEdit !== false,
+    canDelete: slot.canDelete !== false,
+  };
 };
 
 function DoctorSlotManagementPage() {
@@ -213,15 +272,27 @@ function DoctorSlotManagementPage() {
 
   const selectedDayHasBookedSlot = hasBookedSlot(selectedSlotDay);
 
-const canRestoreDefaults = Boolean(
-  selectedSlotDay &&
-    !isSundaySlotDay(selectedSlotDay) &&
-    !selectedDayHasBookedSlot
-);
+  const canManageSelectedDay = Boolean(
+    selectedSlotDay &&
+      selectedSlotDay.canManageSlots !== false &&
+      !selectedSlotDay.isPastDate
+  );
+
+  const canRestoreDefaults = Boolean(
+    selectedSlotDay &&
+      selectedSlotDay.canRestoreDefaults !== false &&
+      !isSundaySlotDay(selectedSlotDay) &&
+      !selectedDayHasBookedSlot
+  );
 
   const openAddModal = () => {
     if (!selectedSlotDay) {
       toast.error("Please select a date first");
+      return;
+    }
+
+    if (!canManageSelectedDay) {
+      toast.error("Past date slots cannot be modified");
       return;
     }
 
@@ -243,17 +314,27 @@ const canRestoreDefaults = Boolean(
   };
 
   const openEditModal = (slot) => {
-  setFormValues({
-    startTime: slot.startTime,
-    endTime: slot.endTime,
-  });
+    const statusMeta = getSlotStatusMeta({
+      slotDay: selectedSlotDay,
+      slot,
+    });
 
-  setSlotModal({
-    open: true,
-    mode: "edit",
-    slot,
-  });
-};
+    if (!statusMeta.canEdit) {
+      toast.error(`${statusMeta.label} slot cannot be edited`);
+      return;
+    }
+
+    setFormValues({
+      startTime: slot.startTime,
+      endTime: slot.endTime,
+    });
+
+    setSlotModal({
+      open: true,
+      mode: "edit",
+      slot,
+    });
+  };
 
   const closeSlotModal = () => {
     setSlotModal({
@@ -280,6 +361,11 @@ const canRestoreDefaults = Boolean(
   const handleSubmitSlot = async () => {
     if (!selectedSlotDay) {
       toast.error("Please select a date first");
+      return;
+    }
+
+    if (!canManageSelectedDay) {
+      toast.error("Past date slots cannot be modified");
       return;
     }
 
@@ -322,14 +408,24 @@ const canRestoreDefaults = Boolean(
     }
   };
 
-const handleDeleteSlot = (slot) => {
-  if (!selectedSlotDay) return;
+  const handleDeleteSlot = (slot) => {
+    if (!selectedSlotDay) return;
 
-  setDeleteModal({
-    open: true,
-    slot,
-  });
-};
+    const statusMeta = getSlotStatusMeta({
+      slotDay: selectedSlotDay,
+      slot,
+    });
+
+    if (!statusMeta.canDelete) {
+      toast.error(`${statusMeta.label} slot cannot be deleted`);
+      return;
+    }
+
+    setDeleteModal({
+      open: true,
+      slot,
+    });
+  };
 
   const confirmDeleteSlot = async () => {
     if (!selectedSlotDay || !deleteModal.slot) return;
@@ -359,6 +455,11 @@ const handleDeleteSlot = (slot) => {
   const openHolidayModal = (mode) => {
     if (!selectedSlotDay) {
       toast.error("Please select a date first");
+      return;
+    }
+
+    if (selectedSlotDay.isPastDate) {
+      toast.error("Past dates cannot be modified");
       return;
     }
 
@@ -436,6 +537,11 @@ const handleDeleteSlot = (slot) => {
       return;
     }
 
+    if (!canManageSelectedDay) {
+      toast.error("Past date slots cannot be repeated");
+      return;
+    }
+
     if (selectedSlotDay.isHoliday) {
       toast.error("Cannot apply recurring from a holiday");
       return;
@@ -488,9 +594,9 @@ const handleDeleteSlot = (slot) => {
             </h1>
 
             <p className="mt-2 max-w-[760px] text-sm leading-[22px] text-[#7A7A85] dark:text-slate-400">
-              Manage working days, extra consultation timings, recurring slots,
-              and holiday availability. Default slots are protected from direct
-              deletion.
+              Manage future working days, extra consultation timings, recurring
+              slots, and holiday availability. Expired, booked, and reserved
+              slots cannot be edited or deleted.
             </p>
           </div>
 
@@ -516,14 +622,12 @@ const handleDeleteSlot = (slot) => {
               <div className="mt-8 flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
                 <div>
                   <h2 className="text-lg font-extrabold text-black dark:text-slate-100">
-                    Available slots for{" "}
-                    {selectedSlotDay?.dayOfWeek || "selected day"}
+                    Slots for {selectedSlotDay?.dayOfWeek || "selected day"}
                   </h2>
 
                   <p className="mt-1 max-w-[680px] text-sm leading-6 text-[#7A7A85] dark:text-slate-400">
-                    Default slots are system-generated. You can add, edit, or
-                    remove only extra slots. Use holiday mode when the doctor is
-                    unavailable for the full day.
+                    Future available slots can be managed. Past slots are shown
+                    as expired for history, but cannot be modified.
                   </p>
                 </div>
 
@@ -538,7 +642,11 @@ const handleDeleteSlot = (slot) => {
                       onChange={(event) =>
                         setRecurringDays(event.target.value)
                       }
-                      disabled={selectedSlotDay?.isHoliday || isMutating}
+                      disabled={
+                        !canManageSelectedDay ||
+                        selectedSlotDay?.isHoliday ||
+                        isMutating
+                      }
                       className="h-11 min-w-[210px] rounded-xl border border-[#E5E7EB] bg-white px-4 text-sm font-semibold text-[#4B5563] outline-none transition focus:border-[#9381FF] focus:ring-4 focus:ring-[#9381FF]/10 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200"
                     >
                       {RECURRING_OPTIONS.map((option) => (
@@ -555,6 +663,7 @@ const handleDeleteSlot = (slot) => {
                     disabled={
                       isMutating ||
                       recurringDays === "0" ||
+                      !canManageSelectedDay ||
                       selectedSlotDay?.isHoliday
                     }
                     className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-[#9381FF] px-5 text-sm font-bold text-white shadow-[0_12px_24px_rgba(147,129,255,0.22)] transition hover:bg-[#7E6EF2] disabled:cursor-not-allowed disabled:opacity-60"
@@ -567,7 +676,11 @@ const handleDeleteSlot = (slot) => {
                     <button
                       type="button"
                       onClick={() => openHolidayModal("undo")}
-                      disabled={isMutating || isSundaySlotDay(selectedSlotDay)}
+                      disabled={
+                        isMutating ||
+                        isSundaySlotDay(selectedSlotDay) ||
+                        selectedSlotDay?.isPastDate
+                      }
                       className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-green-200 bg-green-50 px-5 text-sm font-bold text-green-700 transition hover:bg-green-100 disabled:cursor-not-allowed disabled:opacity-60"
                     >
                       <Umbrella size={16} />
@@ -580,7 +693,8 @@ const handleDeleteSlot = (slot) => {
                       disabled={
                         isMutating ||
                         isSundaySlotDay(selectedSlotDay) ||
-                        selectedDayHasBookedSlot
+                        selectedDayHasBookedSlot ||
+                        selectedSlotDay?.isPastDate
                       }
                       className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-orange-200 bg-orange-50 px-5 text-sm font-bold text-orange-700 transition hover:bg-orange-100 disabled:cursor-not-allowed disabled:opacity-60"
                     >
@@ -592,12 +706,12 @@ const handleDeleteSlot = (slot) => {
               </div>
 
               {selectedSlotDay?.isHoliday ? (
-               <HolidayState
-  slotDay={selectedSlotDay}
-  canRestore={canRestoreDefaults}
-  loading={isMutating}
-  onRestore={() => setRestoreModalOpen(true)}
-/>
+                <HolidayState
+                  slotDay={selectedSlotDay}
+                  canRestore={canRestoreDefaults}
+                  loading={isMutating}
+                  onRestore={() => setRestoreModalOpen(true)}
+                />
               ) : (
                 <>
                   <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
@@ -605,6 +719,7 @@ const handleDeleteSlot = (slot) => {
                       activeSlots.map((slot) => (
                         <SlotCard
                           key={slot._id}
+                          slotDay={selectedSlotDay}
                           slot={slot}
                           onEdit={() => openEditModal(slot)}
                           onDelete={() => handleDeleteSlot(slot)}
@@ -624,7 +739,7 @@ const handleDeleteSlot = (slot) => {
                     <button
                       type="button"
                       onClick={openAddModal}
-                      disabled={isMutating}
+                      disabled={isMutating || !canManageSelectedDay}
                       className="inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-bold text-[#9381FF] transition hover:bg-[#F3EFFF] hover:text-[#7E6EF2] disabled:cursor-not-allowed disabled:opacity-60"
                     >
                       <Plus size={18} />
@@ -649,42 +764,38 @@ const handleDeleteSlot = (slot) => {
         />
       )}
 
-  <ConfirmModal
-  open={deleteModal.open}
-  title="Delete Slot?"
-  description={
-    deleteModal.slot?.type === "default"
-      ? "Are you sure you want to delete this default slot? If this is the last active slot, this date will become unavailable for patients."
-      : "Are you sure you want to delete this extra slot? If this is the last active slot, this date will become unavailable for patients."
-  }
-  confirmText="Delete Slot"
-  cancelText="Cancel"
-  danger
-  loading={isMutating}
-  onConfirm={confirmDeleteSlot}
-  onCancel={() =>
-    setDeleteModal({
-      open: false,
-      slot: null,
-    })
-  }
-/>
+      <ConfirmModal
+        open={deleteModal.open}
+        title="Delete Slot?"
+        description={
+          deleteModal.slot?.type === "default"
+            ? "Are you sure you want to delete this default slot? If this is the last active slot, this date will become unavailable for patients."
+            : "Are you sure you want to delete this extra slot? If this is the last active slot, this date will become unavailable for patients."
+        }
+        confirmText="Delete Slot"
+        cancelText="Cancel"
+        danger
+        loading={isMutating}
+        onConfirm={confirmDeleteSlot}
+        onCancel={() =>
+          setDeleteModal({
+            open: false,
+            slot: null,
+          })
+        }
+      />
 
       <ConfirmModal
         open={holidayModal.open}
         title={
-          holidayModal.mode === "mark"
-            ? "Mark Date as Holiday?"
-            : "Undo Holiday?"
+          holidayModal.mode === "mark" ? "Mark Date as Holiday?" : "Undo Holiday?"
         }
         description={
           holidayModal.mode === "mark"
             ? "Patients will not be able to book appointments on this date. This is only allowed when there are no booked slots."
             : "Default consultation slots will be restored for this date."
         }
-        confirmText={
-          holidayModal.mode === "mark" ? "Mark Holiday" : "Undo Holiday"
-        }
+        confirmText={holidayModal.mode === "mark" ? "Mark Holiday" : "Undo Holiday"}
         cancelText="Cancel"
         danger={holidayModal.mode === "mark"}
         loading={isMutating}
@@ -743,6 +854,9 @@ function DoctorInfoCard({ user }) {
 
 function DayCard({ slotDay, selected, onClick }) {
   const activeSlots = getActiveSlots(slotDay);
+  const expiredCount = activeSlots.filter(
+    (slot) => slot.displayStatus === "expired" || slot.isExpired
+  ).length;
 
   return (
     <button
@@ -784,7 +898,7 @@ function DayCard({ slotDay, selected, onClick }) {
         )}
       </div>
 
-      <div className="mt-4">
+      <div className="mt-4 flex flex-wrap gap-2">
         {slotDay.isHoliday ? (
           <span
             className={`inline-flex rounded-full px-3 py-1 text-xs font-bold ${
@@ -796,25 +910,40 @@ function DayCard({ slotDay, selected, onClick }) {
             Holiday
           </span>
         ) : (
-          <span
-            className={`inline-flex rounded-full px-3 py-1 text-xs font-bold ${
-              selected
-                ? "bg-white/20 text-white"
-                : "bg-[#F0F1FF] text-[#9381FF]"
-            }`}
-          >
-            {activeSlots.length} slots
-          </span>
+          <>
+            <span
+              className={`inline-flex rounded-full px-3 py-1 text-xs font-bold ${
+                selected
+                  ? "bg-white/20 text-white"
+                  : "bg-[#F0F1FF] text-[#9381FF]"
+              }`}
+            >
+              {activeSlots.length} slots
+            </span>
+
+            {expiredCount > 0 && (
+              <span
+                className={`inline-flex rounded-full px-3 py-1 text-xs font-bold ${
+                  selected ? "bg-white/20 text-white" : "bg-zinc-100 text-zinc-700"
+                }`}
+              >
+                {expiredCount} expired
+              </span>
+            )}
+          </>
         )}
       </div>
     </button>
   );
 }
 
-function SlotCard({ slot, onEdit, onDelete, disabled }) {
+function SlotCard({ slotDay, slot, onEdit, onDelete, disabled }) {
   const isDefaultSlot = slot.type === "default";
-  const isBooked = slot.status === "booked";
-  
+  const statusMeta = getSlotStatusMeta({ slotDay, slot });
+
+  const disableEdit = disabled || !statusMeta.canEdit;
+  const disableDelete = disabled || !statusMeta.canDelete;
+
   return (
     <div className="min-h-[148px] rounded-2xl border border-[#EEF0F6] bg-white p-5 shadow-[0_10px_26px_rgba(17,24,39,0.04)] dark:border-slate-800 dark:bg-slate-950">
       <div className="flex items-start justify-between gap-3">
@@ -828,11 +957,11 @@ function SlotCard({ slot, onEdit, onDelete, disabled }) {
           </p>
         </div>
 
-        {isBooked && (
-          <span className="rounded-full bg-red-50 px-3 py-1 text-xs font-bold text-red-600">
-            Booked
-          </span>
-        )}
+        <span
+          className={`rounded-full px-3 py-1 text-xs font-bold ${statusMeta.className}`}
+        >
+          {statusMeta.label}
+        </span>
       </div>
 
       <div className="mt-4 flex flex-wrap items-center gap-2">
@@ -845,19 +974,13 @@ function SlotCard({ slot, onEdit, onDelete, disabled }) {
             Extra
           </span>
         )}
-
-        {!isBooked && (
-          <span className="inline-flex rounded-full bg-[#DCFCE7] px-3 py-1 text-xs font-bold text-[#15803D]">
-            Available
-          </span>
-        )}
       </div>
 
       <div className="mt-6 flex items-center gap-[18px]">
         <button
           type="button"
           onClick={onEdit}
-          disabled={disabled || isBooked}
+          disabled={disableEdit}
           className="inline-flex items-center gap-2 text-sm font-semibold text-[#7C5CFC] transition hover:text-[#5F43E8] disabled:cursor-not-allowed disabled:opacity-50"
         >
           <Edit3 size={16} />
@@ -867,7 +990,7 @@ function SlotCard({ slot, onEdit, onDelete, disabled }) {
         <button
           type="button"
           onClick={onDelete}
-          disabled={disabled || isBooked}
+          disabled={disableDelete}
           className="inline-flex items-center gap-2 text-sm font-semibold text-[#EF4444] transition hover:text-red-700 disabled:cursor-not-allowed disabled:opacity-50"
         >
           <Trash2 size={16} />
@@ -888,7 +1011,7 @@ function SlotModal({ mode, values, loading, onChange, onClose, onSubmit }) {
         <div className="mb-5 flex items-start justify-between">
           <div>
             <h2 className="text-lg font-bold text-black dark:text-slate-100">
-              {mode === "add" ? "Add2 Extra Slot" : "Edit Slot"}
+              {mode === "add" ? "Add Extra Slot" : "Edit Slot"}
             </h2>
 
             <p className="text-sm text-[#7A7A85] dark:text-slate-400">
@@ -989,12 +1112,7 @@ function SlotModal({ mode, values, loading, onChange, onClose, onSubmit }) {
   );
 }
 
-function HolidayState({
-  slotDay,
-  canRestore = false,
-  loading = false,
-  onRestore,
-}) {
+function HolidayState({ slotDay, canRestore = false, loading = false, onRestore }) {
   const isSunday = slotDay?.dayOfWeek === "Sunday";
 
   return (

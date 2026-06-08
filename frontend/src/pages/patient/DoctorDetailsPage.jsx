@@ -121,6 +121,11 @@ function DoctorDetailsPage() {
   };
 
   const handleSlotSelect = (slot) => {
+    if (!slot.isBookable) {
+      toast.error(slot.unavailableMessage || "This slot is not bookable");
+      return;
+    }
+
     dispatch(
       setSelectedDoctorSlot({
         doctorId,
@@ -129,9 +134,24 @@ function DoctorDetailsPage() {
     );
   };
 
- const handleContinueBooking = () => {
+  const handleContinueBooking = () => {
   if (!selectedSlot) {
     toast.error("Please select a slot first");
+    return;
+  }
+
+  if (!selectedSlot.isBookable) {
+    toast.error(
+      selectedSlot.unavailableMessage ||
+        "Selected slot is no longer available. Please choose another slot."
+    );
+    return;
+  }
+
+  if (selectedSlot.isReservedByMe && selectedSlot.existingAppointmentId) {
+    toast.success("This slot is already reserved for you. Continue payment.");
+
+    navigate(`/payment/${selectedSlot.existingAppointmentId}`);
     return;
   }
 
@@ -147,7 +167,7 @@ function DoctorDetailsPage() {
 
   const bookingDraft = {
     doctorId,
-    selectedDate,
+    selectedDate: safeSelectedDate,
     slotDayId,
     selectedSlot: {
       ...selectedSlot,
@@ -156,6 +176,7 @@ function DoctorDetailsPage() {
   };
 
   saveBookingDraft(bookingDraft);
+  dispatch(setBookingDraft(bookingDraft));
 
   navigate(`/book-appointment/${doctorId}`);
 };
@@ -205,28 +226,55 @@ function DoctorDetailsPage() {
                     Loading available slots...
                   </div>
                 ) : availableSlotData?.isHoliday ? (
-  <div className="rounded-2xl bg-orange-50 p-6 text-sm font-bold text-orange-600">
-    {availableSlotData?.dayOfWeek === "Sunday"
-      ? "Sunday holiday. No slots available."
-      : "Doctor is not available on this date. Please select another date."}
-  </div>
-): sortedSlots.length > 0 ? (
+                  <div className="rounded-2xl bg-orange-50 p-6 text-sm font-bold text-orange-600">
+                    {availableSlotData?.dayOfWeek === "Sunday"
+                      ? "Sunday holiday. No slots available."
+                      : "Doctor is not available on this date. Please select another date."}
+                  </div>
+                ) : sortedSlots.length > 0 ? (
                   <div className="grid gap-4 md:grid-cols-2">
                     {sortedSlots.map((slot) => {
                       const active = selectedSlot?._id === slot._id;
+                      const disabled = !slot.isBookable;
 
                       return (
                         <button
                           key={slot._id}
                           type="button"
+                          disabled={disabled}
                           onClick={() => handleSlotSelect(slot)}
-                          className={`h-16 rounded-2xl border text-sm font-extrabold transition ${
+                          className={`min-h-16 rounded-2xl border px-4 py-3 text-sm font-extrabold transition ${
                             active
                               ? "border-green-200 bg-green-100 text-green-700 shadow-[0_12px_26px_rgba(34,197,94,0.16)]"
-                              : "border-[#E5E7EB] bg-white text-[#374151] hover:border-[#9381FF] hover:bg-[#F0F1FF] hover:text-[#9381FF]"
+                              : disabled
+                                ? "cursor-not-allowed border-[#E5E7EB] bg-[#F3F4F6] text-[#9CA3AF]"
+                                : "border-[#E5E7EB] bg-white text-[#374151] hover:border-[#9381FF] hover:bg-[#F0F1FF] hover:text-[#9381FF]"
                           }`}
                         >
-                          {formatTime(slot.startTime)} – {formatTime(slot.endTime)}
+                          <span className="block">
+                            {formatTime(slot.startTime)} –{" "}
+                            {formatTime(slot.endTime)}
+                          </span>
+
+                         {slot.isReservedByMe && (
+  <span className="mt-1 inline-flex rounded-full bg-green-100 px-3 py-1 text-[11px] font-extrabold text-green-700">
+    Reserved for you
+  </span>
+)}
+
+{disabled && (
+  <span
+    className={`mt-1 inline-flex rounded-full px-3 py-1 text-[11px] font-extrabold ${
+      slot.unavailableReason === "expired"
+        ? "bg-zinc-200 text-zinc-600"
+        : slot.unavailableReason === "too_soon"
+          ? "bg-orange-100 text-orange-600"
+          : "bg-slate-200 text-slate-600"
+    }`}
+  >
+    {slot.unavailableMessage || "Unavailable"}
+  </span>
+)}
                         </button>
                       );
                     })}
@@ -248,7 +296,8 @@ function DoctorDetailsPage() {
                 <button
                   type="button"
                   onClick={handleContinueBooking}
-                  className="h-13 min-w-[220px] rounded-2xl bg-[#9381FF] px-8 py-4 text-sm font-extrabold text-white shadow-[0_14px_30px_rgba(147,129,255,0.26)] transition hover:bg-[#7E6EF2]"
+                  disabled={!selectedSlot || !selectedSlot?.isBookable}
+                  className="h-13 min-w-[220px] rounded-2xl bg-[#9381FF] px-8 py-4 text-sm font-extrabold text-white shadow-[0_14px_30px_rgba(147,129,255,0.26)] transition hover:bg-[#7E6EF2] disabled:cursor-not-allowed disabled:bg-[#C4BFFF] disabled:shadow-none"
                 >
                   Continue Booking
                 </button>
@@ -303,12 +352,16 @@ function DoctorProfileCard({ doctor }) {
             <div className="mt-4 flex flex-wrap gap-3">
               <ProfilePill
                 icon={BriefcaseBusiness}
-                text={`${doctor.professionalInfo?.experience || 0} Years Experience`}
+                text={`${
+                  doctor.professionalInfo?.experience || 0
+                } Years Experience`}
               />
 
               <ProfilePill
                 icon={Phone}
-                text={`No: ${doctor.professionalInfo?.contactNumber || "Not available"}`}
+                text={`No: ${
+                  doctor.professionalInfo?.contactNumber || "Not available"
+                }`}
               />
 
               <ProfilePill

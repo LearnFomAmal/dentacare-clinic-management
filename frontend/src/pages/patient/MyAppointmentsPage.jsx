@@ -25,6 +25,7 @@ const STATUS_TABS = [
   { label: "Completed", value: "completed" },
   { label: "Cancelled", value: "cancelled" },
   { label: "Rejected", value: "rejected" },
+  { label: "Expired", value: "expired" },
   { label: "Payment Pending", value: "pending_payment" },
 ];
 
@@ -60,6 +61,7 @@ function MyAppointmentsPage() {
         .length,
       cancelled: myAppointments.filter((item) => item.status === "cancelled")
         .length,
+        expired: myAppointments.filter((item) => item.status === "expired").length,
     };
   }, [myAppointments]);
 
@@ -81,12 +83,13 @@ function MyAppointmentsPage() {
           </p>
         </section>
 
-        <section className="mb-6 grid gap-4 md:grid-cols-5">
+        <section className="mb-6 grid gap-4 md:grid-cols-6">
           <StatCard label="Total" value={stats.total} />
           <StatCard label="Pending" value={stats.pending} />
           <StatCard label="Approved" value={stats.approved} />
           <StatCard label="Completed" value={stats.completed} />
           <StatCard label="Cancelled" value={stats.cancelled} />
+          <StatCard label="Expired" value={stats.expired} />
         </section>
 
         <section className="mb-6 flex flex-wrap gap-3">
@@ -212,6 +215,14 @@ function AppointmentCard({ appointment, onView }) {
           className="bg-red-50 text-red-700 dark:bg-red-500/10 dark:text-red-300"
         />
       )}
+     
+     {appointment.status === "expired" && (
+   <StatusNote
+    title="Expired"
+    text="This appointment expired because the scheduled time passed without approval."
+    className="bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300"
+  />
+)}
 
       <button
         type="button"

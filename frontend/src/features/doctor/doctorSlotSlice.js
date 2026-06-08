@@ -12,7 +12,12 @@ import {
 } from "./doctorSlotService";
 
 const getTodayDateString = () => {
-  return new Date().toISOString().split("T")[0];
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Kolkata",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date());
 };
 
 const getErrorMessage = (error, fallback) => {

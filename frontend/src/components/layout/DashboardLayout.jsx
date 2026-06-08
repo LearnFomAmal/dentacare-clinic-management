@@ -115,10 +115,16 @@ const getRoleLinks = (role) => {
         icon: Stethoscope,
       },
       {
+  label: "Earnings",
+  to: ROUTES.DOCTOR_EARNINGS,
+  icon: WalletCards,
+},
+      {
         label: "Settings",
         to: ROUTES.DOCTOR_SETTINGS,
         icon: Settings,
       },
+      
     ];
   }
 
@@ -156,22 +162,28 @@ const patientTopLinks = [
     label: "Home",
     to: ROUTES.HOME,
     end: true,
+    match: (pathname) => pathname === ROUTES.HOME,
   },
   {
     label: "Dashboard",
     to: ROUTES.PATIENT_DASHBOARD || ROUTES.USER_SETTINGS,
+    match: (pathname) =>
+      pathname === ROUTES.PATIENT_DASHBOARD ||
+      pathname.startsWith("/my-appointments") ||
+      pathname.startsWith("/wallet") ||
+      pathname.startsWith("/referrals") ||
+      pathname.startsWith("/settings"),
   },
   {
     label: "Find Doctors",
     to: ROUTES.FIND_DOCTORS,
-  },
-  {
-    label: "Wallet",
-    to: ROUTES.WALLET,
-  },
-  {
-    label: "Referrals",
-    to: ROUTES.REFERRALS,
+    match: (pathname) =>
+      pathname === ROUTES.FIND_DOCTORS ||
+      pathname.startsWith("/doctors") ||
+      pathname.startsWith("/book-appointment") ||
+      pathname.startsWith("/payment") ||
+      pathname.startsWith("/payment-success") ||
+      pathname.startsWith("/payment-failed"),
   },
 ];
 
@@ -443,9 +455,14 @@ function DashboardLayout({
             {routeRole === "patient" && (
               <nav className="hidden items-center gap-8 lg:flex">
                 {patientTopLinks.map((item) => (
-                  <TopNavLink key={item.label} to={item.to} end={item.end}>
-                    {item.label}
-                  </TopNavLink>
+                  <TopNavLink
+  key={item.label}
+  to={item.to}
+  end={item.end}
+  match={item.match}
+>
+  {item.label}
+</TopNavLink>
                 ))}
               </nav>
             )}
@@ -476,7 +493,12 @@ function DashboardLayout({
           {routeRole === "patient" && (
             <nav className="flex gap-2 overflow-x-auto border-t border-[#F3F4F6] px-4 py-3 dark:border-slate-800 lg:hidden">
               {patientTopLinks.map((item) => (
-                <MobileTopLink key={item.label} to={item.to} end={item.end}>
+                <MobileTopLink
+                  key={item.label}
+                  to={item.to}
+                  end={item.end}
+                  match={item.match}
+                >
                   {item.label}
                 </MobileTopLink>
               ))}
@@ -531,36 +553,48 @@ function SidebarLink({ item, collapsed, onClick }) {
   );
 }
 
-function TopNavLink({ to, children, end = false }) {
+function TopNavLink({ to, children, end = false, match }) {
+  const location = useLocation();
+
+  const active = match
+    ? match(location.pathname)
+    : end
+      ? location.pathname === to
+      : location.pathname === to || location.pathname.startsWith(`${to}/`);
+
   return (
     <NavLink
       to={to}
       end={end}
-      className={({ isActive }) =>
-        `text-sm font-extrabold transition ${
-          isActive
-            ? "text-[#9381FF]"
-            : "text-[#2D333B] hover:text-[#9381FF] dark:text-slate-300"
-        }`
-      }
+      className={`text-sm font-extrabold transition ${
+        active
+          ? "text-[#9381FF]"
+          : "text-[#2D333B] hover:text-[#9381FF] dark:text-slate-300"
+      }`}
     >
       {children}
     </NavLink>
   );
 }
 
-function MobileTopLink({ to, children, end = false }) {
+function MobileTopLink({ to, children, end = false, match }) {
+  const location = useLocation();
+
+  const active = match
+    ? match(location.pathname)
+    : end
+      ? location.pathname === to
+      : location.pathname === to || location.pathname.startsWith(`${to}/`);
+
   return (
     <NavLink
       to={to}
       end={end}
-      className={({ isActive }) =>
-        `flex shrink-0 items-center gap-2 rounded-xl px-4 py-2 text-sm font-bold transition ${
-          isActive
-            ? "bg-[#9381FF] text-white"
-            : "bg-[#F8FAFC] text-[#6B7280] dark:bg-slate-800 dark:text-slate-300"
-        }`
-      }
+      className={`flex shrink-0 items-center gap-2 rounded-xl px-4 py-2 text-sm font-bold transition ${
+        active
+          ? "bg-[#9381FF] text-white"
+          : "bg-[#F8FAFC] text-[#6B7280] dark:bg-slate-800 dark:text-slate-300"
+      }`}
     >
       {children}
     </NavLink>

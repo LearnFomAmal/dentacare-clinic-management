@@ -8,14 +8,15 @@ import {
   findAdminReferrals,
   findMyReferralHistory,
   findMyReferralStats,
-  findPendingReferralByReferredUser,
   findReferralByReferredUser,
   findUserByIdForReferral,
   findUserByReferralCode,
   findUserReferralProfile,
   getActiveReferralConfig,
   getLatestReferralConfig,
+  hasSuccessfulReferralDiscountAppointment,
   upsertReferralConfig,
+  findReferralByReferredUserForProfile,
 } from "./referral.repository.js";
 
 import {
@@ -25,14 +26,71 @@ import {
 
 const REFERRAL_CODE_PREFIX = "DENTA";
 
+const DEFAULT_REFERRAL_CONFIG = {
+  refereeDiscountType: "flat",
+  refereeDiscountValue: 100,
+  maxDiscount: 100,
+  minAppointmentAmount: 0,
+  referrerReward: 100,
+  isActive: true,
+};
+
 const normalizeReferralCode = (code = "") => {
   return String(code).trim().toUpperCase();
 };
 
-export const calculateReferralDiscount = ({
-  config,
-  amount,
-}) => {
+const normalizeReferralConfigResponse = (config) => {
+  if (!config) {
+    return null;
+  }
+
+  return {
+    _id: config._id,
+    refereeDiscountType: config.refereeDiscountType,
+    refereeDiscountValue: config.refereeDiscountValue,
+    maxDiscount: config.maxDiscount,
+    minAppointmentAmount: config.minAppointmentAmount,
+    referrerReward: config.referrerReward,
+    isActive: config.isActive,
+    updatedBy: config.updatedBy || null,
+    createdAt: config.createdAt,
+    updatedAt: config.updatedAt,
+  };
+};
+
+const ensureReferralConfigExists = async () => {
+  const latestConfig = await getLatestReferralConfig();
+
+  if (latestConfig) {
+    return latestConfig;
+  }
+
+  return upsertReferralConfig({
+    payload: DEFAULT_REFERRAL_CONFIG,
+    adminId: null,
+  });
+};
+
+const getActiveReferralConfigForDiscount = async () => {
+  const activeConfig = await getActiveReferralConfig();
+
+  if (activeConfig) {
+    return activeConfig;
+  }
+
+  const latestConfig = await getLatestReferralConfig();
+
+  if (latestConfig) {
+    return null;
+  }
+
+  return upsertReferralConfig({
+    payload: DEFAULT_REFERRAL_CONFIG,
+    adminId: null,
+  });
+};
+
+export const calculateReferralDiscount = ({ config, amount }) => {
   const numericAmount = Number(amount);
 
   if (!config || !config.isActive) {
@@ -94,6 +152,10 @@ export const validateReferralCodeForRegistration = async ({
     throw new AppError("Invalid referral code", 400);
   }
 
+  if (!referrer.referral?.referralCode) {
+    throw new AppError("Referral code is not active", 400);
+  }
+
   if (referrer.email?.toLowerCase() === String(email).toLowerCase()) {
     throw new AppError("You cannot use your own referral code", 400);
   }
@@ -114,8 +176,21 @@ export const createReferralAfterRegistration = async ({
   referredUserId,
   referralCode,
 }) => {
-  if (!referrerId || !referredUserId) {
-    return null;
+  if (!referrerId) {
+    throw new AppError("Referral referrer is missing", 400);
+  }
+
+  if (!referredUserId) {
+    throw new AppError("Referred user is missing", 400);
+  }
+
+  const code = normalizeReferralCode(referralCode);
+
+  if (!code) {
+    throw new AppError(
+      "Referral code is missing. Please register again with a valid referral code.",
+      400
+    );
   }
 
   const existingReferral = await findReferralByReferredUser({
@@ -129,7 +204,7 @@ export const createReferralAfterRegistration = async ({
   return createReferral({
     referrerId,
     referredUserId,
-    referralCode: normalizeReferralCode(referralCode),
+    referralCode: code,
     status: "pending",
     rewardStatus: "not_ready",
   });
@@ -139,6 +214,13 @@ export const getReferralDiscountForAppointment = async ({
   patient,
   appointmentAmount,
 }) => {
+  if (!patient?._id) {
+    return {
+      referralDiscount: 0,
+      appliedReferralId: null,
+    };
+  }
+
   if (!patient?.referral?.referredBy) {
     return {
       referralDiscount: 0,
@@ -153,7 +235,7 @@ export const getReferralDiscountForAppointment = async ({
     };
   }
 
-  const referral = await findPendingReferralByReferredUser({
+  const referral = await findReferralByReferredUser({
     referredUserId: patient._id,
   });
 
@@ -164,9 +246,36 @@ export const getReferralDiscountForAppointment = async ({
     };
   }
 
-  const config = await getActiveReferralConfig();
+  if (referral.status !== "pending") {
+    return {
+      referralDiscount: 0,
+      appliedReferralId: null,
+    };
+  }
 
-  if (!config) {
+  if (referral.discountUsedAt || referral.firstAppointmentId) {
+    return {
+      referralDiscount: 0,
+      appliedReferralId: null,
+    };
+  }
+
+  const alreadyUsedInSuccessfulPayment =
+    await hasSuccessfulReferralDiscountAppointment({
+      referredUserId: patient._id,
+      referralId: referral._id,
+    });
+
+  if (alreadyUsedInSuccessfulPayment) {
+    return {
+      referralDiscount: 0,
+      appliedReferralId: null,
+    };
+  }
+
+  const config = await getActiveReferralConfigForDiscount();
+
+  if (!config || !config.isActive) {
     return {
       referralDiscount: 0,
       appliedReferralId: null,
@@ -200,16 +309,39 @@ export const getMyReferralService = async ({ userId }) => {
     throw new AppError("User not found", 404);
   }
 
-  const [stats, config, referredByUser] = await Promise.all([
-    findMyReferralStats(userId),
-    getLatestReferralConfig(),
-    user.referral?.referredBy
-      ? findUserByIdForReferral(user.referral.referredBy)
-      : null,
-  ]);
+  const [stats, config, referredByUser, referredUserReferral] =
+    await Promise.all([
+      findMyReferralStats(userId),
+      ensureReferralConfigExists(),
+      user.referral?.referredBy
+        ? findUserByIdForReferral(user.referral.referredBy)
+        : null,
+      findReferralByReferredUserForProfile({
+        referredUserId: userId,
+      }),
+    ]);
+
+  const hasReferralSource = Boolean(user.referral?.referredBy);
+  const hasUsedReferralDiscount = Boolean(
+    referredUserReferral?.discountUsedAt ||
+      referredUserReferral?.firstAppointmentId ||
+      referredUserReferral?.status === "discount_used" ||
+      referredUserReferral?.status === "completed" ||
+      referredUserReferral?.status === "cancelled"
+  );
+
+  const isRefereeDiscountAvailable = Boolean(
+    hasReferralSource &&
+      referredUserReferral &&
+      referredUserReferral.status === "pending" &&
+      !referredUserReferral.discountUsedAt &&
+      !referredUserReferral.firstAppointmentId &&
+      !user.referral?.hasCompletedFirstAppointment
+  );
 
   return {
     referralCode: user.referral?.referralCode || "",
+
     referredBy: referredByUser
       ? {
           _id: referredByUser._id,
@@ -217,24 +349,26 @@ export const getMyReferralService = async ({ userId }) => {
           email: referredByUser.email,
         }
       : null,
+
     hasCompletedFirstAppointment:
       user.referral?.hasCompletedFirstAppointment || false,
+
+    refereeBenefit: {
+      isAvailable: isRefereeDiscountAvailable,
+      hasUsedDiscount: hasUsedReferralDiscount,
+      status: referredUserReferral?.status || null,
+      discountUsedAt: referredUserReferral?.discountUsedAt || null,
+      firstAppointmentId: referredUserReferral?.firstAppointmentId || null,
+    },
+
     walletSummary: user.walletSummary || {
       balance: 0,
       totalEarned: 0,
       totalSpent: 0,
     },
+
     stats,
-    config: config
-      ? {
-          refereeDiscountType: config.refereeDiscountType,
-          refereeDiscountValue: config.refereeDiscountValue,
-          maxDiscount: config.maxDiscount,
-          minAppointmentAmount: config.minAppointmentAmount,
-          referrerReward: config.referrerReward,
-          isActive: config.isActive,
-        }
-      : null,
+    config: normalizeReferralConfigResponse(config),
   };
 };
 
@@ -287,20 +421,9 @@ export const getAdminReferralsService = async ({ query }) => {
 };
 
 export const getReferralConfigService = async () => {
-  const config = await getLatestReferralConfig();
+  const config = await ensureReferralConfigExists();
 
-  if (!config) {
-    return {
-      refereeDiscountType: "flat",
-      refereeDiscountValue: 100,
-      maxDiscount: 100,
-      minAppointmentAmount: 0,
-      referrerReward: 100,
-      isActive: true,
-    };
-  }
-
-  return config;
+  return normalizeReferralConfigResponse(config);
 };
 
 export const updateReferralConfigService = async ({

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { X } from "lucide-react";
 
 import Button from "../ui/Button";
+import { getCancellationRefundInfo } from "../../utils/appointmentUi";
 
 const CANCELLATION_REASONS = [
   {
@@ -54,7 +55,7 @@ function CancelAppointmentModal({
   }, [open, actor]);
 
   if (!open) return null;
-
+   const refundInfo = getCancellationRefundInfo(appointment);
   const handleConfirm = () => {
     onConfirm({
       appointmentId: appointment?._id,
@@ -73,9 +74,9 @@ function CancelAppointmentModal({
             </h2>
 
             <p className="mt-1 text-sm leading-6 text-[#6B7280]">
-              Give a clear cancellation reason. If payment was completed, the
-              refund will be credited to the patient's wallet.
-            </p>
+  Give a clear cancellation reason. Refund depends on the cancellation
+  cutoff policy.
+</p>
           </div>
 
           <button
@@ -98,7 +99,23 @@ function CancelAppointmentModal({
             {appointment?.startTime || ""} - {appointment?.endTime || ""}
           </p>
         </div>
+            {actor === "patient" && refundInfo.isPaid && (
+  <div
+    className={`mt-4 rounded-2xl border p-4 ${
+      refundInfo.refundEligible
+        ? "border-green-100 bg-green-50 text-green-700"
+        : "border-red-100 bg-red-50 text-red-700"
+    }`}
+  >
+    <p className="text-xs font-extrabold uppercase tracking-[0.6px]">
+      {refundInfo.refundEligible ? "Refund Eligible" : "No Refund"}
+    </p>
 
+    <p className="mt-2 text-sm font-semibold leading-6">
+      {refundInfo.message}
+    </p>
+  </div>
+)}
         <div className="mt-5 space-y-3">
           {CANCELLATION_REASONS.map((item) => (
             <label

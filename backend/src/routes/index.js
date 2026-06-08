@@ -15,6 +15,7 @@ import paymentRoutes from "../modules/payments/payment.routes.js";
 import couponRoutes from "../modules/coupons/coupon.routes.js";
 import referralRoutes from "../modules/referrals/referral.routes.js";
 import walletRoutes from "../modules/wallets/wallet.routes.js";
+import earningRoutes from "../modules/earnings/earning.routes.js";
 
 const router = Router();
 
@@ -33,6 +34,7 @@ router.use("/payments", paymentRoutes);
 router.use("/coupons", couponRoutes);
 router.use("/referrals", referralRoutes);
 router.use("/wallets", walletRoutes);
+router.use("/earnings", earningRoutes);
 
 router.get("/health", (req, res) => {
   res.status(200).json({

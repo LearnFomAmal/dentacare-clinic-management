@@ -16,6 +16,8 @@ import {
   validatePagination,
 } from "./publicDoctor.validator.js";
 
+const MIN_BOOKING_LEAD_MINUTES = 120;
+
 const DEFAULT_SLOTS = [
   {
     startTime: "09:00",
@@ -92,9 +94,124 @@ const validateNotPastDate = (date) => {
   }
 };
 
+const buildSlotDateTime = ({ date, time }) => {
+  return new Date(`${date}T${time}:00+05:30`);
+};
+
+const getSlotAvailabilityMeta = ({ date, slot, patientId = null }) => {
+  const status = slot.status;
+
+  const isReservedByMe =
+    status === "reserved" &&
+    patientId &&
+    slot.reservedBy &&
+    slot.reservedBy.toString() === patientId.toString();
+
+  if (isReservedByMe) {
+    return {
+      isBookable: true,
+      isReservedByMe: true,
+      existingAppointmentId: slot.reservedAppointmentId
+        ? slot.reservedAppointmentId.toString()
+        : "",
+      reservedUntil: slot.reservedUntil || null,
+      unavailableReason: "",
+      unavailableMessage: "",
+      displayMessage: "Reserved for you",
+    };
+  }
+
+  if (status === "booked") {
+    return {
+      isBookable: false,
+      isReservedByMe: false,
+      existingAppointmentId: "",
+      reservedUntil: null,
+      unavailableReason: "booked",
+      unavailableMessage: "Booked",
+      displayMessage: "Booked",
+    };
+  }
+
+  if (status === "reserved") {
+    return {
+      isBookable: false,
+      isReservedByMe: false,
+      existingAppointmentId: "",
+      reservedUntil: slot.reservedUntil || null,
+      unavailableReason: "reserved",
+      unavailableMessage: "Reserved",
+      displayMessage: "Reserved",
+    };
+  }
+
+  if (status === "blocked") {
+    return {
+      isBookable: false,
+      isReservedByMe: false,
+      existingAppointmentId: "",
+      reservedUntil: null,
+      unavailableReason: "blocked",
+      unavailableMessage: "Blocked",
+      displayMessage: "Blocked",
+    };
+  }
+
+  const slotStart = buildSlotDateTime({
+    date,
+    time: slot.startTime,
+  });
+
+  const now = new Date();
+
+  const minimumAllowedStart = new Date(
+    now.getTime() + MIN_BOOKING_LEAD_MINUTES * 60 * 1000
+  );
+
+  if (slotStart <= now) {
+    return {
+      isBookable: false,
+      isReservedByMe: false,
+      existingAppointmentId: "",
+      reservedUntil: null,
+      unavailableReason: "expired",
+      unavailableMessage: "Expired",
+      displayMessage: "Expired",
+    };
+  }
+
+  if (slotStart < minimumAllowedStart) {
+    return {
+      isBookable: false,
+      isReservedByMe: false,
+      existingAppointmentId: "",
+      reservedUntil: null,
+      unavailableReason: "too_soon",
+      unavailableMessage: "Too soon",
+      displayMessage: "Too soon",
+    };
+  }
+
+  return {
+    isBookable: true,
+    isReservedByMe: false,
+    existingAppointmentId: "",
+    reservedUntil: null,
+    unavailableReason: "",
+    unavailableMessage: "",
+    displayMessage: "",
+  };
+};
+
 // ==============================
 // SLOT DAY HELPERS
 // ==============================
+const buildFreshDefaultSlots = () => {
+  return DEFAULT_SLOTS.map((slot) => ({
+    ...slot,
+  }));
+};
+
 const buildDefaultSlotDayPayload = (doctorId, date) => {
   const dayOfWeek = getDayOfWeek(date);
   const isHoliday = dayOfWeek === "Sunday";
@@ -104,8 +221,38 @@ const buildDefaultSlotDayPayload = (doctorId, date) => {
     date,
     dayOfWeek,
     isHoliday,
-    slots: isHoliday ? [] : DEFAULT_SLOTS,
+    slots: isHoliday ? [] : buildFreshDefaultSlots(),
   };
+};
+
+const clearExpiredReservations = async (slotDay) => {
+  if (!slotDay || slotDay.isHoliday) {
+    return slotDay;
+  }
+
+  const now = new Date();
+  let changed = false;
+
+  slotDay.slots.forEach((slot) => {
+    const isExpiredReservation =
+      slot.status === "reserved" &&
+      slot.reservedUntil &&
+      slot.reservedUntil < now;
+
+    if (isExpiredReservation) {
+      slot.status = "available";
+      slot.reservedBy = null;
+      slot.reservedAppointmentId = null;
+      slot.reservedUntil = null;
+      changed = true;
+    }
+  });
+
+  if (changed) {
+    await slotDay.save();
+  }
+
+  return slotDay;
 };
 
 const ensureSlotDay = async (doctorId, date) => {
@@ -131,7 +278,7 @@ const ensureSlotDay = async (doctorId, date) => {
   }
 };
 
-const getBookableSlots = (slotDay) => {
+const getVisibleSlots = (slotDay, patientId = null) => {
   if (!slotDay || slotDay.isHoliday) {
     return [];
   }
@@ -139,15 +286,36 @@ const getBookableSlots = (slotDay) => {
   const slotDayId = slotDay._id.toString();
 
   return slotDay.slots
-    .filter((slot) => !slot.isDeleted && slot.status === "available")
-    .map((slot) => ({
-      _id: slot._id.toString(),
-      slotDayId,
-      startTime: slot.startTime,
-      endTime: slot.endTime,
-      type: slot.type,
-      status: slot.status,
-    }));
+    .filter((slot) => !slot.isDeleted)
+    .map((slot) => {
+      const availability = getSlotAvailabilityMeta({
+        date: slotDay.date,
+        slot,
+        patientId,
+      });
+
+      return {
+        _id: slot._id.toString(),
+        slotDayId,
+        startTime: slot.startTime,
+        endTime: slot.endTime,
+        type: slot.type,
+        status: slot.status,
+
+        isBookable: availability.isBookable,
+        isReservedByMe: availability.isReservedByMe,
+        existingAppointmentId: availability.existingAppointmentId,
+        reservedUntil: availability.reservedUntil,
+
+        unavailableReason: availability.unavailableReason,
+        unavailableMessage: availability.unavailableMessage,
+        displayMessage: availability.displayMessage,
+      };
+    });
+};
+
+const getBookableSlots = (slotDay, patientId = null) => {
+  return getVisibleSlots(slotDay, patientId).filter((slot) => slot.isBookable);
 };
 
 const formatDoctor = (doctor, availableSlotsToday = []) => {
@@ -216,35 +384,7 @@ const getSortOption = (sort) => {
     createdAt: -1,
   };
 };
-const clearExpiredReservations = async (slotDay) => {
-  if (!slotDay || slotDay.isHoliday) {
-    return slotDay;
-  }
 
-  const now = new Date();
-  let changed = false;
-
-  slotDay.slots.forEach((slot) => {
-    const isExpiredReservation =
-      slot.status === "reserved" &&
-      slot.reservedUntil &&
-      slot.reservedUntil < now;
-
-    if (isExpiredReservation) {
-      slot.status = "available";
-      slot.reservedBy = null;
-      slot.reservedAppointmentId = null;
-      slot.reservedUntil = null;
-      changed = true;
-    }
-  });
-
-  if (changed) {
-    await slotDay.save();
-  }
-
-  return slotDay;
-};
 // ==============================
 // SERVICES
 // ==============================
@@ -259,7 +399,6 @@ export const getPublicDoctorsService = async (query) => {
   const { page, limit } = validatePagination(query);
 
   const activeSpecialties = await findActiveSpecialties();
-
   const activeSpecialtyIds = activeSpecialties.map((item) => item._id);
 
   if (specialtyId) {
@@ -318,7 +457,6 @@ export const getPublicDoctorsService = async (query) => {
   const doctorsWithSlots = await Promise.all(
     doctors.map(async (doctor) => {
       const slotDay = await ensureSlotDay(doctor._id, today);
-
       const availableSlotsToday = getBookableSlots(slotDay).slice(0, 4);
 
       return formatDoctor(doctor, availableSlotsToday);
@@ -346,7 +484,6 @@ export const getPublicDoctorDetailsService = async (doctorId) => {
   validateObjectId(doctorId, "doctor id");
 
   const activeSpecialties = await findActiveSpecialties();
-
   const activeSpecialtyIds = activeSpecialties.map((item) => item._id);
 
   const doctor = await findPublicDoctorById(doctorId, activeSpecialtyIds);
@@ -358,10 +495,11 @@ export const getPublicDoctorDetailsService = async (doctorId) => {
   return formatDoctor(doctor);
 };
 
-export const getPublicDoctorAvailableSlotsService = async (
+export const getPublicDoctorAvailableSlotsService = async ({
   doctorId,
-  query
-) => {
+  query,
+  patientId = null,
+}) => {
   validateObjectId(doctorId, "doctor id");
 
   const date = query.date || getTodayDateString();
@@ -370,7 +508,6 @@ export const getPublicDoctorAvailableSlotsService = async (
   validateNotPastDate(date);
 
   const activeSpecialties = await findActiveSpecialties();
-
   const activeSpecialtyIds = activeSpecialties.map((item) => item._id);
 
   const doctor = await findPublicDoctorById(doctorId, activeSpecialtyIds);
@@ -379,21 +516,22 @@ export const getPublicDoctorAvailableSlotsService = async (
     throw new AppError("Doctor not found", 404);
   }
 
-const slotDay = await ensureSlotDay(doctorId, date);
+  const slotDay = await ensureSlotDay(doctorId, date);
 
-const slotDayId = slotDay._id.toString();
-const bookableSlots = getBookableSlots(slotDay);
+  const slotDayId = slotDay._id.toString();
+  const visibleSlots = getVisibleSlots(slotDay, patientId);
+  const bookableSlots = visibleSlots.filter((slot) => slot.isBookable);
 
-const isUnavailable = slotDay.isHoliday || bookableSlots.length === 0;
+  const isUnavailable = slotDay.isHoliday || bookableSlots.length === 0;
 
-return {
-  doctorId,
-  slotDayId,
-  _id: slotDayId,
-  date,
-  dayOfWeek: slotDay.dayOfWeek,
-  isHoliday: slotDay.isHoliday,
-  isUnavailable,
-  slots: isUnavailable ? [] : bookableSlots,
-};
+  return {
+    doctorId,
+    slotDayId,
+    _id: slotDayId,
+    date,
+    dayOfWeek: slotDay.dayOfWeek,
+    isHoliday: slotDay.isHoliday,
+    isUnavailable,
+    slots: visibleSlots,
+  };
 };

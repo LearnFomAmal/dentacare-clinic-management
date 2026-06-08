@@ -44,18 +44,29 @@ expiresAt: {
     type: Boolean,
     default: false,
   },
-  tempUserData: {
+tempUserData: {
   username: String,
-  password: String, // Store hashed password for security
+
+  // Store hashed password for security
+  password: String,
+
   dateOfBirth: Date,
   gender: String,
   phoneNumber: String,
   bloodGroup: String,
+
   referredBy: {
     type: mongoose.Schema.Types.ObjectId,
     ref: "User",
     default: null,
-  }
+  },
+
+  referralCodeUsed: {
+    type: String,
+    uppercase: true,
+    trim: true,
+    default: "",
+  },
 },
   doctorId: {
   type: mongoose.Schema.Types.ObjectId,

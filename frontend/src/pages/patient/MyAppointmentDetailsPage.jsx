@@ -11,8 +11,9 @@ import {
 import { Link, useParams } from "react-router-dom";
 import toast from "react-hot-toast";
 
-import PatientLayout from "../../components/patient/PatientLayout";
+import DashboardLayout from "../../components/layout/DashboardLayout";
 import CancelAppointmentModal from "../../components/appointments/CancelAppointmentModal";
+import RescheduleAppointmentModal from "../../components/appointments/RescheduleAppointmentModal";
 import { useAppDispatch, useAppSelector } from "../../app/hooks";
 
 import {
@@ -21,7 +22,7 @@ import {
   fetchMyAppointmentDetails,
   rescheduleMyAppointment,
 } from "../../features/appointment/appointmentSlice";
-import RescheduleAppointmentModal from "../../components/appointments/RescheduleAppointmentModal";
+
 import {
   clearAppointmentReports,
   clearReportError,
@@ -29,12 +30,15 @@ import {
 } from "../../features/reports/reportSlice";
 
 import {
+  canCancelAppointment,
+  canRescheduleAppointment,
   formatAppointmentDate,
   formatAppointmentTime,
   getCleanStatus,
   getDoctorName,
   getSpecialtyName,
   getStatusBadgeClass,
+  isAppointmentEndTimePast,
 } from "../../utils/appointmentUi";
 
 const formatCompletedAt = (value) => {
@@ -55,6 +59,7 @@ function MyAppointmentDetailsPage() {
 
   const [cancelModalOpen, setCancelModalOpen] = useState(false);
   const [rescheduleModalOpen, setRescheduleModalOpen] = useState(false);
+
   const {
     selectedAppointment,
     isLoadingDetails,
@@ -85,9 +90,12 @@ function MyAppointmentDetailsPage() {
   useEffect(() => {
     if (!error) return;
 
-    toast.error(error);
+    if (!isCancelling && !isRescheduling) {
+      toast.error(error);
+    }
+
     dispatch(clearAppointmentError());
-  }, [error, dispatch]);
+  }, [error, dispatch, isCancelling, isRescheduling]);
 
   useEffect(() => {
     if (!reportError) return;
@@ -122,46 +130,46 @@ function MyAppointmentDetailsPage() {
       toast.error(err || "Failed to cancel appointment");
     }
   };
+
   const handleRescheduleAppointment = async ({
-  newSlotDayId,
-  newSlotId,
-  newAppointmentDate,
-  reasonType,
-  reason,
-}) => {
-  if (!reason.trim()) {
-    toast.error("Reschedule reason is required");
-    return;
-  }
+    newSlotDayId,
+    newSlotId,
+    newAppointmentDate,
+    reasonType,
+    reason,
+  }) => {
+    if (!reason.trim()) {
+      toast.error("Reschedule reason is required");
+      return;
+    }
 
-  try {
-    const result = await dispatch(
-      rescheduleMyAppointment({
-        appointmentId,
-        newSlotDayId,
-        newSlotId,
-        newAppointmentDate,
-        reasonType,
-        reason,
-      })
-    ).unwrap();
+    try {
+      const result = await dispatch(
+        rescheduleMyAppointment({
+          appointmentId,
+          newSlotDayId,
+          newSlotId,
+          newAppointmentDate,
+          reasonType,
+          reason,
+        })
+      ).unwrap();
 
-    toast.success(result.message || "Appointment rescheduled");
-    setRescheduleModalOpen(false);
+      toast.success(result.message || "Appointment rescheduled");
+      setRescheduleModalOpen(false);
 
-    dispatch(fetchMyAppointmentDetails(appointmentId));
-  } catch (err) {
-    toast.error(err || "Failed to reschedule appointment");
-  }
-};
-  const canCancel =
-    appointment && ["pending", "approved"].includes(appointment.status);
+      dispatch(fetchMyAppointmentDetails(appointmentId));
+    } catch (err) {
+      toast.error(err || "Failed to reschedule appointment");
+    }
+  };
 
-    const canReschedule =
-  appointment && ["pending", "approved"].includes(appointment.status);
+  const canCancel = canCancelAppointment(appointment);
+  const canReschedule = canRescheduleAppointment(appointment);
+  const isPastAppointment = isAppointmentEndTimePast(appointment);
 
   return (
-    <PatientLayout>
+    <DashboardLayout showPageHeader={false}>
       <main className="mx-auto max-w-[1040px] px-6 py-10">
         <Link
           to="/my-appointments"
@@ -177,7 +185,8 @@ function MyAppointmentDetailsPage() {
           </div>
         ) : !appointment ? (
           <div className="mt-6 rounded-3xl bg-red-50 p-10 text-sm font-bold text-red-600">
-            Appointment not found.
+            Appointment not found. If payment failed, please book again from
+            the doctor page.
           </div>
         ) : (
           <div className="mt-6 grid gap-6 lg:grid-cols-[1fr_330px]">
@@ -249,7 +258,34 @@ function MyAppointmentDetailsPage() {
                         Refund credited to wallet.
                       </p>
                     )}
+                   {appointment.status === "cancelled" &&
+                         appointment.paymentStatus === "paid" &&
+                          appointment.cancellation?.refundStatus === "not_refunded" && (
+                          <p className="mt-3 rounded-xl bg-red-50 px-4 py-3 text-xs font-extrabold text-red-700">
+                              No refund issued. {appointment.cancellation?.refundPolicy}
+                         </p>
+                   )}
+       
                   </div>
+                )}
+
+                {appointment.status === "expired" && (
+                  <div className="mt-6 rounded-2xl bg-zinc-100 p-5">
+                    <p className="flex items-center gap-2 text-sm font-extrabold text-zinc-700">
+                      <XCircle size={18} />
+                      Appointment expired
+                    </p>
+
+                    <p className="mt-2 text-xs font-bold text-zinc-600">
+                      The appointment time passed before it was approved.
+                    </p>
+
+                    {appointment.paymentStatus === "refunded" && (
+                      <p className="mt-3 rounded-xl bg-green-50 px-4 py-3 text-xs font-extrabold text-green-700">
+                        Refund credited to wallet.
+                      </p>
+                    )}
+           </div>
                 )}
               </div>
 
@@ -357,7 +393,11 @@ function MyAppointmentDetailsPage() {
 
                 <SummaryRow
                   label="Paid Amount"
-                  value={`₹${appointment.pricing?.finalAmount || 0}`}
+                  value={`₹${
+                    appointment.paymentStatus === "paid"
+                      ? appointment.pricing?.finalAmount || 0
+                      : 0
+                  }`}
                   highlight
                 />
 
@@ -371,14 +411,29 @@ function MyAppointmentDetailsPage() {
                   value={appointment.paymentStatus || "N/A"}
                 />
 
-                <SummaryRow
-                  label="Refund Status"
-                  value={
-                    appointment.paymentStatus === "refunded"
-                      ? "Refunded to wallet"
-                      : "N/A"
-                  }
-                />
+         <SummaryRow
+  label="Refund Status"
+  value={
+    appointment.paymentStatus === "refunded"
+      ? "Refunded to wallet"
+      : appointment.cancellation?.refundStatus === "not_refunded"
+        ? "Not refunded"
+        : "N/A"
+  }
+/>
+
+{appointment.cancellation?.refundPolicy && (
+  <div className="rounded-2xl bg-[#F8FAFC] p-4">
+    <p className="text-xs font-bold uppercase tracking-[0.6px] text-[#9CA3AF]">
+      Refund Policy
+    </p>
+
+    <p className="mt-2 text-sm font-semibold leading-6 text-[#374151]">
+      {appointment.cancellation.refundPolicy}
+    </p>
+  </div>
+)}
+
 
                 <SummaryRow
                   label="Completed At"
@@ -401,17 +456,33 @@ function MyAppointmentDetailsPage() {
                   {isCancelling ? "Cancelling..." : "Cancel Appointment"}
                 </button>
               )}
-                {canReschedule && (
-  <button
-    type="button"
-    disabled={isRescheduling}
-    onClick={() => setRescheduleModalOpen(true)}
-    className="mt-3 inline-flex h-12 w-full items-center justify-center gap-2 rounded-2xl bg-[#F0F1FF] text-sm font-extrabold text-[#9381FF] transition hover:bg-[#E6E7FF] disabled:opacity-60"
-  >
-    <RefreshCcw size={17} />
-    {isRescheduling ? "Rescheduling..." : "Reschedule Appointment"}
-  </button>
-)}
+
+              {canReschedule && (
+                <button
+                  type="button"
+                  disabled={isRescheduling}
+                  onClick={() => setRescheduleModalOpen(true)}
+                  className="mt-3 inline-flex h-12 w-full items-center justify-center gap-2 rounded-2xl bg-[#F0F1FF] text-sm font-extrabold text-[#9381FF] transition hover:bg-[#E6E7FF] disabled:opacity-60"
+                >
+                  <RefreshCcw size={17} />
+                  {isRescheduling ? "Rescheduling..." : "Reschedule Appointment"}
+                </button>
+              )}
+
+              {isPastAppointment &&
+                ["pending", "approved"].includes(appointment.status) && (
+                  <div className="mt-6 rounded-2xl bg-orange-50 p-4">
+                    <p className="text-xs font-bold uppercase text-orange-600">
+                      Appointment time over
+                    </p>
+
+                    <p className="mt-2 text-sm leading-6 text-orange-700">
+                      This appointment&apos;s scheduled time has already passed.
+                      It can no longer be cancelled or rescheduled.
+                    </p>
+                  </div>
+                )}
+
               {appointment.status === "rejected" && (
                 <div className="mt-6 rounded-2xl bg-red-50 p-4">
                   <p className="text-xs font-bold uppercase text-red-500">
@@ -434,6 +505,25 @@ function MyAppointmentDetailsPage() {
                   <p className="mt-2 text-sm leading-6 text-slate-700">
                     {appointment.cancellation?.reason || "No reason provided"}
                   </p>
+                </div>
+              )}
+
+              {appointment.status === "expired" && (
+                <div className="mt-6 rounded-2xl bg-zinc-100 p-4">
+                  <p className="text-xs font-bold uppercase text-zinc-600">
+                    Expired
+                  </p>
+
+                  <p className="mt-2 text-sm leading-6 text-zinc-700">
+                    This appointment expired because the scheduled time passed
+                    without approval.
+                  </p>
+
+                  {appointment.paymentStatus === "refunded" && (
+                    <p className="mt-3 rounded-xl bg-green-50 px-4 py-3 text-xs font-extrabold text-green-700">
+                      Refund credited to wallet.
+                    </p>
+                  )}
                 </div>
               )}
 
@@ -460,15 +550,16 @@ function MyAppointmentDetailsPage() {
           onClose={() => setCancelModalOpen(false)}
           onConfirm={handleCancelAppointment}
         />
+
         <RescheduleAppointmentModal
-   open={rescheduleModalOpen}
-   loading={isRescheduling}
-   appointment={appointment}
-   onClose={() => setRescheduleModalOpen(false)}
-   onConfirm={handleRescheduleAppointment}
-/>
+          open={rescheduleModalOpen}
+          loading={isRescheduling}
+          appointment={appointment}
+          onClose={() => setRescheduleModalOpen(false)}
+          onConfirm={handleRescheduleAppointment}
+        />
       </main>
-    </PatientLayout>
+    </DashboardLayout>
   );
 }
 

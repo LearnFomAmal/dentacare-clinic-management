@@ -226,3 +226,22 @@ export const googleLoginApi = async (credential) => {
 
   return response.data;
 };
+
+// ==============================
+// CURRENT AUTH USER / SESSION CHECK
+// ==============================
+export const getCurrentUserApi = async (accountType) => {
+  let endpoint = API_ENDPOINTS.USER.ME;
+
+  if (accountType === "doctor") {
+    endpoint = API_ENDPOINTS.DOCTOR.ME;
+  }
+
+  if (accountType === "admin") {
+    endpoint = API_ENDPOINTS.ADMIN.ME;
+  }
+
+  const response = await axiosInstance.get(endpoint);
+
+  return response.data;
+};
