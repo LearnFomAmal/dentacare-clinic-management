@@ -61,3 +61,14 @@ export const uploadDoctorPrescription = multer({
     fileSize: 5 * 1024 * 1024,
   },
 }).single("file");
+
+export const uploadBannerImage = multer({
+  storage,
+  fileFilter: createFileFilter(
+    profileImageMimeTypes,
+    "Only JPG, JPEG, PNG and WEBP banner images are allowed"
+  ),
+  limits: {
+    fileSize: 3 * 1024 * 1024,
+  },
+}).single("bannerImage");

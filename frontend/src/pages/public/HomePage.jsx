@@ -16,6 +16,12 @@ import {
 } from "lucide-react";
 
 import { ROUTES } from "../../constants/routes";
+import { useEffect } from "react";
+import BannerCarousel from "../../components/banners/BannerCarousel";
+import {
+  clearBannerError,
+  fetchHomeBanners,
+} from "../../features/banner/bannerSlice";
 
 const doctors = [
   {
@@ -122,12 +128,40 @@ const transformationImages = [
 ];
 
 function HomePage() {
+  const dispatch = useAppDispatch();
+
+  const { isAuthenticated, role } = useAppSelector((state) => state.auth);
+  const { homeBanners, error } = useAppSelector((state) => state.banners);
+
+  const isPatient = isAuthenticated && role === "patient";
+
+  useEffect(() => {
+    if (isPatient) {
+      dispatch(fetchHomeBanners());
+    }
+  }, [dispatch, isPatient]);
+
+  useEffect(() => {
+    if (!error) return;
+
+    dispatch(clearBannerError());
+  }, [error, dispatch]);
+
   return (
     <div className="min-h-screen bg-white text-[#111827]">
       <HomeNavbar />
 
       <main>
         <HeroSection />
+
+        {isPatient && (
+          <BannerCarousel
+            banners={homeBanners}
+            title="Exclusive Offers"
+            description="Referral rewards and specialty coupon offers made for you."
+          />
+        )}
+
         <DoctorsSection />
         <ServicesSection />
         <TransformationSection />

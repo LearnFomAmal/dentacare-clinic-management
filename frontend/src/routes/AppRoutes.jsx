@@ -46,6 +46,8 @@ import AdminCouponsPage from "../pages/admin/AdminCouponsPage";
 import AdminCouponFormPage from "../pages/admin/AdminCouponFormPage";
 import WalletPage from "../pages/patient/WalletPage";
 import DoctorEarningsPage from "../pages/doctor/DoctorEarningsPage";
+import AdminBannersPage from "../pages/admin/AdminBannersPage";
+import AdminBannerFormPage from "../pages/admin/AdminBannerFormPage";
 
 function AppRoutes() {
   return (
@@ -394,6 +396,34 @@ function AppRoutes() {
     </ProtectedRoute>
   }
 />
+
+ <Route
+  path={ROUTES.ADMIN_BANNERS}
+  element={
+    <ProtectedRoute allowedRoles={["admin"]}>
+      <AdminBannersPage />
+    </ProtectedRoute>
+  }
+/>
+
+<Route
+  path={ROUTES.ADMIN_ADD_BANNER}
+  element={
+    <ProtectedRoute allowedRoles={["admin"]}>
+      <AdminBannerFormPage />
+    </ProtectedRoute>
+  }
+/>
+
+<Route
+  path={ROUTES.ADMIN_EDIT_BANNER}
+  element={
+    <ProtectedRoute allowedRoles={["admin"]}>
+      <AdminBannerFormPage />
+    </ProtectedRoute>
+  }
+/>
+
       <Route path="*" element={<Navigate to={ROUTES.HOME} replace />} />
     </Routes>
   );

@@ -49,5 +49,7 @@ export const ROUTES = {
   ADMIN_COUPONS: "/admin/coupons",
   ADMIN_ADD_COUPON: "/admin/coupons/add",
   ADMIN_EDIT_COUPON: "/admin/coupons/:couponId/edit",
-  
+  ADMIN_BANNERS: "/admin/banners",
+  ADMIN_ADD_BANNER: "/admin/banners/add",
+  ADMIN_EDIT_BANNER: "/admin/banners/:bannerId/edit",
 };

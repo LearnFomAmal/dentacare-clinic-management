@@ -20,6 +20,7 @@ import {
   UsersRound,
   Gift,
   WalletCards,
+   ImagePlus,
 } from "lucide-react";
 import toast from "react-hot-toast";
 
@@ -94,6 +95,11 @@ const getRoleLinks = (role) => {
       to: ROUTES.ADMIN_PROFILE,
       icon: Settings,
     },
+    {
+       label: "Banners",
+       to: ROUTES.ADMIN_BANNERS,
+       icon: ImagePlus,
+   },
   ];
 }
 

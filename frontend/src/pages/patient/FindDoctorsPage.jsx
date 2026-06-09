@@ -7,9 +7,14 @@ import {
   Star,
   Stethoscope,
 } from "lucide-react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import toast from "react-hot-toast";
-
+import { useSearchParams } from "react-router-dom";
+import BannerCarousel from "../../components/banners/BannerCarousel";
+import {
+  clearBannerError,
+  fetchDoctorPageBanners,
+} from "../../features/banner/bannerSlice";
 import PatientLayout from "../../components/patient/PatientLayout";
 import { useAppDispatch, useAppSelector } from "../../app/hooks";
 import {
@@ -22,7 +27,8 @@ import {
 function FindDoctorsPage() {
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
-
+  const [searchParams] = useSearchParams();
+ 
   const {
     doctors,
     specialties,
@@ -33,6 +39,11 @@ function FindDoctorsPage() {
     error,
   } = useAppSelector((state) => state.publicDoctors);
 
+  const {
+   doctorPageBanners,
+   error: bannerError,
+  } = useAppSelector((state) => state.banners);
+const couponFromBanner = searchParams.get("coupon") || "";
   useEffect(() => {
     dispatch(fetchPublicSpecialties());
   }, [dispatch]);
@@ -54,6 +65,30 @@ function FindDoctorsPage() {
   toast.error(error);
   dispatch(clearPublicDoctorError());
  }, [error, dispatch]);
+  
+
+ useEffect(() => {
+  dispatch(fetchDoctorPageBanners());
+}, [dispatch]);
+
+useEffect(() => {
+  const specialtyId = searchParams.get("specialty");
+
+  if (specialtyId && specialtyId !== filters.specialtyId) {
+    dispatch(
+      setDoctorFilter({
+        name: "specialtyId",
+        value: specialtyId,
+      })
+    );
+  }
+}, [dispatch, searchParams, filters.specialtyId]);
+
+useEffect(() => {
+  if (!bannerError) return;
+
+  dispatch(clearBannerError());
+}, [bannerError, dispatch]);
 
   const handleFilterChange = (name, value) => {
     dispatch(setDoctorFilter({ name, value }));
@@ -84,9 +119,15 @@ function FindDoctorsPage() {
               <SlidersHorizontal size={17} />
               {pagination.totalDoctors} doctors
             </div>
+            
           </div>
         </section>
-
+   <BannerCarousel
+  banners={doctorPageBanners}
+  title="Specialty Offers"
+  description="Use active specialty coupons while choosing your dentist."
+  compact
+/>
         <section className="rounded-3xl border border-[#EEF0F6] bg-white p-5 shadow-[0_18px_48px_rgba(17,24,39,0.05)]">
           <div className="grid gap-3 md:grid-cols-[1fr_220px_170px_160px]">
             <div className="relative">
@@ -172,7 +213,13 @@ function FindDoctorsPage() {
                 <DoctorListCard
                   key={doctor._id}
                   doctor={doctor}
-                  onViewDetails={() => navigate(`/doctors/${doctor._id}`)}
+                 onViewDetails={() => {
+  const query = couponFromBanner
+    ? `?coupon=${encodeURIComponent(couponFromBanner)}`
+    : "";
+
+  navigate(`/doctors/${doctor._id}${query}`);
+}}
                 />
               ))}
             </div>

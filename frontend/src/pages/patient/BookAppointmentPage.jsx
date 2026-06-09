@@ -13,7 +13,7 @@ import {
   X,
   AlertTriangle,
 } from "lucide-react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import toast from "react-hot-toast";
 
 import ImageCropperModal from "../../components/common/ImageCropperModal";
@@ -121,6 +121,7 @@ function BookAppointmentPage() {
   const { doctorId } = useParams();
   const navigate = useNavigate();
   const dispatch = useAppDispatch();
+  const [searchParams] = useSearchParams();
 
   const { user } = useAppSelector((state) => state.auth);
 
@@ -158,6 +159,7 @@ function BookAppointmentPage() {
 
   const [bookingReason, setBookingReason] = useState("");
   const [couponCode, setCouponCode] = useState("");
+  const bannerCouponCode = searchParams.get("coupon") || "";
   const [cropSourceUrl, setCropSourceUrl] = useState("");
   const [isReportCropOpen, setIsReportCropOpen] = useState(false);
   const [localPreviewUrl, setLocalPreviewUrl] = useState("");
@@ -186,6 +188,38 @@ const [pendingBookingPayload, setPendingBookingPayload] = useState(null);
 
   const doctor = selectedDoctor;
   const consultationFee = doctor?.professionalInfo?.consultationFee || 0;
+   useEffect(() => {
+  if (!bannerCouponCode) return;
+
+  setCouponCode(bannerCouponCode.toUpperCase());
+}, [bannerCouponCode]);
+
+useEffect(() => {
+  if (!bannerCouponCode || !doctorId || !consultationFee || appliedCoupon) {
+    return;
+  }
+
+  dispatch(
+    validateCoupon({
+      doctorId,
+      couponCode: bannerCouponCode.toUpperCase(),
+      appointmentAmount: consultationFee,
+    })
+  )
+    .unwrap()
+    .then((result) => {
+      toast.success(result.message || "Banner coupon applied successfully");
+    })
+    .catch(() => {
+      // Do not block booking if banner coupon became invalid.
+    });
+}, [
+  dispatch,
+  bannerCouponCode,
+  doctorId,
+  consultationFee,
+  appliedCoupon,
+]);
 
   const selectedReportIds = useMemo(() => {
     return draftReports.map((report) => report._id);

@@ -183,4 +183,17 @@ REFERRAL: {
     TRANSACTIONS: "/wallets/transactions",
     TOPUP: "/wallets/topup",
   },
+
+  BANNER: {
+  HOME: "/banners/home",
+  DOCTORS: "/banners/doctors",
+
+  ADMIN_CREATE: "/banners/admin",
+  ADMIN_GET_ALL: "/banners/admin",
+  ADMIN_GET_DETAILS: (bannerId) => `/banners/admin/${bannerId}`,
+  ADMIN_UPDATE: (bannerId) => `/banners/admin/${bannerId}`,
+  ADMIN_UPDATE_STATUS: (bannerId) => `/banners/admin/${bannerId}/status`,
+  ADMIN_DELETE: (bannerId) => `/banners/admin/${bannerId}`,
+},
+
 };

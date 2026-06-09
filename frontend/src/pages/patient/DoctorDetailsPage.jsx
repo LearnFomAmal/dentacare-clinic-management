@@ -7,7 +7,13 @@ import {
   Star,
   Stethoscope,
 } from "lucide-react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import {
+  Link,
+  useNavigate,
+  useParams,
+  useSearchParams,
+} from "react-router-dom";
+
 import toast from "react-hot-toast";
 
 import PatientLayout from "../../components/patient/PatientLayout";
@@ -54,6 +60,7 @@ function DoctorDetailsPage() {
   const { doctorId } = useParams();
   const navigate = useNavigate();
   const dispatch = useAppDispatch();
+  const [searchParams] = useSearchParams();
 
   const {
     selectedDoctor,
@@ -134,7 +141,7 @@ function DoctorDetailsPage() {
     );
   };
 
-  const handleContinueBooking = () => {
+const handleContinueBooking = () => {
   if (!selectedSlot) {
     toast.error("Please select a slot first");
     return;
@@ -178,7 +185,13 @@ function DoctorDetailsPage() {
   saveBookingDraft(bookingDraft);
   dispatch(setBookingDraft(bookingDraft));
 
-  navigate(`/book-appointment/${doctorId}`);
+  const couponFromBanner = searchParams.get("coupon") || "";
+
+  const couponQuery = couponFromBanner
+    ? `?coupon=${encodeURIComponent(couponFromBanner)}`
+    : "";
+
+  navigate(`/book-appointment/${doctorId}${couponQuery}`);
 };
 
   return (
