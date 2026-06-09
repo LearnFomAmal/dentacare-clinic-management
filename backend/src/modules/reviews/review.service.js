@@ -35,10 +35,84 @@ import {
   validateUpdateReviewInput,
 } from "./review.validator.js";
 
+import {
+  safeCreateAdminNotification,
+  safeCreateNotification,
+} from "../notifications/notification.service.js";
+
 const normalizeAverageRating = (value) => {
   return Math.round(Number(value || 0) * 10) / 10;
 };
+const getId = (value) => {
+  return value?._id || value;
+};
 
+const notifyPatientForReview = async ({
+  review,
+  type,
+  title,
+  message,
+  actorRole = "admin",
+  actorId = null,
+  actorName = "Admin",
+}) => {
+  await safeCreateNotification({
+    recipientRole: "patient",
+    recipientId: getId(review.patientId),
+    actorRole,
+    actorId,
+    actorName,
+    type,
+    title,
+    message,
+    referenceType: "review",
+    referenceId: review._id,
+  });
+};
+
+const notifyDoctorForReview = async ({
+  review,
+  type,
+  title,
+  message,
+  actorRole = "patient",
+  actorId = null,
+  actorName = "Patient",
+}) => {
+  await safeCreateNotification({
+    recipientRole: "doctor",
+    recipientId: getId(review.doctorId),
+    actorRole,
+    actorId,
+    actorName,
+    type,
+    title,
+    message,
+    referenceType: "review",
+    referenceId: review._id,
+  });
+};
+
+const notifyAdminForReview = async ({
+  review,
+  type,
+  title,
+  message,
+  actorRole = "patient",
+  actorId = null,
+  actorName = "Patient",
+}) => {
+  await safeCreateAdminNotification({
+    actorRole,
+    actorId,
+    actorName,
+    type,
+    title,
+    message,
+    referenceType: "review",
+    referenceId: review._id,
+  });
+};
 export const recalculateDoctorRatingStats = async (doctorId) => {
   const stats = await getApprovedReviewStatsByDoctor(doctorId);
 
@@ -134,15 +208,37 @@ export const createReviewService = async ({ patientId, body }) => {
     );
   }
 
-  try {
-    return await createReview({
-      patientId: new mongoose.Types.ObjectId(patientId),
-      doctorId: appointment.doctorId,
-      appointmentId: appointment._id,
-      rating: Number(rating),
-      description: description.trim(),
-      status: "pending",
-    });
+ try {
+  const review = await createReview({
+    patientId: new mongoose.Types.ObjectId(patientId),
+    doctorId: appointment.doctorId,
+    appointmentId: appointment._id,
+    rating: Number(rating),
+    description: description.trim(),
+    status: "pending",
+  });
+
+  await notifyDoctorForReview({
+    review,
+    type: "review_submitted",
+    title: "New Review Submitted",
+    message: "A patient submitted a review for you. It will be visible after admin approval.",
+    actorRole: "patient",
+    actorId: patientId,
+    actorName: "Patient",
+  });
+
+  await notifyAdminForReview({
+    review,
+    type: "review_submitted",
+    title: "New Review Pending Approval",
+    message: "A patient submitted a review. Please approve or reject it.",
+    actorRole: "patient",
+    actorId: patientId,
+    actorName: "Patient",
+  });
+
+  return review;
   } catch (error) {
     if (error.code === 11000) {
       throw new AppError(
@@ -504,7 +600,23 @@ export const approveReviewByAdminService = async ({ reviewId }) => {
   await review.save();
 
   await recalculateDoctorRatingStats(review.doctorId);
+  await notifyPatientForReview({
+  review,
+  type: "review_approved",
+  title: "Review Approved",
+  message: "Your review has been approved and is now visible publicly.",
+  actorRole: "admin",
+  actorName: "Admin",
+});
 
+await notifyDoctorForReview({
+  review,
+  type: "review_approved",
+  title: "Review Approved",
+  message: "A patient review for you has been approved and is now visible publicly.",
+  actorRole: "admin",
+  actorName: "Admin",
+});
   return review;
 };
 
@@ -535,6 +647,14 @@ export const rejectReviewByAdminService = async ({ reviewId, body }) => {
   if (wasApproved) {
     await recalculateDoctorRatingStats(doctorId);
   }
-
+  
+await notifyPatientForReview({
+  review,
+  type: "review_rejected",
+  title: "Review Rejected",
+  message: "Your review was rejected by admin. Please check the reason and update it if needed.",
+  actorRole: "admin",
+  actorName: "Admin",
+});
   return review;
 };

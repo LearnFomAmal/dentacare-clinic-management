@@ -6,6 +6,10 @@ import {
   creditReferralRewardToWallet,
   refundAppointmentPaymentToWallet,
 } from "../wallets/wallet.service.js";
+import {
+  safeCreateAdminNotification,
+  safeCreateNotification,
+} from "../notifications/notification.service.js";
 import { validateCouponForAppointment } from "../coupons/coupon.service.js";
 import {
   claimReferralRewardForCompletion,
@@ -50,6 +54,86 @@ import {
 const RESERVATION_MINUTES = 10;
 const MIN_BOOKING_LEAD_MINUTES = 120;
 const CANCELLATION_REFUND_CUTOFF_HOURS = 4;
+
+const getDoctorDisplayName = (doctor) => {
+  if (!doctor) return "your doctor";
+
+  const firstName = doctor.firstName || "";
+  const lastName = doctor.lastName || "";
+
+  return `Dr. ${[firstName, lastName].filter(Boolean).join(" ")}`.trim();
+};
+
+const getPatientDisplayName = (patient) => {
+  return patient?.username || patient?.email || "Patient";
+};
+
+const notifyPatientForAppointment = async ({
+  appointment,
+  type,
+  title,
+  message,
+  actorRole = "system",
+  actorId = null,
+  actorName = "",
+}) => {
+  await safeCreateNotification({
+    recipientRole: "patient",
+    recipientId: appointment.patientId,
+    actorRole,
+    actorId,
+    actorName,
+    type,
+    title,
+    message,
+    referenceType: "appointment",
+    referenceId: appointment._id,
+  });
+};
+
+const notifyDoctorForAppointment = async ({
+  appointment,
+  type,
+  title,
+  message,
+  actorRole = "system",
+  actorId = null,
+  actorName = "",
+}) => {
+  await safeCreateNotification({
+    recipientRole: "doctor",
+    recipientId: appointment.doctorId,
+    actorRole,
+    actorId,
+    actorName,
+    type,
+    title,
+    message,
+    referenceType: "appointment",
+    referenceId: appointment._id,
+  });
+};
+
+const notifyAdminForAppointment = async ({
+  appointment,
+  type,
+  title,
+  message,
+  actorRole = "system",
+  actorId = null,
+  actorName = "",
+}) => {
+  await safeCreateAdminNotification({
+    actorRole,
+    actorId,
+    actorName,
+    type,
+    title,
+    message,
+    referenceType: "appointment",
+    referenceId: appointment._id,
+  });
+};
 
 const isPatientProfileComplete = (user) => {
   return Boolean(
@@ -377,7 +461,47 @@ const cancelAppointmentCore = async ({
     appointment,
     session,
   });
+ if (cancelledBy === "patient") {
+  await notifyDoctorForAppointment({
+    appointment,
+    type: "appointment_cancelled_by_patient",
+    title: "Appointment Cancelled",
+    message: "A patient cancelled an appointment.",
+    actorRole: "patient",
+    actorId: appointment.patientId,
+    actorName: "Patient",
+  });
 
+  await notifyAdminForAppointment({
+    appointment,
+    type: "appointment_cancelled_by_patient",
+    title: "Appointment Cancelled by Patient",
+    message: "A patient cancelled an appointment.",
+    actorRole: "patient",
+    actorId: appointment.patientId,
+    actorName: "Patient",
+  });
+}
+
+if (cancelledBy === "admin") {
+  await notifyPatientForAppointment({
+    appointment,
+    type: "appointment_cancelled_by_admin",
+    title: "Appointment Cancelled",
+    message: "Your appointment was cancelled by admin.",
+    actorRole: "admin",
+    actorName: "Admin",
+  });
+
+  await notifyDoctorForAppointment({
+    appointment,
+    type: "appointment_cancelled_by_admin",
+    title: "Appointment Cancelled by Admin",
+    message: "An appointment assigned to you was cancelled by admin.",
+    actorRole: "admin",
+    actorName: "Admin",
+  });
+}
   return appointment;
 };
 
@@ -646,7 +770,25 @@ const completeAppointmentCore = async ({ appointment, session }) => {
       }
     }
   }
+ await notifyPatientForAppointment({
+  appointment,
+  type: "appointment_completed",
+  title: "Appointment Completed",
+  message: "Your appointment has been marked as completed. You can now submit a review.",
+  actorRole: "doctor",
+  actorId: appointment.doctorId,
+  actorName: "Doctor",
+});
 
+await notifyAdminForAppointment({
+  appointment,
+  type: "appointment_completed",
+  title: "Appointment Completed",
+  message: "A doctor completed an appointment.",
+  actorRole: "doctor",
+  actorId: appointment.doctorId,
+  actorName: "Doctor",
+});
   return appointment;
 };
 
@@ -1123,7 +1265,15 @@ export const approveAppointmentByDoctorService = async ({
   await saveAppointment({
     appointment,
   });
-
+ await notifyPatientForAppointment({
+  appointment,
+  type: "appointment_approved",
+  title: "Appointment Approved",
+  message: "Your appointment has been approved by the doctor.",
+  actorRole: "doctor",
+  actorId: doctorId,
+  actorName: "Doctor",
+});
   return appointment;
 };
 
@@ -1180,6 +1330,16 @@ export const rejectAppointmentByDoctorService = async ({
         appointment,
         session,
       });
+
+      await notifyPatientForAppointment({
+  appointment,
+  type: "appointment_rejected",
+  title: "Appointment Rejected",
+  message: "Your appointment was rejected by the doctor. Refund has been credited to your wallet.",
+  actorRole: "doctor",
+  actorId: doctorId,
+  actorName: "Doctor",
+});
 
       updatedAppointment = appointment;
     });
@@ -1275,7 +1435,23 @@ export const approveAppointmentByAdminService = async ({ appointmentId }) => {
   await saveAppointment({
     appointment,
   });
+  await notifyPatientForAppointment({
+  appointment,
+  type: "appointment_approved_by_admin",
+  title: "Appointment Approved",
+  message: "Your appointment has been approved by admin.",
+  actorRole: "admin",
+  actorName: "Admin",
+});
 
+await notifyDoctorForAppointment({
+  appointment,
+  type: "appointment_approved_by_admin",
+  title: "Appointment Approved by Admin",
+  message: "An appointment assigned to you was approved by admin.",
+  actorRole: "admin",
+  actorName: "Admin",
+});
   return appointment;
 };
 
@@ -1329,6 +1505,24 @@ export const rejectAppointmentByAdminService = async ({
         appointment,
         session,
       });
+       
+      await notifyPatientForAppointment({
+  appointment,
+  type: "appointment_rejected_by_admin",
+  title: "Appointment Rejected",
+  message: "Your appointment was rejected by admin. Refund has been credited to your wallet.",
+  actorRole: "admin",
+  actorName: "Admin",
+});
+
+await notifyDoctorForAppointment({
+  appointment,
+  type: "appointment_rejected_by_admin",
+  title: "Appointment Rejected by Admin",
+  message: "An appointment assigned to you was rejected by admin.",
+  actorRole: "admin",
+  actorName: "Admin",
+});
 
       updatedAppointment = appointment;
     });
@@ -1545,6 +1739,25 @@ export const rescheduleAppointmentByPatientService = async ({
         appointment,
         session,
       });
+         await notifyDoctorForAppointment({
+  appointment,
+  type: "appointment_rescheduled",
+  title: "Appointment Rescheduled",
+  message: "A patient rescheduled an appointment. Please review the new slot.",
+  actorRole: "patient",
+  actorId: patientId,
+  actorName: "Patient",
+});
+
+await notifyAdminForAppointment({
+  appointment,
+  type: "appointment_rescheduled",
+  title: "Appointment Rescheduled",
+  message: "A patient rescheduled an appointment.",
+  actorRole: "patient",
+  actorId: patientId,
+  actorName: "Patient",
+});
 
       updatedAppointment = appointment;
     });

@@ -56,5 +56,4 @@ export const ROUTES = {
   ADMIN_EDIT_BANNER: "/admin/banners/:bannerId/edit",
   ADMIN_REVIEWS: "/admin/reviews",
   ADMIN_REVIEW_DETAILS: "/admin/reviews/:reviewId",
-
 };

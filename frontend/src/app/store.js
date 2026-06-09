@@ -10,6 +10,7 @@ import referralReducer from "../features/referral/referralSlice";
 import walletReducer from "../features/wallet/walletSlice";
 import bannerReducer from "../features/banner/bannerSlice";
 import reviewReducer from "../features/review/reviewSlice";
+import notificationReducer from "../features/notification/notificationSlice";
 
 export const store = configureStore({
   reducer: {
@@ -23,5 +24,6 @@ export const store = configureStore({
     wallet: walletReducer,
     banners: bannerReducer,
     reviews: reviewReducer,
+    notifications: notificationReducer,
   },
 });

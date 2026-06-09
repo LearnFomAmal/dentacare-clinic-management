@@ -36,6 +36,7 @@ import {
 } from "../../utils/authStorage";
 import { useAppDispatch, useAppSelector } from "../../app/hooks";
 import { clearAuth } from "../../features/auth/authSlice";
+import NotificationBell from "../notifications/NotificationBell";
 
 const getRoleFromPath = (pathname) => {
   if (pathname === "/admin" || pathname.startsWith("/admin/")) {
@@ -192,10 +193,10 @@ const patientTopLinks = [
     to: ROUTES.PATIENT_DASHBOARD || ROUTES.USER_SETTINGS,
     match: (pathname) =>
       pathname.startsWith("/my-appointments") ||
-pathname.startsWith("/my-reviews") ||
-pathname.startsWith("/wallet") ||
-pathname.startsWith("/referrals") ||
-pathname.startsWith("/settings"),
+      pathname.startsWith("/my-reviews") ||
+      pathname.startsWith("/wallet") ||
+      pathname.startsWith("/referrals") ||
+      pathname.startsWith("/settings"),
   },
   {
     label: "Find Doctors",
@@ -490,8 +491,10 @@ function DashboardLayout({
               </nav>
             )}
 
-            <div className="flex items-center gap-3">
-              <div className="hidden items-center gap-3 sm:flex">
+       <div className="flex items-center gap-3">
+  <NotificationBell role={routeRole} />
+
+  <div className="hidden items-center gap-3 sm:flex">
                <div className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-full bg-[#F0F1FF] text-sm font-bold text-[#9381FF] dark:bg-slate-800">
   <HeaderAvatar
     user={user}

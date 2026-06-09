@@ -214,5 +214,29 @@ REVIEW: {
   ADMIN_APPROVE: (reviewId) => `/reviews/admin/${reviewId}/approve`,
   ADMIN_REJECT: (reviewId) => `/reviews/admin/${reviewId}/reject`,
 },
+NOTIFICATION: {
+  PATIENT_LIST: "/notifications/patient",
+  PATIENT_UNREAD_COUNT: "/notifications/patient/unread-count",
+  PATIENT_MARK_READ: (notificationId) =>
+    `/notifications/patient/${notificationId}/read`,
+  PATIENT_MARK_ALL_READ: "/notifications/patient/read-all",
+  PATIENT_DELETE: (notificationId) =>
+    `/notifications/patient/${notificationId}`,
 
+  DOCTOR_LIST: "/notifications/doctor",
+  DOCTOR_UNREAD_COUNT: "/notifications/doctor/unread-count",
+  DOCTOR_MARK_READ: (notificationId) =>
+    `/notifications/doctor/${notificationId}/read`,
+  DOCTOR_MARK_ALL_READ: "/notifications/doctor/read-all",
+  DOCTOR_DELETE: (notificationId) =>
+    `/notifications/doctor/${notificationId}`,
+
+  ADMIN_LIST: "/notifications/admin",
+  ADMIN_UNREAD_COUNT: "/notifications/admin/unread-count",
+  ADMIN_MARK_READ: (notificationId) =>
+    `/notifications/admin/${notificationId}/read`,
+  ADMIN_MARK_ALL_READ: "/notifications/admin/read-all",
+  ADMIN_DELETE: (notificationId) =>
+    `/notifications/admin/${notificationId}`,
+},
 };
