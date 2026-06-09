@@ -36,14 +36,15 @@ export const fetchPublicDoctors = createAsyncThunk(
     try {
       const { filters } = getState().publicDoctors;
 
-      const response = await getPublicDoctorsApi({
-        search: filters.search,
-        specialtyId: filters.specialtyId,
-        minExperience: filters.minExperience,
-        sort: filters.sort,
-        page: filters.page,
-        limit: filters.limit,
-      });
+    const response = await getPublicDoctorsApi({
+  search: filters.search,
+  specialtyId: filters.specialtyId,
+  minExperience: filters.minExperience,
+  minRating: filters.minRating,
+  sort: filters.sort,
+  page: filters.page,
+  limit: filters.limit,
+});
 
       return response.data;
     } catch (error) {
@@ -114,13 +115,14 @@ const publicDoctorSlice = createSlice({
     selectedSlotsByDoctor: {},
 
     filters: {
-      search: "",
-      specialtyId: "",
-      minExperience: "",
-      sort: "latest",
-      page: 1,
-      limit: 9,
-    },
+    search: "",
+    specialtyId: "",
+    minExperience: "",
+    minRating: "",
+    sort: "latest",
+    page: 1,
+    limit: 9,
+},
 
     pagination: {
       page: 1,
@@ -144,16 +146,17 @@ const publicDoctorSlice = createSlice({
       state.filters.page = 1;
     },
 
-    resetDoctorFilters: (state) => {
-      state.filters = {
-        search: "",
-        specialtyId: "",
-        minExperience: "",
-        sort: "latest",
-        page: 1,
-        limit: 9,
-      };
-    },
+  resetDoctorFilters: (state) => {
+  state.filters = {
+    search: "",
+    specialtyId: "",
+    minExperience: "",
+    minRating: "",
+    sort: "latest",
+    page: 1,
+    limit: 9,
+  };
+},
 
     setDoctorPage: (state, action) => {
       state.filters.page = action.payload;

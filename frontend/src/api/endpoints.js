@@ -196,4 +196,23 @@ REFERRAL: {
   ADMIN_DELETE: (bannerId) => `/banners/admin/${bannerId}`,
 },
 
+REVIEW: {
+  CREATE: "/reviews",
+
+  MY: "/reviews/my",
+  MY_DETAILS: (reviewId) => `/reviews/my/${reviewId}`,
+  UPDATE_MY: (reviewId) => `/reviews/${reviewId}`,
+  DELETE_MY: (reviewId) => `/reviews/${reviewId}`,
+
+  PUBLIC_DOCTOR_REVIEWS: (doctorId) => `/reviews/doctor/${doctorId}`,
+  PUBLIC_DOCTOR_SUMMARY: (doctorId) => `/reviews/doctor/${doctorId}/summary`,
+
+  DOCTOR_ME: "/reviews/doctor/me",
+
+  ADMIN_GET_ALL: "/reviews/admin",
+  ADMIN_GET_DETAILS: (reviewId) => `/reviews/admin/${reviewId}`,
+  ADMIN_APPROVE: (reviewId) => `/reviews/admin/${reviewId}/approve`,
+  ADMIN_REJECT: (reviewId) => `/reviews/admin/${reviewId}/reject`,
+},
+
 };

@@ -20,8 +20,10 @@ import {
   UsersRound,
   Gift,
   WalletCards,
-   ImagePlus,
+  ImagePlus,
+  Star,
 } from "lucide-react";
+
 import toast from "react-hot-toast";
 
 import { ROUTES } from "../../constants/routes";
@@ -100,6 +102,11 @@ const getRoleLinks = (role) => {
        to: ROUTES.ADMIN_BANNERS,
        icon: ImagePlus,
    },
+   {
+  label: "Reviews",
+  to: ROUTES.ADMIN_REVIEWS,
+  icon: Star,
+},
   ];
 }
 
@@ -130,6 +137,11 @@ const getRoleLinks = (role) => {
         to: ROUTES.DOCTOR_SETTINGS,
         icon: Settings,
       },
+      {
+  label: "Reviews",
+  to: ROUTES.DOCTOR_REVIEWS,
+  icon: Star,
+},
       
     ];
   }
@@ -160,6 +172,11 @@ const getRoleLinks = (role) => {
     to: ROUTES.USER_SETTINGS,
     icon: Settings,
   },
+  {
+    label: "Reviews",
+    to: ROUTES.MY_REVIEWS,
+    icon: Star,
+  }
 ];
 };
 
@@ -174,11 +191,11 @@ const patientTopLinks = [
     label: "Dashboard",
     to: ROUTES.PATIENT_DASHBOARD || ROUTES.USER_SETTINGS,
     match: (pathname) =>
-      pathname === ROUTES.PATIENT_DASHBOARD ||
       pathname.startsWith("/my-appointments") ||
-      pathname.startsWith("/wallet") ||
-      pathname.startsWith("/referrals") ||
-      pathname.startsWith("/settings"),
+pathname.startsWith("/my-reviews") ||
+pathname.startsWith("/wallet") ||
+pathname.startsWith("/referrals") ||
+pathname.startsWith("/settings"),
   },
   {
     label: "Find Doctors",

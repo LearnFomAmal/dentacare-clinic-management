@@ -12,9 +12,16 @@ import {
 
 import {
   validateDateString,
+  validateMinRating,
   validateObjectId,
   validatePagination,
 } from "./publicDoctor.validator.js";
+
+import {
+  findPublicApprovedReviewsByDoctor,
+  getApprovedReviewStatsByDoctor,
+  getRatingDistributionByDoctor,
+} from "../reviews/review.repository.js";
 
 const MIN_BOOKING_LEAD_MINUTES = 120;
 
@@ -389,15 +396,16 @@ const getSortOption = (sort) => {
 // SERVICES
 // ==============================
 export const getPublicDoctorsService = async (query) => {
-  const {
-    search = "",
-    specialtyId = "",
-    minExperience = "",
-    sort = "latest",
-  } = query;
+ const {
+  search = "",
+  specialtyId = "",
+  minExperience = "",
+  minRating = "",
+  sort = "latest",
+} = query;
 
   const { page, limit } = validatePagination(query);
-
+   validateMinRating(minRating);
   const activeSpecialties = await findActiveSpecialties();
   const activeSpecialtyIds = activeSpecialties.map((item) => item._id);
 
@@ -438,7 +446,17 @@ export const getPublicDoctorsService = async (query) => {
     filter["professionalInfo.experience"] = {
       $gte: Number(minExperience),
     };
-  }
+  };
+
+  if (minRating !== "") {
+  filter["stats.averageRating"] = {
+    $gte: Number(minRating),
+  };
+
+  filter["stats.totalReviews"] = {
+    $gt: 0,
+  };
+};
 
   const skip = (page - 1) * limit;
 
@@ -475,6 +493,7 @@ export const getPublicDoctorsService = async (query) => {
       search,
       specialtyId,
       minExperience,
+      minRating,
       sort,
     },
   };
@@ -492,7 +511,29 @@ export const getPublicDoctorDetailsService = async (doctorId) => {
     throw new AppError("Doctor not found", 404);
   }
 
-  return formatDoctor(doctor);
+  const [reviewStats, ratingDistribution, latestReviews] =
+    await Promise.all([
+      getApprovedReviewStatsByDoctor(doctorId),
+      getRatingDistributionByDoctor(doctorId),
+      findPublicApprovedReviewsByDoctor({
+        doctorId,
+        skip: 0,
+        limit: 5,
+      }),
+    ]);
+
+  return {
+    ...formatDoctor(doctor),
+
+    reviewSummary: {
+      averageRating:
+        Math.round(Number(reviewStats.averageRating || 0) * 10) / 10,
+      totalReviews: Number(reviewStats.totalReviews || 0),
+      ratingDistribution,
+    },
+
+    latestReviews,
+  };
 };
 
 export const getPublicDoctorAvailableSlotsService = async ({

@@ -25,6 +25,7 @@ export const ROUTES = {
   MY_APPOINTMENT_DETAILS: "/my-appointments/:appointmentId",
   REFERRALS: "/referrals",
   WALLET: "/wallet",
+  MY_REVIEWS: "/my-reviews",
   // DOCTOR
   DOCTOR_DASHBOARD: "/doctor/dashboard",
   DOCTOR_SETTINGS: "/doctor/settings",
@@ -32,6 +33,7 @@ export const ROUTES = {
   DOCTOR_APPOINTMENTS: "/doctor/appointments",
   DOCTOR_APPOINTMENT_DETAILS: "/doctor/appointments/:appointmentId",
   DOCTOR_EARNINGS: "/doctor/earnings",
+  DOCTOR_REVIEWS: "/doctor/reviews",
   // ADMIN
   ADMIN_DASHBOARD: "/admin/dashboard",
   ADMIN_PROFILE: "/admin/profile",
@@ -52,4 +54,7 @@ export const ROUTES = {
   ADMIN_BANNERS: "/admin/banners",
   ADMIN_ADD_BANNER: "/admin/banners/add",
   ADMIN_EDIT_BANNER: "/admin/banners/:bannerId/edit",
+  ADMIN_REVIEWS: "/admin/reviews",
+  ADMIN_REVIEW_DETAILS: "/admin/reviews/:reviewId",
+
 };

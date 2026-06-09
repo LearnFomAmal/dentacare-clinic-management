@@ -17,12 +17,15 @@ import referralRoutes from "../modules/referrals/referral.routes.js";
 import walletRoutes from "../modules/wallets/wallet.routes.js";
 import earningRoutes from "../modules/earnings/earning.routes.js";
 import bannerRoutes from "../modules/banners/banner.routes.js";
+import reviewRoutes from "../modules/reviews/review.routes.js";
 
 const router = Router();
 
 router.use("/auth", authRoutes);
 router.use("/users", userRoutes);
 router.use("/banners", bannerRoutes);
+router.use("/reviews", reviewRoutes);
+router.use("/reviews", reviewRoutes);
 
 router.use("/doctors/public", publicDoctorRoutes);
 router.use("/doctors/slots", doctorSlotRoutes);

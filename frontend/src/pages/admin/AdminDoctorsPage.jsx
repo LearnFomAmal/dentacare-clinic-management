@@ -6,6 +6,7 @@ import {
   Search,
   ShieldCheck,
   Stethoscope,
+  Star,
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import toast from "react-hot-toast";
@@ -28,7 +29,7 @@ function AdminDoctorsPage() {
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("");
   const [page, setPage] = useState(1);
-
+  const [rating, setRating] = useState("");
   const [isLoading, setIsLoading] = useState(true);
 
   const [statusModal, setStatusModal] = useState({
@@ -58,6 +59,10 @@ function AdminDoctorsPage() {
         params.status = status;
       }
 
+      if (rating) {
+        params.rating = rating;
+      }
+
       const response = await getDoctorsApi(params);
 
       setDoctors(response?.data?.data || []);
@@ -74,9 +79,9 @@ function AdminDoctorsPage() {
     }
   };
 
-  useEffect(() => {
-    fetchDoctors();
-  }, [page, status]);
+ useEffect(() => {
+  fetchDoctors();
+}, [page, status, rating]);
 
   const handleSearchSubmit = (event) => {
     event.preventDefault();
@@ -148,7 +153,7 @@ function AdminDoctorsPage() {
           <div className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <form
               onSubmit={handleSearchSubmit}
-              className="grid flex-1 gap-4 lg:grid-cols-[1fr_220px_140px]"
+              className="grid flex-1 gap-4 lg:grid-cols-[1fr_180px_180px_140px]"
             >
               <div className="relative">
                 <Search
@@ -177,7 +182,21 @@ function AdminDoctorsPage() {
                 <option value="unblocked">Unblocked</option>
                 <option value="blocked">Blocked</option>
               </select>
-
+             <select
+  value={rating}
+  onChange={(event) => {
+    setRating(event.target.value);
+    setPage(1);
+  }}
+  className="h-12 rounded-2xl border border-[rgba(172,178,189,0.2)] bg-white px-4 text-sm font-medium text-[#2D333B] outline-none transition focus:border-[#4C59A6] focus:ring-2 focus:ring-[#4C59A6]/10"
+>
+  <option value="">All Ratings</option>
+  <option value="5">5 star</option>
+  <option value="4">4+ rating</option>
+  <option value="3">3+ rating</option>
+  <option value="2">2+ rating</option>
+  <option value="1">1+ rating</option>
+</select>
               <button
                 type="submit"
                 className="h-12 rounded-2xl bg-[#B8B8FF] px-5 text-sm font-bold text-[#2D333B] transition hover:bg-[#a8a8f5]"
@@ -205,11 +224,12 @@ function AdminDoctorsPage() {
             </div>
           ) : (
             <div className="overflow-hidden rounded-2xl border border-[rgba(172,178,189,0.15)]">
-              <div className="grid grid-cols-[1.4fr_1.2fr_0.8fr_0.8fr_0.8fr_160px] bg-[#F8FAFC] px-5 py-4 text-xs font-bold uppercase tracking-[0.6px] text-[#595F69]">
+              <div className="grid-cols-[1.4fr_1.1fr_0.7fr_0.7fr_0.8fr_0.8fr_160px] bg-[#F8FAFC] px-5 py-4 text-xs font-bold uppercase tracking-[0.6px] text-[#595F69]">
                 <div>Doctor</div>
                 <div>Specialty</div>
                 <div>Experience</div>
                 <div>Fee</div>
+                <div>Rating</div>
                 <div>Status</div>
                 <div className="text-right">Actions</div>
               </div>
@@ -217,7 +237,7 @@ function AdminDoctorsPage() {
               {doctors.map((doctor) => (
                 <div
                   key={doctor._id}
-                  className="grid grid-cols-[1.4fr_1.2fr_0.8fr_0.8fr_0.8fr_160px] items-center border-t border-[rgba(172,178,189,0.12)] bg-white px-5 py-4 text-sm"
+                  className="grid grid-cols-[1.4fr_1.1fr_0.7fr_0.7fr_0.8fr_0.8fr_160px] items-center border-t border-[rgba(172,178,189,0.12)] bg-white px-5 py-4 text-sm"
                 >
                   <div className="flex items-center gap-3">
                     <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[#B8B8FF]/40 text-[#4C59A6]">
@@ -247,6 +267,13 @@ function AdminDoctorsPage() {
                   <div className="font-semibold text-[#4C59A6]">
                     ₹{doctor.professionalInfo?.consultationFee ?? 0}
                   </div>
+                  <div className="flex items-center gap-1 font-semibold text-[#2D333B]">
+  <Star size={15} fill="currentColor" className="text-[#F59E0B]" />
+  {doctor.stats?.averageRating || 0}
+  <span className="text-xs text-[#8B93A5]">
+    ({doctor.stats?.totalReviews || 0})
+  </span>
+</div>
 
                   <div>
                     <span

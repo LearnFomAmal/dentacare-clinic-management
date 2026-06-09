@@ -9,6 +9,7 @@ import couponReducer from "../features/coupon/couponSlice";
 import referralReducer from "../features/referral/referralSlice";
 import walletReducer from "../features/wallet/walletSlice";
 import bannerReducer from "../features/banner/bannerSlice";
+import reviewReducer from "../features/review/reviewSlice";
 
 export const store = configureStore({
   reducer: {
@@ -21,5 +22,6 @@ export const store = configureStore({
     referrals: referralReducer,
     wallet: walletReducer,
     banners: bannerReducer,
+    reviews: reviewReducer,
   },
 });

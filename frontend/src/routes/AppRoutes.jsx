@@ -48,6 +48,10 @@ import WalletPage from "../pages/patient/WalletPage";
 import DoctorEarningsPage from "../pages/doctor/DoctorEarningsPage";
 import AdminBannersPage from "../pages/admin/AdminBannersPage";
 import AdminBannerFormPage from "../pages/admin/AdminBannerFormPage";
+import MyReviewsPage from "../pages/patient/MyReviewsPage";
+import DoctorReviewsPage from "../pages/doctor/DoctorReviewsPage";
+import AdminReviewsPage from "../pages/admin/AdminReviewsPage";
+
 
 function AppRoutes() {
   return (
@@ -420,6 +424,33 @@ function AppRoutes() {
   element={
     <ProtectedRoute allowedRoles={["admin"]}>
       <AdminBannerFormPage />
+    </ProtectedRoute>
+  }
+/>
+
+<Route
+  path={ROUTES.MY_REVIEWS}
+  element={
+    <ProtectedRoute allowedRoles={["patient"]}>
+      <MyReviewsPage />
+    </ProtectedRoute>
+  }
+/>
+
+<Route
+  path={ROUTES.DOCTOR_REVIEWS}
+  element={
+    <ProtectedRoute allowedRoles={["doctor"]}>
+      <DoctorReviewsPage />
+    </ProtectedRoute>
+  }
+/>
+
+<Route
+  path={ROUTES.ADMIN_REVIEWS}
+  element={
+    <ProtectedRoute allowedRoles={["admin"]}>
+      <AdminReviewsPage />
     </ProtectedRoute>
   }
 />

@@ -957,7 +957,6 @@ if (isSamePassword) {
     throw new AppError("Doctor not found", 404);
   }
 
-  // Shape response for admin dashboard
   return {
     _id: doctor._id,
 
@@ -965,18 +964,15 @@ if (isSamePassword) {
 
     email: doctor.email,
 
-    phone:
-      doctor.professionalInfo?.contactNumber || null,
+    phone: doctor.professionalInfo?.contactNumber || null,
 
     specialization: doctor.specialization,
 
     experience: doctor.professionalInfo?.experience,
 
-    consultationFee:
-      doctor.professionalInfo?.consultationFee,
+    consultationFee: doctor.professionalInfo?.consultationFee,
 
-    profileImage:
-      doctor.professionalInfo?.profileImage || "",
+    profileImage: doctor.professionalInfo?.profileImage || "",
 
     joinedAt: doctor.createdAt,
 
@@ -985,6 +981,13 @@ if (isSamePassword) {
     education: doctor.professionalInfo?.education,
 
     settings: doctor.settings,
+
+    stats: {
+      averageRating: doctor.stats?.averageRating || 0,
+      totalReviews: doctor.stats?.totalReviews || 0,
+      totalPatients: doctor.stats?.totalPatients || 0,
+      totalAppointments: doctor.stats?.totalAppointments || 0,
+    },
   };
 };
 

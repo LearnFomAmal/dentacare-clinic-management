@@ -7,15 +7,20 @@ import {
   IndianRupee,
   XCircle,
   RefreshCcw,
+  Star,
 } from "lucide-react";
 import { Link, useParams } from "react-router-dom";
 import toast from "react-hot-toast";
-
+import ReviewFormModal from "../../components/reviews/ReviewFormModal";
 import DashboardLayout from "../../components/layout/DashboardLayout";
 import CancelAppointmentModal from "../../components/appointments/CancelAppointmentModal";
 import RescheduleAppointmentModal from "../../components/appointments/RescheduleAppointmentModal";
 import { useAppDispatch, useAppSelector } from "../../app/hooks";
-
+import {
+  clearReviewError,
+  createReview,
+  fetchMyReviews,
+} from "../../features/review/reviewSlice";
 import {
   cancelMyAppointment,
   clearAppointmentError,
@@ -59,7 +64,7 @@ function MyAppointmentDetailsPage() {
 
   const [cancelModalOpen, setCancelModalOpen] = useState(false);
   const [rescheduleModalOpen, setRescheduleModalOpen] = useState(false);
-
+  const [reviewModalOpen, setReviewModalOpen] = useState(false);
   const {
     selectedAppointment,
     isLoadingDetails,
@@ -73,6 +78,12 @@ function MyAppointmentDetailsPage() {
     isLoadingAppointmentReports,
     error: reportError,
   } = useAppSelector((state) => state.reports);
+ 
+  const {
+  myReviews,
+  isSaving: isSavingReview,
+  error: reviewError,
+} = useAppSelector((state) => state.reviews);
 
   useEffect(() => {
     if (!appointmentId) return;
@@ -103,8 +114,37 @@ function MyAppointmentDetailsPage() {
     toast.error(reportError);
     dispatch(clearReportError());
   }, [reportError, dispatch]);
+ 
+  useEffect(() => {
+  dispatch(
+    fetchMyReviews({
+      page: 1,
+      limit: 100,
+    })
+  );
+}, [dispatch]);
+
+useEffect(() => {
+  if (!reviewError) return;
+
+  toast.error(reviewError);
+  dispatch(clearReviewError());
+}, [reviewError, dispatch]);
 
   const appointment = selectedAppointment;
+ const existingReview = myReviews.find((review) => {
+  const reviewAppointmentId =
+    typeof review.appointmentId === "string"
+      ? review.appointmentId
+      : review.appointmentId?._id;
+
+  return reviewAppointmentId === appointmentId;
+});
+
+const canReviewAppointment =
+  appointment?.status === "completed" &&
+  appointment?.paymentStatus === "paid" &&
+  !existingReview;
 
   const handleCancelAppointment = async ({ reasonType, reason }) => {
     if (!reason.trim()) {
@@ -167,7 +207,34 @@ function MyAppointmentDetailsPage() {
   const canCancel = canCancelAppointment(appointment);
   const canReschedule = canRescheduleAppointment(appointment);
   const isPastAppointment = isAppointmentEndTimePast(appointment);
+ const handleSubmitReview = async ({ rating, description }) => {
+  if (!description.trim()) {
+    toast.error("Review description is required");
+    return;
+  }
 
+  try {
+    const result = await dispatch(
+      createReview({
+        appointmentId,
+        rating,
+        description,
+      })
+    ).unwrap();
+
+    toast.success(result.message || "Review submitted successfully");
+    setReviewModalOpen(false);
+
+    dispatch(
+      fetchMyReviews({
+        page: 1,
+        limit: 100,
+      })
+    );
+  } catch (err) {
+    toast.error(err || "Failed to submit review");
+  }
+};
   return (
     <DashboardLayout showPageHeader={false}>
       <main className="mx-auto max-w-[1040px] px-6 py-10">
@@ -229,12 +296,14 @@ function MyAppointmentDetailsPage() {
                       <CheckCircle2 size={18} />
                       Appointment completed
                     </p>
-
+                   
                     <p className="mt-2 text-xs font-bold text-green-600">
                       Completed at {formatCompletedAt(appointment.completedAt)}
                     </p>
                   </div>
                 )}
+
+
 
                 {appointment.status === "cancelled" && (
                   <div className="mt-6 rounded-2xl bg-slate-100 p-5">
@@ -538,6 +607,81 @@ function MyAppointmentDetailsPage() {
                   </p>
                 </div>
               )}
+
+              {appointment.status === "completed" && (
+  <div className="mt-6 rounded-2xl border border-[#EEF0F6] bg-[#F8FAFC] p-5">
+    <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+      <div>
+        <p className="flex items-center gap-2 text-sm font-extrabold text-[#111827]">
+          <Star size={18} className="text-[#F59E0B]" fill="currentColor" />
+          Appointment Review
+        </p>
+
+        {existingReview ? (
+          <p className="mt-2 text-xs font-bold capitalize text-[#6B7280]">
+            Review submitted. Status: {existingReview.status}
+          </p>
+        ) : (
+          <p className="mt-2 text-xs font-bold text-[#6B7280]">
+            Share your experience with this doctor.
+          </p>
+        )}
+      </div>
+
+      {canReviewAppointment ? (
+        <button
+          type="button"
+          onClick={() => setReviewModalOpen(true)}
+          className="h-11 rounded-2xl bg-[#9381FF] px-5 text-sm font-extrabold text-white transition hover:bg-[#7E6EF2]"
+        >
+          Submit Review
+        </button>
+      ) : existingReview ? (
+        <span
+          className={`rounded-full px-3 py-1 text-xs font-extrabold capitalize ${
+            existingReview.status === "approved"
+              ? "bg-green-100 text-green-700"
+              : existingReview.status === "rejected"
+                ? "bg-red-100 text-red-700"
+                : "bg-orange-100 text-orange-700"
+          }`}
+        >
+          {existingReview.status}
+        </span>
+      ) : null}
+    </div>
+
+    {existingReview && (
+      <div className="mt-4 rounded-2xl bg-white p-4">
+        <div className="flex items-center gap-1 text-[#F59E0B]">
+          {Array.from({ length: 5 }).map((_, index) => (
+            <Star
+              key={index}
+              size={15}
+              fill={
+                index < Number(existingReview.rating)
+                  ? "currentColor"
+                  : "none"
+              }
+            />
+          ))}
+        </div>
+
+        <p className="mt-3 text-sm leading-6 text-[#374151]">
+          {existingReview.description}
+        </p>
+
+        {existingReview.status === "rejected" &&
+          existingReview.rejectionReason && (
+            <p className="mt-3 rounded-xl bg-red-50 px-4 py-3 text-xs font-bold text-red-700">
+              Rejection reason: {existingReview.rejectionReason}
+            </p>
+          )}
+      </div>
+    )}
+  </div>
+)}
+
             </aside>
           </div>
         )}
@@ -558,6 +702,13 @@ function MyAppointmentDetailsPage() {
           onClose={() => setRescheduleModalOpen(false)}
           onConfirm={handleRescheduleAppointment}
         />
+        <ReviewFormModal
+  open={reviewModalOpen}
+  loading={isSavingReview}
+  appointment={appointment}
+  onClose={() => setReviewModalOpen(false)}
+  onSubmit={handleSubmitReview}
+/>
       </main>
     </DashboardLayout>
   );

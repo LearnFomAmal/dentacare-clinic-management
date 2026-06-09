@@ -10,6 +10,7 @@ import {
   Stethoscope,
   UserRound,
   Wallet,
+  Star,
 } from "lucide-react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import toast from "react-hot-toast";
@@ -287,11 +288,17 @@ function AdminDoctorDetailsPage() {
             description="Current doctor activity summary."
           >
             <div className="grid gap-4">
-              <DetailCard
-                icon={ShieldCheck}
-                label="Rating"
+            <DetailCard
+               icon={Star}
+                 label="Average Rating"
                 value={`${doctor?.stats?.averageRating || 0} / 5`}
-              />
+             />
+
+            <DetailCard
+             icon={ShieldCheck}
+            label="Total Reviews"
+            value={doctor?.stats?.totalReviews || 0}
+             />
 
               <DetailCard
                 icon={UserRound}
@@ -306,6 +313,29 @@ function AdminDoctorDetailsPage() {
               />
             </div>
           </SettingsSection>
+
+          <SettingsSection
+  title="Doctor Reviews"
+  description="View and moderate reviews submitted for this doctor."
+>
+  <div className="rounded-2xl bg-[#F8FAFC] p-5">
+    <p className="flex items-center gap-2 text-2xl font-extrabold text-[#111827]">
+      <Star size={22} fill="currentColor" className="text-[#F59E0B]" />
+      {doctor?.stats?.averageRating || 0}
+    </p>
+
+    <p className="mt-1 text-sm font-bold text-[#6B7280]">
+      Based on {doctor?.stats?.totalReviews || 0} approved reviews.
+    </p>
+
+    <Link
+      to={`${ROUTES.ADMIN_REVIEWS}?doctorId=${doctor?._id}`}
+      className="mt-4 inline-flex h-11 items-center justify-center rounded-2xl bg-[#9381FF] px-5 text-sm font-extrabold text-white transition hover:bg-[#7E6EF2]"
+    >
+      Manage Doctor Reviews
+    </Link>
+  </div>
+</SettingsSection>
         </div>
       </div>
      <DoctorEarningsSection

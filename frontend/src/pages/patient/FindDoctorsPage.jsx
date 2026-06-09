@@ -9,7 +9,7 @@ import {
 } from "lucide-react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import toast from "react-hot-toast";
-import { useSearchParams } from "react-router-dom";
+
 import BannerCarousel from "../../components/banners/BannerCarousel";
 import {
   clearBannerError,
@@ -52,11 +52,12 @@ const couponFromBanner = searchParams.get("coupon") || "";
     dispatch(fetchPublicDoctors());
   }, [
     dispatch,
-    filters.search,
-    filters.specialtyId,
-    filters.minExperience,
-    filters.sort,
-    filters.page,
+   filters.search,
+filters.specialtyId,
+filters.minExperience,
+filters.minRating,
+filters.sort,
+filters.page,
   ]);
 
  useEffect(() => {
@@ -129,7 +130,7 @@ useEffect(() => {
   compact
 />
         <section className="rounded-3xl border border-[#EEF0F6] bg-white p-5 shadow-[0_18px_48px_rgba(17,24,39,0.05)]">
-          <div className="grid gap-3 md:grid-cols-[1fr_220px_170px_160px]">
+          <div className="grid gap-3 md:grid-cols-[1fr_220px_170px_170px_160px]">
             <div className="relative">
               <Search
                 size={18}
@@ -176,7 +177,20 @@ useEffect(() => {
               <option value="10">10+ years</option>
               <option value="15">15+ years</option>
             </select>
-
+              <select
+  value={filters.minRating || ""}
+  onChange={(event) =>
+    handleFilterChange("minRating", event.target.value)
+  }
+  className="h-13 rounded-2xl border border-[#E5E7EB] bg-white px-4 py-4 text-sm font-bold text-[#374151] outline-none transition focus:border-[#9381FF] focus:ring-4 focus:ring-[#9381FF]/10"
+>
+  <option value="">Rating</option>
+  <option value="5">5 star</option>
+  <option value="4">4+ rating</option>
+  <option value="3">3+ rating</option>
+  <option value="2">2+ rating</option>
+  <option value="1">1+ rating</option>
+</select>
             <select
               value={filters.sort}
               onChange={(event) =>
