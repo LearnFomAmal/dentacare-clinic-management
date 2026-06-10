@@ -22,6 +22,7 @@ import {
   WalletCards,
   ImagePlus,
   Star,
+  MessageCircle,
 } from "lucide-react";
 
 import toast from "react-hot-toast";
@@ -108,6 +109,7 @@ const getRoleLinks = (role) => {
   to: ROUTES.ADMIN_REVIEWS,
   icon: Star,
 },
+
   ];
 }
 
@@ -143,6 +145,11 @@ const getRoleLinks = (role) => {
   to: ROUTES.DOCTOR_REVIEWS,
   icon: Star,
 },
+{
+  label: "Chats",
+  to: ROUTES.DOCTOR_CHATS,
+  icon: MessageCircle,
+},
       
     ];
   }
@@ -177,7 +184,12 @@ const getRoleLinks = (role) => {
     label: "Reviews",
     to: ROUTES.MY_REVIEWS,
     icon: Star,
-  }
+  },
+  {
+  label: "Chats",
+  to: ROUTES.CHATS,
+  icon: MessageCircle,
+},
 ];
 };
 
@@ -196,7 +208,9 @@ const patientTopLinks = [
       pathname.startsWith("/my-reviews") ||
       pathname.startsWith("/wallet") ||
       pathname.startsWith("/referrals") ||
+      pathname.startsWith("/chats") ||
       pathname.startsWith("/settings"),
+
   },
   {
     label: "Find Doctors",

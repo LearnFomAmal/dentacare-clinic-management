@@ -10,7 +10,6 @@ import {
   createReview,
   findActiveReviewByAppointmentId,
   findAdminReviews,
-  findApprovedReviewStatsByDoctor,
   findCompletedAppointmentForReview,
   findDoctorExistsForReview,
   findDoctorOwnReviews,

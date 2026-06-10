@@ -239,4 +239,19 @@ NOTIFICATION: {
   ADMIN_DELETE: (notificationId) =>
     `/notifications/admin/${notificationId}`,
 },
+CHAT: {
+  PATIENT_MY: "/chats/patient/my",
+  PATIENT_MESSAGES: (appointmentId) =>
+    `/chats/patient/appointments/${appointmentId}/messages`,
+  PATIENT_SEND_MESSAGE: (appointmentId) =>
+    `/chats/patient/appointments/${appointmentId}/messages`,
+  PATIENT_MARK_READ: (chatId) => `/chats/patient/${chatId}/read`,
+
+  DOCTOR_MY: "/chats/doctor/my",
+  DOCTOR_MESSAGES: (appointmentId) =>
+    `/chats/doctor/appointments/${appointmentId}/messages`,
+  DOCTOR_SEND_MESSAGE: (appointmentId) =>
+    `/chats/doctor/appointments/${appointmentId}/messages`,
+  DOCTOR_MARK_READ: (chatId) => `/chats/doctor/${chatId}/read`,
+},
 };

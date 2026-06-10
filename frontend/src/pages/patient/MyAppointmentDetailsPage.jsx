@@ -8,6 +8,7 @@ import {
   XCircle,
   RefreshCcw,
   Star,
+  MessageCircle,
 } from "lucide-react";
 import { Link, useParams } from "react-router-dom";
 import toast from "react-hot-toast";
@@ -45,6 +46,7 @@ import {
   getStatusBadgeClass,
   isAppointmentEndTimePast,
 } from "../../utils/appointmentUi";
+import { ROUTES } from "../../constants/routes";
 
 const formatCompletedAt = (value) => {
   if (!value) return "N/A";
@@ -207,6 +209,9 @@ const canReviewAppointment =
   const canCancel = canCancelAppointment(appointment);
   const canReschedule = canRescheduleAppointment(appointment);
   const isPastAppointment = isAppointmentEndTimePast(appointment);
+  const chatPath = appointment?._id
+  ? ROUTES.CHAT_APPOINTMENT.replace(":appointmentId", appointment._id)
+  : "";
  const handleSubmitReview = async ({ rating, description }) => {
   if (!description.trim()) {
     toast.error("Review description is required");
@@ -514,7 +519,15 @@ const canReviewAppointment =
                   value={appointment.paymentSummary?.transactionId || "N/A"}
                 />
               </div>
-
+             {appointment.status === "approved" && chatPath && (
+  <Link
+    to={chatPath}
+    className="mt-6 inline-flex h-12 w-full items-center justify-center gap-2 rounded-2xl bg-[#9381FF] text-sm font-extrabold text-white shadow-[0_14px_28px_rgba(147,129,255,0.24)] transition hover:bg-[#7E6EF2]"
+  >
+    <MessageCircle size={17} />
+    Chat with Doctor
+  </Link>
+)}
               {canCancel && (
                 <button
                   type="button"

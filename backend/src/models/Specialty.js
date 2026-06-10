@@ -38,9 +38,7 @@ const specialtySchema = new mongoose.Schema(
   }
 );
 
-specialtySchema.index({
-  name: 1,
-});
+
 
 const Specialty = mongoose.model(
   "Specialty",

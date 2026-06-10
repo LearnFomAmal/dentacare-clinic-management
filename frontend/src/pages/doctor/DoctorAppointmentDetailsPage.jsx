@@ -15,10 +15,11 @@ import {
   VenusAndMars,
   X,
   XCircle,
+  MessageCircle,
 } from "lucide-react";
 import { Link, useParams } from "react-router-dom";
 import toast from "react-hot-toast";
-
+import { ROUTES } from "../../constants/routes";
 import DashboardLayout from "../../components/layout/DashboardLayout";
 import RejectAppointmentModal from "../../components/appointments/RejectAppointmentModal";
 import { useAppDispatch, useAppSelector } from "../../app/hooks";
@@ -194,7 +195,12 @@ function DoctorAppointmentDetailsPage() {
     appointment?.status === "approved" && !isPastAppointment;
   const isApprovedAwaitingCompletion =
     appointment?.status === "approved" && isPastAppointment;
-
+const chatPath = appointment?._id
+  ? ROUTES.DOCTOR_CHAT_APPOINTMENT.replace(
+      ":appointmentId",
+      appointment._id
+    )
+  : "";
   const handleApprove = async () => {
     try {
       const result = await dispatch(
@@ -404,7 +410,15 @@ function DoctorAppointmentDetailsPage() {
                 />
               )}
             </div>
-
+              {appointment.status === "approved" && chatPath && (
+  <Link
+    to={chatPath}
+    className="mt-6 inline-flex h-12 w-full items-center justify-center gap-2 rounded-2xl bg-[#9381FF] text-sm font-extrabold text-white shadow-[0_14px_28px_rgba(147,129,255,0.24)] transition hover:bg-[#7E6EF2]"
+  >
+    <MessageCircle size={17} />
+    Chat with Patient
+  </Link>
+)}
             {canApproveOrReject && (
               <div className="mt-6 grid gap-3">
                 <button

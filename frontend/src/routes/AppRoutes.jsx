@@ -51,6 +51,8 @@ import AdminBannerFormPage from "../pages/admin/AdminBannerFormPage";
 import MyReviewsPage from "../pages/patient/MyReviewsPage";
 import DoctorReviewsPage from "../pages/doctor/DoctorReviewsPage";
 import AdminReviewsPage from "../pages/admin/AdminReviewsPage";
+import MyChatsPage from "../pages/chat/MyChatsPage";
+import AppointmentChatPage from "../pages/chat/AppointmentChatPage";
 
 
 function AppRoutes() {
@@ -455,6 +457,40 @@ function AppRoutes() {
   }
 />
 
+<Route
+  path={ROUTES.CHATS}
+  element={
+    <ProtectedRoute allowedRoles={["patient"]}>
+      <MyChatsPage />
+    </ProtectedRoute>
+  }
+/>
+
+<Route
+  path={ROUTES.CHAT_APPOINTMENT}
+  element={
+    <ProtectedRoute allowedRoles={["patient"]}>
+      <AppointmentChatPage />
+    </ProtectedRoute>
+  }
+/>
+<Route
+  path={ROUTES.DOCTOR_CHATS}
+  element={
+    <ProtectedRoute allowedRoles={["doctor"]}>
+      <MyChatsPage />
+    </ProtectedRoute>
+  }
+/>
+
+<Route
+  path={ROUTES.DOCTOR_CHAT_APPOINTMENT}
+  element={
+    <ProtectedRoute allowedRoles={["doctor"]}>
+      <AppointmentChatPage />
+    </ProtectedRoute>
+  }
+/>
       <Route path="*" element={<Navigate to={ROUTES.HOME} replace />} />
     </Routes>
   );

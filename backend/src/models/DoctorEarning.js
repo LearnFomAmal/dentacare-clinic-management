@@ -13,7 +13,7 @@ const doctorEarningSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: "Appointment",
       required: true,
-      index: true,
+     
     },
 
     paymentId: {
