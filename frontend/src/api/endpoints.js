@@ -42,6 +42,18 @@ export const API_ENDPOINTS = {
   },
 
   DOCTOR: {
+    REGISTER: "/doctors/register",
+REGISTER_VERIFY_OTP: "/doctors/register/verify-otp",
+REGISTER_RESEND_OTP: "/doctors/register/resend-otp",
+
+MY_VERIFICATION: "/doctors/me/verification",
+UPLOAD_VERIFICATION_DOCUMENTS: "/doctors/me/verification-documents",
+
+ADMIN_VERIFICATION_REQUESTS: "/doctors/admin/verification-requests",
+ADMIN_APPROVE_VERIFICATION: (id) =>
+  `/doctors/admin/${id}/verification/approve`,
+ADMIN_REJECT_VERIFICATION: (id) =>
+  `/doctors/admin/${id}/verification/reject`,
     LOGIN: "/doctors/login",
     LOGOUT: "/doctors/logout",
 
@@ -135,6 +147,8 @@ RESTORE_DEFAULTS: (slotDayId) =>
     `/appointments/doctor/${appointmentId}/approve`,
   DOCTOR_REJECT: (appointmentId) =>
     `/appointments/doctor/${appointmentId}/reject`,
+  DOCTOR_CANCEL: (appointmentId) =>
+  `/appointments/doctor/${appointmentId}/cancel`,
   DOCTOR_COMPLETE: (appointmentId) =>
     `/appointments/doctor/${appointmentId}/complete`,
 
@@ -178,11 +192,14 @@ REFERRAL: {
   ADMIN_GET_ALL: "/referrals/admin",
   ADMIN_CONFIG: "/referrals/admin/config",
 },
-  WALLET: {
-    ME: "/wallets/me",
-    TRANSACTIONS: "/wallets/transactions",
-    TOPUP: "/wallets/topup",
-  },
+
+ WALLET: {
+  ME: "/wallets/me",
+  TRANSACTIONS: "/wallets/transactions",
+  CREATE_RAZORPAY_ORDER: "/wallets/razorpay/create-order",
+  VERIFY_RAZORPAY_TOPUP: "/wallets/razorpay/verify",
+  CANCEL_RAZORPAY_TOPUP: "/wallets/razorpay/cancel",
+},
 
   BANNER: {
   HOME: "/banners/home",

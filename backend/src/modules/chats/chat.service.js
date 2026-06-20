@@ -15,6 +15,7 @@ import {
   findChatsForPatient,
   findMessagesByChatId,
   markMessagesAsReadForReceiver,
+  populateChat,
   saveChat,
 } from "./chat.repository.js";
 
@@ -25,6 +26,9 @@ import {
   validateSendMessageInput,
 } from "./chat.validator.js";
 
+const READABLE_CHAT_STATUSES = ["approved", "completed", "cancelled"];
+const READABLE_PAYMENT_STATUSES = ["paid", "refunded"];
+
 const getMongoId = (value) => {
   return value?._id || value;
 };
@@ -33,26 +37,82 @@ const toStringId = (value) => {
   return String(getMongoId(value));
 };
 
+const toPlainObject = (value) => {
+  return value?.toObject ? value.toObject() : value;
+};
+
 const buildRoomName = (appointmentId) => {
   return `chat:appointment:${appointmentId}`;
 };
 
+const getReadOnlyReason = (appointment) => {
+  if (!appointment) return "Chat is unavailable.";
+
+  if (appointment.status === "completed") {
+    return "This appointment is completed. Chat history is available, but new messages are disabled.";
+  }
+
+  if (appointment.status === "cancelled") {
+    return "This appointment is cancelled. Chat history is available, but new messages are disabled.";
+  }
+
+  if (appointment.status !== "approved") {
+    return "Chat is available only after appointment approval.";
+  }
+
+  if (appointment.paymentStatus !== "paid") {
+    return "Chat is available only for paid appointments.";
+  }
+
+  return "";
+};
+
+const canReadAppointmentChat = (appointment) => {
+  return Boolean(
+    appointment &&
+      READABLE_CHAT_STATUSES.includes(appointment.status) &&
+      READABLE_PAYMENT_STATUSES.includes(appointment.paymentStatus)
+  );
+};
+
+const canSendAppointmentChat = (appointment) => {
+  return Boolean(
+    appointment &&
+      appointment.status === "approved" &&
+      appointment.paymentStatus === "paid"
+  );
+};
+
 const normalizeChat = (chat, currentRole = "") => {
+  const plainChat = toPlainObject(chat);
+
+  const appointment =
+    typeof plainChat.appointmentId === "object"
+      ? plainChat.appointmentId
+      : null;
+
+  const canSendMessage = canSendAppointmentChat(appointment);
+
   const unreadCount =
     currentRole === "patient"
-      ? chat.patientUnreadCount || 0
+      ? plainChat.patientUnreadCount || 0
       : currentRole === "doctor"
-        ? chat.doctorUnreadCount || 0
+        ? plainChat.doctorUnreadCount || 0
         : 0;
 
   return {
-    ...chat,
+    ...plainChat,
     unreadCount,
-    roomName: buildRoomName(chat.appointmentId?._id || chat.appointmentId),
+    canSendMessage,
+    isReadOnly: !canSendMessage,
+    readOnlyReason: canSendMessage ? "" : getReadOnlyReason(appointment),
+    roomName: buildRoomName(
+      plainChat.appointmentId?._id || plainChat.appointmentId
+    ),
   };
 };
 
-const ensureAppointmentChatAccess = async ({
+const ensureAppointmentParticipantAndAccounts = async ({
   appointmentId,
   userId,
   role,
@@ -69,22 +129,39 @@ const ensureAppointmentChatAccess = async ({
     throw new AppError("Appointment not found", 404);
   }
 
-  if (appointment.status !== "approved") {
-    throw new AppError(
-      "Chat is available only for approved appointments",
-      403
-    );
+  const patient = appointment.patientId;
+  const doctor = appointment.doctorId;
+
+  if (!patient || patient.accountStatus?.isDeleted) {
+    throw new AppError("Patient account not found", 404);
   }
 
-  if (appointment.paymentStatus !== "paid") {
-    throw new AppError(
-      "Chat is available only for paid appointments",
-      403
-    );
+  if (patient.accountStatus?.isBlocked) {
+    throw new AppError("Patient account is blocked", 403);
   }
 
-  const patientId = toStringId(appointment.patientId);
-  const doctorId = toStringId(appointment.doctorId);
+  if (!doctor || doctor.accountStatus?.isDeleted) {
+    throw new AppError("Doctor account not found", 404);
+  }
+
+  if (doctor.accountStatus?.isBlocked) {
+    throw new AppError("Doctor account is blocked", 403);
+  }
+
+  if (!doctor.accountStatus?.isEmailVerified) {
+    throw new AppError("Doctor email is not verified", 403);
+  }
+
+  if (!doctor.accountStatus?.isVerified) {
+    throw new AppError("Doctor documents are not approved", 403);
+  }
+
+  if (doctor.verification?.status !== "approved") {
+    throw new AppError("Doctor verification is not approved", 403);
+  }
+
+  const patientId = toStringId(patient);
+  const doctorId = toStringId(doctor);
 
   if (role === "patient" && patientId !== String(userId)) {
     throw new AppError("You are not allowed to access this chat", 403);
@@ -92,6 +169,36 @@ const ensureAppointmentChatAccess = async ({
 
   if (role === "doctor" && doctorId !== String(userId)) {
     throw new AppError("You are not allowed to access this chat", 403);
+  }
+
+  return appointment;
+};
+
+const ensureAppointmentChatAccess = async ({
+  appointmentId,
+  userId,
+  role,
+  mode = "read",
+}) => {
+  const appointment = await ensureAppointmentParticipantAndAccounts({
+    appointmentId,
+    userId,
+    role,
+  });
+
+  if (mode === "send") {
+    if (!canSendAppointmentChat(appointment)) {
+      throw new AppError(getReadOnlyReason(appointment), 403);
+    }
+
+    return appointment;
+  }
+
+  if (!canReadAppointmentChat(appointment)) {
+    throw new AppError(
+      "Chat is available only for approved, completed, or cancelled paid appointments",
+      403
+    );
   }
 
   return appointment;
@@ -106,6 +213,10 @@ const getOrCreateChatForAppointment = async (appointment) => {
 
   if (existingChat) {
     return existingChat;
+  }
+
+  if (!canSendAppointmentChat(appointment)) {
+    throw new AppError("No chat history found for this appointment", 404);
   }
 
   try {
@@ -130,6 +241,22 @@ const getOrCreateChatForAppointment = async (appointment) => {
   }
 };
 
+const getReadableChatForAppointment = async (appointment) => {
+  if (canSendAppointmentChat(appointment)) {
+    return getOrCreateChatForAppointment(appointment);
+  }
+
+  const existingChat = await findChatByAppointmentId({
+    appointmentId: appointment._id,
+  });
+
+  if (!existingChat) {
+    throw new AppError("No chat history found for this appointment", 404);
+  }
+
+  return existingChat;
+};
+
 const ensureChatAccessByChatId = async ({ chatId, userId, role }) => {
   validateObjectId(chatId, "chat id");
   validateObjectId(userId, `${role} id`);
@@ -143,11 +270,11 @@ const ensureChatAccessByChatId = async ({ chatId, userId, role }) => {
     throw new AppError("Chat not found", 404);
   }
 
-  if (role === "patient" && String(chat.patientId) !== String(userId)) {
+  if (role === "patient" && toStringId(chat.patientId) !== String(userId)) {
     throw new AppError("You are not allowed to access this chat", 403);
   }
 
-  if (role === "doctor" && String(chat.doctorId) !== String(userId)) {
+  if (role === "doctor" && toStringId(chat.doctorId) !== String(userId)) {
     throw new AppError("You are not allowed to access this chat", 403);
   }
 
@@ -205,9 +332,10 @@ export const getAppointmentMessagesService = async ({
     appointmentId,
     userId,
     role,
+    mode: "read",
   });
 
-  const chat = await getOrCreateChatForAppointment(appointment);
+  const chat = await getReadableChatForAppointment(appointment);
 
   const { page, limit } = validatePagination(query);
   const skip = (page - 1) * limit;
@@ -224,9 +352,10 @@ export const getAppointmentMessagesService = async ({
   ]);
 
   const orderedMessages = [...messages].reverse();
+  const populatedChat = await populateChat(chat);
 
   return {
-    chat: normalizeChat(chat.toObject ? chat.toObject() : chat, role),
+    chat: normalizeChat(populatedChat, role),
     messages: orderedMessages,
     roomName: buildRoomName(appointmentId),
     pagination: {
@@ -250,6 +379,7 @@ export const sendChatMessageService = async ({
     appointmentId,
     userId,
     role,
+    mode: "send",
   });
 
   const chat = await getOrCreateChatForAppointment(appointment);
@@ -302,8 +432,10 @@ export const sendChatMessageService = async ({
 
   await saveChat(chat);
 
+  const populatedChat = await populateChat(chat);
+
   return {
-    chat: normalizeChat(chat.toObject ? chat.toObject() : chat, role),
+    chat: normalizeChat(populatedChat, role),
     message: message.toObject ? message.toObject() : message,
     roomName: buildRoomName(appointmentId),
   };
@@ -332,8 +464,10 @@ export const markChatAsReadService = async ({ chatId, userId, role }) => {
 
   await saveChat(chat);
 
+  const populatedChat = await populateChat(chat);
+
   return {
-    chat: normalizeChat(chat.toObject ? chat.toObject() : chat, role),
+    chat: normalizeChat(populatedChat, role),
   };
 };
 
@@ -346,13 +480,38 @@ export const validateSocketChatAccessService = async ({
     appointmentId,
     userId,
     role,
+    mode: "read",
   });
 
-  const chat = await getOrCreateChatForAppointment(appointment);
+  const chat = await getReadableChatForAppointment(appointment);
+  const populatedChat = await populateChat(chat);
 
   return {
     appointment,
-    chat,
+    chat: normalizeChat(populatedChat, role),
     roomName: buildRoomName(appointmentId),
   };
+};
+
+export const ensureChatExistsForApprovedAppointmentService = async ({
+  appointmentId,
+}) => {
+  validateObjectId(appointmentId, "appointment id");
+
+  const appointment = await findAppointmentForChat({
+    appointmentId,
+  });
+
+  if (!appointment) {
+    return null;
+  }
+
+  if (!canSendAppointmentChat(appointment)) {
+    return null;
+  }
+
+  const chat = await getOrCreateChatForAppointment(appointment);
+  const populatedChat = await populateChat(chat);
+
+  return normalizeChat(populatedChat);
 };

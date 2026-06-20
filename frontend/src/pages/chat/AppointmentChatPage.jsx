@@ -18,6 +18,7 @@ import {
   sendChatMessage,
   setCurrentChatFromSocket,
   updateChatFromSocket,
+  markMessagesReadFromSocket,
 } from "../../features/chat/chatSlice";
 
 import {
@@ -48,6 +49,9 @@ function AppointmentChatPage() {
     isSending,
     error,
   } = useAppSelector((state) => state.chats);
+
+  const isReadOnly = Boolean(currentChat?.isReadOnly);
+  const canSendMessage = Boolean(currentChat?.canSendMessage);
 
   useEffect(() => {
     if (!appointmentId) return;
@@ -100,6 +104,18 @@ function AppointmentChatPage() {
       if (payload?.chat) {
         dispatch(updateChatFromSocket(payload.chat));
       }
+
+      if (payload?.readerRole) {
+        dispatch(
+          markMessagesReadFromSocket({
+            readerRole: payload.readerRole,
+          })
+        );
+      }
+    });
+
+    socket.on("connect_error", () => {
+      toast.error("Realtime chat connection failed");
     });
 
     socket.on("chat_error", (payload) => {
@@ -114,6 +130,7 @@ function AppointmentChatPage() {
       socket.off("chat_joined");
       socket.off("receive_message");
       socket.off("messages_read");
+      socket.off("connect_error");
       socket.off("chat_error");
 
       disconnectChatSocket();
@@ -153,26 +170,80 @@ function AppointmentChatPage() {
   }, [messages.length]);
 
   const handleSendMessage = async (text) => {
+    if (!text?.trim()) return;
+
+    if (isReadOnly || !canSendMessage) {
+      toast.error(
+        currentChat?.readOnlyReason ||
+          "This chat is read-only. You cannot send new messages."
+      );
+      return;
+    }
+
     const socket = socketRef.current;
 
     if (socket?.connected) {
-      socket.emit("send_message", {
-        appointmentId,
-        text,
-        clientTempId: `${Date.now()}`,
-      });
+      const clientTempId = `${Date.now()}-${Math.random()
+        .toString(16)
+        .slice(2)}`;
+
+      socket.timeout(8000).emit(
+        "send_message",
+        {
+          appointmentId,
+          text,
+          clientTempId,
+        },
+        (error, response) => {
+          if (error) {
+            toast.error("Message sent slowly. Refreshing chat...");
+            dispatch(
+              fetchAppointmentMessages({
+                role,
+                appointmentId,
+                params: {
+                  page: 1,
+                  limit: 50,
+                },
+              })
+            );
+            return;
+          }
+
+          if (!response?.success) {
+            toast.error(response?.message || "Failed to send message");
+            return;
+          }
+
+          if (response?.message) {
+            dispatch(addRealtimeMessage(response.message));
+          }
+
+          if (response?.chat) {
+            dispatch(updateChatFromSocket(response.chat));
+          }
+        }
+      );
 
       return;
     }
 
     try {
-      await dispatch(
+      const result = await dispatch(
         sendChatMessage({
           role,
           appointmentId,
           text,
         })
       ).unwrap();
+
+      if (result?.message) {
+        dispatch(addRealtimeMessage(result.message));
+      }
+
+      if (result?.chat) {
+        dispatch(updateChatFromSocket(result.chat));
+      }
     } catch (err) {
       toast.error(err || "Failed to send message");
     }
@@ -189,6 +260,15 @@ function AppointmentChatPage() {
               <h1 className="text-lg font-extrabold text-[#111827]">
                 Appointment Chat
               </h1>
+            </div>
+          )}
+
+          {isReadOnly && (
+            <div className="border-b border-orange-100 bg-orange-50 px-5 py-3">
+              <p className="text-sm font-bold text-orange-700">
+                {currentChat?.readOnlyReason ||
+                  "This chat is read-only. You can view previous messages but cannot send new ones."}
+              </p>
             </div>
           )}
 
@@ -231,7 +311,7 @@ function AppointmentChatPage() {
 
           <ChatInput
             loading={isSending}
-            disabled={!currentChat}
+            disabled={!currentChat || isReadOnly || !canSendMessage}
             onSend={handleSendMessage}
           />
         </div>

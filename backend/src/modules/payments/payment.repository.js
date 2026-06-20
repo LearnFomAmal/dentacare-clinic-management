@@ -5,6 +5,7 @@ import Coupon from "../../models/Coupon.js";
 import CouponUsage from "../../models/CouponUsage.js";
 import Referral from "../../models/Referral.js";
 import ReferralConfig from "../../models/ReferralConfig.js";
+import Report from "../../models/Report.js";
 
 export const findPatientAppointmentById = ({
   appointmentId,
@@ -178,4 +179,23 @@ export const markReferralDiscountUsedForPayment = ({
       session,
     }
   );
+};
+
+export const releaseReportsFromAppointment = ({
+  appointmentId,
+  patientId,
+  session = null,
+}) => {
+  return Report.updateMany(
+    {
+      appointmentId,
+      patientId,
+      status: "attached",
+    },
+    {
+      appointmentId: null,
+      doctorId: null,
+      status: "draft",
+    }
+  ).session(session);
 };

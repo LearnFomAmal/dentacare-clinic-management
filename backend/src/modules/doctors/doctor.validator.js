@@ -1,5 +1,11 @@
 import AppError from "../../shared/errors/AppError.js";
+import mongoose from "mongoose";
 
+const validateMongoObjectId = (value, fieldName) => {
+  if (!mongoose.Types.ObjectId.isValid(value)) {
+    throw new AppError(`Invalid ${fieldName}`, 400);
+  }
+};
 const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const phoneRegex = /^[6-9]\d{9}$/;
 const passwordRegex =
@@ -64,7 +70,7 @@ export const validateCreateDoctorInput = (data) => {
   }
 
   validateEmail(email);
-
+validateMongoObjectId(specializationId, "specialization id");
   if (!phoneRegex.test(contactNumber)) {
     throw new AppError("Invalid contact number", 400);
   }
@@ -299,5 +305,108 @@ export const validateDoctorConsultationFeeInput = (consultationFee) => {
 
   if (feeNumber > 10000) {
     throw new AppError("Consultation fee cannot be more than ₹10000", 400);
+  }
+};
+
+export const validateDoctorSelfRegisterInput = (data) => {
+  const {
+    firstName,
+    lastName,
+    email,
+    specializationId,
+    experience,
+    education,
+    contactNumber,
+    password,
+    confirmPassword,
+  } = data;
+
+  if (
+    !firstName ||
+    !lastName ||
+    !email ||
+    !specializationId ||
+    experience === undefined ||
+    experience === null ||
+    !education ||
+    !contactNumber ||
+    !password ||
+    !confirmPassword
+  ) {
+    throw new AppError("All fields are required", 400);
+  }
+
+  if (firstName.trim().length < 2 || firstName.trim().length > 30) {
+    throw new AppError("First name must be 2-30 characters", 400);
+  }
+
+  if (lastName.trim().length < 1 || lastName.trim().length > 30) {
+    throw new AppError("Last name must be 1-30 characters", 400);
+  }
+
+  validateEmail(email);
+  validateMongoObjectId(specializationId, "specialization id");
+
+  if (!phoneRegex.test(contactNumber)) {
+    throw new AppError("Invalid contact number", 400);
+  }
+
+  const experienceNumber = Number(experience);
+
+  if (Number.isNaN(experienceNumber)) {
+    throw new AppError("Experience must be a number", 400);
+  }
+
+  if (experienceNumber < 0) {
+    throw new AppError("Experience cannot be negative", 400);
+  }
+
+  if (experienceNumber > 25) {
+    throw new AppError("Experience cannot be more than 25 years", 400);
+  }
+
+  if (education.trim().length < 2 || education.trim().length > 100) {
+    throw new AppError("Education must be 2-100 characters", 400);
+  }
+
+  if (password !== confirmPassword) {
+    throw new AppError("Passwords do not match", 400);
+  }
+
+  if (!passwordRegex.test(password)) {
+    throw new AppError(
+      "Password must be 8-20 chars with uppercase, lowercase, number and special character",
+      400
+    );
+  }
+};
+
+export const validateDoctorRegisterOtpInput = (
+  email,
+  otp
+) => {
+  validateEmail(email);
+  validateOtp(otp);
+};
+
+export const validateAdminRejectDoctorVerificationInput = (body) => {
+  const { rejectionReason } = body;
+
+  if (!rejectionReason || !rejectionReason.trim()) {
+    throw new AppError("Rejection reason is required", 400);
+  }
+
+  if (rejectionReason.trim().length < 5) {
+    throw new AppError(
+      "Rejection reason must be at least 5 characters",
+      400
+    );
+  }
+
+  if (rejectionReason.trim().length > 500) {
+    throw new AppError(
+      "Rejection reason cannot exceed 500 characters",
+      400
+    );
   }
 };

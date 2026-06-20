@@ -38,6 +38,10 @@ export const ROUTES = {
   DOCTOR_REVIEWS: "/doctor/reviews",
   DOCTOR_CHATS: "/doctor/chats",
   DOCTOR_CHAT_APPOINTMENT: "/doctor/chats/appointments/:appointmentId",
+  DOCTOR_REGISTER: "/doctor/register",
+DOCTOR_REGISTER_VERIFY_OTP: "/doctor/register/verify-otp",
+DOCTOR_VERIFICATION_STATUS: "/doctor/verification-status",
+DOCTOR_UPLOAD_DOCUMENTS: "/doctor/upload-documents",
   // ADMIN
   ADMIN_DASHBOARD: "/admin/dashboard",
   ADMIN_PROFILE: "/admin/profile",
@@ -48,7 +52,7 @@ export const ROUTES = {
   ADMIN_ADD_DOCTOR: "/admin/doctors/add",
   ADMIN_DOCTOR_DETAILS: "/admin/doctors/:id",
   ADMIN_EDIT_DOCTOR_FEE: "/admin/doctors/:id/edit-fee",
-
+  
   ADMIN_SPECIALTIES: "/admin/specialties",
   ADMIN_APPOINTMENTS: "/admin/appointments",
   ADMIN_APPOINTMENT_DETAILS: "/admin/appointments/:appointmentId",
@@ -60,4 +64,6 @@ export const ROUTES = {
   ADMIN_EDIT_BANNER: "/admin/banners/:bannerId/edit",
   ADMIN_REVIEWS: "/admin/reviews",
   ADMIN_REVIEW_DETAILS: "/admin/reviews/:reviewId",
+  ADMIN_DOCTOR_VERIFICATION_REQUESTS: "/admin/doctor-verifications",
+
 };

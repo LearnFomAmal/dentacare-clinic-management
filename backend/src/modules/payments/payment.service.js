@@ -4,7 +4,10 @@ import Razorpay from "razorpay";
 
 import { env } from "../../config/env.js";
 import AppError from "../../shared/errors/AppError.js";
-
+import {
+  safeCreateAdminNotification,
+  safeCreateNotification,
+} from "../notifications/notification.service.js";
 import {
   countCompletedCouponUsageByUser,
   createCouponUsage,
@@ -21,6 +24,7 @@ import {
   markReferralDiscountUsedForPayment,
   saveAppointment,
   saveSlotDay,
+  releaseReportsFromAppointment,
 } from "./payment.repository.js";
 
 import { processBookingWalletDebit } from "../wallets/wallet.service.js";
@@ -89,6 +93,45 @@ const buildPaymentPayload = ({
     failureReason,
   };
 };
+
+const notifyAfterSuccessfulPayment = async ({ appointment }) => {
+  await safeCreateNotification({
+    recipientRole: "patient",
+    recipientId: appointment.patientId,
+    actorRole: "system",
+    type: "payment_success",
+    title: "Payment Successful",
+    message:
+      "Your payment was successful. Your appointment is now waiting for approval.",
+    referenceType: "appointment",
+    referenceId: appointment._id,
+  });
+
+  await safeCreateNotification({
+    recipientRole: "doctor",
+    recipientId: appointment.doctorId,
+    actorRole: "patient",
+    actorId: appointment.patientId,
+    actorName: "Patient",
+    type: "booking_received",
+    title: "New Appointment Booking",
+    message: "A patient booked an appointment and it is waiting for approval.",
+    referenceType: "appointment",
+    referenceId: appointment._id,
+  });
+
+  await safeCreateAdminNotification({
+    actorRole: "patient",
+    actorId: appointment.patientId,
+    actorName: "Patient",
+    type: "booking_received",
+    title: "New Appointment Booking",
+    message: "A patient completed payment for a new appointment.",
+    referenceType: "appointment",
+    referenceId: appointment._id,
+  });
+};
+
 
 const ensureAppointmentPayable = (appointment) => {
   if (!appointment) {
@@ -381,7 +424,23 @@ const completeSuccessfulPayment = async ({
       });
 
       ensureAppointmentPayable(appointment);
+       if (razorpayOrderId) {
+  const storedOrderId = appointment.paymentSummary?.razorpayOrderId || "";
 
+  if (!storedOrderId) {
+    throw new AppError(
+      "No Razorpay order was created for this appointment",
+      400
+    );
+  }
+
+  if (storedOrderId !== razorpayOrderId) {
+    throw new AppError(
+      "Razorpay order does not match this appointment",
+      400
+    );
+  }
+}
       const { slotDay, slot } = await verifySlotReservation({
         appointment,
         patientId,
@@ -451,12 +510,25 @@ const completeSuccessfulPayment = async ({
       finalPayment = payment;
       finalAppointment = appointment;
     });
-
+     if (finalAppointment) {
+  await notifyAfterSuccessfulPayment({
+    appointment: finalAppointment,
+  });
+}
     return {
       appointment: finalAppointment,
       payment: finalPayment,
       walletTransaction: finalWalletTransaction,
     };
+   } catch (error) {
+    if (error?.code === 11000) {
+      throw new AppError(
+        "Payment is already processed for this appointment",
+        400
+      );
+    }
+
+    throw error;
   } finally {
     await session.endSession();
   }
@@ -495,6 +567,15 @@ export const createRazorpayOrderService = async ({ patientId, body }) => {
     },
   });
 
+  appointment.paymentSummary = {
+  ...appointment.paymentSummary,
+  razorpayOrderId: order.id,
+};
+
+await saveAppointment({
+  appointment,
+});
+
   return {
     keyId: env.RAZORPAY_KEY_ID,
     orderId: order.id,
@@ -510,14 +591,12 @@ export const verifyRazorpayPaymentService = async ({
   patientId,
   body,
 }) => {
-  validateVerifyRazorpayPaymentInput(body);
-
   const {
     appointmentId,
-    razorpay_order_id,
-    razorpay_payment_id,
-    razorpay_signature,
-  } = body;
+    razorpayOrderId,
+    razorpayPaymentId,
+    razorpaySignature,
+  } = validateVerifyRazorpayPaymentInput(body);
 
   if (!env.RAZORPAY_KEY_SECRET) {
     throw new AppError("Razorpay secret is not configured", 500);
@@ -525,10 +604,10 @@ export const verifyRazorpayPaymentService = async ({
 
   const generatedSignature = crypto
     .createHmac("sha256", env.RAZORPAY_KEY_SECRET)
-    .update(`${razorpay_order_id}|${razorpay_payment_id}`)
+    .update(`${razorpayOrderId}|${razorpayPaymentId}`)
     .digest("hex");
 
-  if (generatedSignature !== razorpay_signature) {
+  if (generatedSignature !== razorpaySignature) {
     throw new AppError("Invalid Razorpay payment signature", 400);
   }
 
@@ -536,10 +615,10 @@ export const verifyRazorpayPaymentService = async ({
     patientId,
     appointmentId,
     paymentMethod: "razorpay",
-    transactionId: razorpay_payment_id,
-    razorpayOrderId: razorpay_order_id,
-    razorpayPaymentId: razorpay_payment_id,
-    razorpaySignature: razorpay_signature,
+    transactionId: razorpayPaymentId,
+    razorpayOrderId,
+    razorpayPaymentId,
+    razorpaySignature,
   });
 };
 
@@ -547,6 +626,13 @@ export const markPaymentSuccessService = async ({ patientId, body }) => {
   validatePaymentSuccessInput(body);
 
   const { appointmentId, paymentMethod, transactionId } = body;
+
+  if (paymentMethod !== "wallet") {
+    throw new AppError(
+      "Online payment must be verified through Razorpay verification",
+      400
+    );
+  }
 
   return completeSuccessfulPayment({
     patientId,
@@ -585,16 +671,22 @@ export const markPaymentFailedService = async ({ patientId, body }) => {
         throw new AppError("Appointment is already paid", 400);
       }
 
-      await releaseReservedSlot({
-        appointment,
-        session,
-      });
+     await releaseReservedSlot({
+  appointment,
+  session,
+});
 
-      await deleteAppointmentById({
-        appointmentId: appointment._id,
-        patientId,
-        session,
-      });
+await releaseReportsFromAppointment({
+  appointmentId: appointment._id,
+  patientId,
+  session,
+});
+
+await deleteAppointmentById({
+  appointmentId: appointment._id,
+  patientId,
+  session,
+});
 
       deletedAppointmentId = appointment._id;
     });

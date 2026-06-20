@@ -28,6 +28,15 @@ export const getBookingDraft = (doctorId = null) => {
   }
 };
 
-export const clearBookingDraft = () => {
-  sessionStorage.removeItem(BOOKING_DRAFT_KEY);
+export const clearBookingDraft = (doctorId = null) => {
+  if (!doctorId) {
+    sessionStorage.removeItem(BOOKING_DRAFT_KEY);
+    return;
+  }
+
+  const draft = getBookingDraft();
+
+  if (String(draft?.doctorId) === String(doctorId)) {
+    sessionStorage.removeItem(BOOKING_DRAFT_KEY);
+  }
 };

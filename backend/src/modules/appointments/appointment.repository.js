@@ -6,6 +6,11 @@ import Report from "../../models/Report.js";
 import User from "../../models/User.js";
 import Payment from "../../models/Payment.js";
 import DoctorEarning from "../../models/DoctorEarning.js";
+import Coupon from "../../models/Coupon.js";
+import CouponUsage from "../../models/CouponUsage.js";
+
+const VISIBLE_PAYMENT_STATUSES = ["paid", "refunded"];
+
 const appointmentPopulate = [
   {
     path: "patientId",
@@ -15,13 +20,16 @@ const appointmentPopulate = [
   {
     path: "doctorId",
     select:
-      "firstName lastName email specialization professionalInfo stats accountStatus",
+      "firstName lastName email specialization professionalInfo stats accountStatus verification",
   },
 ];
 
+// ==============================
+// BOOKING HELPERS
+// ==============================
 export const findDoctorForBooking = (doctorId) => {
   return Doctor.findById(doctorId).select(
-    "_id firstName lastName email specialization professionalInfo accountStatus stats"
+    "_id firstName lastName email specialization professionalInfo accountStatus verification stats"
   );
 };
 
@@ -34,10 +42,14 @@ export const findPatientReportsByIds = ({ patientId, reportIds }) => {
 
 export const createAppointment = async ({ payload, session = null }) => {
   const appointments = await Appointment.create([payload], { session });
+
   return appointments[0];
 };
 
-export const findAppointmentByIdForPatient = ({ appointmentId, patientId }) => {
+export const findAppointmentByIdForPatient = ({
+  appointmentId,
+  patientId,
+}) => {
   return Appointment.findOne({
     _id: appointmentId,
     patientId,
@@ -46,14 +58,38 @@ export const findAppointmentByIdForPatient = ({ appointmentId, patientId }) => {
     .lean();
 };
 
-export const findPatientAppointments = ({ patientId, status }) => {
+// ==============================
+// PATIENT APPOINTMENTS
+// ==============================
+const buildPatientAppointmentsFilter = ({ patientId, status }) => {
   const filter = {
     patientId,
+    paymentStatus: {
+      $in: VISIBLE_PAYMENT_STATUSES,
+    },
   };
 
   if (status) {
     filter.status = status;
+  } else {
+    filter.status = {
+      $ne: "pending_payment",
+    };
   }
+
+  return filter;
+};
+
+export const findPatientAppointments = ({
+  patientId,
+  status,
+  skip = 0,
+  limit = 6,
+}) => {
+  const filter = buildPatientAppointmentsFilter({
+    patientId,
+    status,
+  });
 
   return Appointment.find(filter)
     .populate(appointmentPopulate)
@@ -62,7 +98,100 @@ export const findPatientAppointments = ({ patientId, status }) => {
       startTime: -1,
       createdAt: -1,
     })
+    .skip(skip)
+    .limit(limit)
     .lean();
+};
+
+export const countPatientAppointments = ({ patientId, status }) => {
+  const filter = buildPatientAppointmentsFilter({
+    patientId,
+    status,
+  });
+
+  return Appointment.countDocuments(filter);
+};
+
+export const getPatientAppointmentStats = async ({ patientId }) => {
+  const baseFilter = {
+    patientId,
+    paymentStatus: {
+      $in: VISIBLE_PAYMENT_STATUSES,
+    },
+    status: {
+      $ne: "pending_payment",
+    },
+  };
+
+  const [
+    total,
+    pending,
+    approved,
+    completed,
+    cancelled,
+    rejected,
+    expired,
+  ] = await Promise.all([
+    Appointment.countDocuments(baseFilter),
+
+    Appointment.countDocuments({
+      patientId,
+      paymentStatus: {
+        $in: VISIBLE_PAYMENT_STATUSES,
+      },
+      status: "pending",
+    }),
+
+    Appointment.countDocuments({
+      patientId,
+      paymentStatus: {
+        $in: VISIBLE_PAYMENT_STATUSES,
+      },
+      status: "approved",
+    }),
+
+    Appointment.countDocuments({
+      patientId,
+      paymentStatus: {
+        $in: VISIBLE_PAYMENT_STATUSES,
+      },
+      status: "completed",
+    }),
+
+    Appointment.countDocuments({
+      patientId,
+      paymentStatus: {
+        $in: VISIBLE_PAYMENT_STATUSES,
+      },
+      status: "cancelled",
+    }),
+
+    Appointment.countDocuments({
+      patientId,
+      paymentStatus: {
+        $in: VISIBLE_PAYMENT_STATUSES,
+      },
+      status: "rejected",
+    }),
+
+    Appointment.countDocuments({
+      patientId,
+      paymentStatus: {
+        $in: VISIBLE_PAYMENT_STATUSES,
+      },
+      status: "expired",
+    }),
+  ]);
+
+  return {
+    total,
+    pending,
+    approved,
+    completed,
+    cancelled,
+    rejected,
+    expired,
+  };
 };
 
 export const findPatientOverlappingAppointments = ({
@@ -73,17 +202,11 @@ export const findPatientOverlappingAppointments = ({
   excludeDoctorId = null,
   session = null,
 }) => {
+  const now = new Date();
+
   const filter = {
     patientId,
     appointmentDate,
-
-    status: {
-      $in: ["pending_payment", "pending", "approved"],
-    },
-
-    paymentStatus: {
-      $in: ["unpaid", "paid"],
-    },
 
     startTime: {
       $lt: endTime,
@@ -92,6 +215,22 @@ export const findPatientOverlappingAppointments = ({
     endTime: {
       $gt: startTime,
     },
+
+    $or: [
+      {
+        status: "pending_payment",
+        paymentStatus: "unpaid",
+        "reservation.reservedUntil": {
+          $gt: now,
+        },
+      },
+      {
+        status: {
+          $in: ["pending", "approved"],
+        },
+        paymentStatus: "paid",
+      },
+    ],
   };
 
   if (excludeDoctorId) {
@@ -117,26 +256,188 @@ export const findPatientOverlappingAppointments = ({
     .lean();
 };
 
-export const findDoctorAppointments = ({ doctorId, status }) => {
+// ==============================
+// DOCTOR APPOINTMENTS
+// ==============================
+const buildDoctorAppointmentsFilter = ({ doctorId, status }) => {
   const filter = {
     doctorId,
     paymentStatus: {
-      $in: ["paid", "refunded"],
+      $in: VISIBLE_PAYMENT_STATUSES,
     },
   };
 
   if (status) {
     filter.status = status;
+  } else {
+    filter.status = {
+      $ne: "pending_payment",
+    };
   }
+
+  return filter;
+};
+
+export const findDoctorAppointments = ({
+  doctorId,
+  status,
+  skip = 0,
+  limit = 6,
+}) => {
+  const filter = buildDoctorAppointmentsFilter({
+    doctorId,
+    status,
+  });
 
   return Appointment.find(filter)
     .populate(appointmentPopulate)
     .sort({
-      appointmentDate: 1,
-      startTime: 1,
       createdAt: -1,
+      appointmentDate: -1,
+      startTime: -1,
     })
+    .skip(skip)
+    .limit(limit)
     .lean();
+};
+
+export const countDoctorAppointments = ({ doctorId, status }) => {
+  const filter = buildDoctorAppointmentsFilter({
+    doctorId,
+    status,
+  });
+
+  return Appointment.countDocuments(filter);
+};
+
+export const getDoctorAppointmentStats = async ({
+  doctorId,
+  nowDate,
+  nowTime,
+}) => {
+  const baseFilter = {
+    doctorId,
+    paymentStatus: {
+      $in: VISIBLE_PAYMENT_STATUSES,
+    },
+    status: {
+      $ne: "pending_payment",
+    },
+  };
+
+  const appointmentEndPassedFilter = {
+    $or: [
+      {
+        appointmentDate: {
+          $lt: nowDate,
+        },
+      },
+      {
+        appointmentDate: nowDate,
+        endTime: {
+          $lte: nowTime,
+        },
+      },
+    ],
+  };
+
+  const appointmentEndNotPassedFilter = {
+    $or: [
+      {
+        appointmentDate: {
+          $gt: nowDate,
+        },
+      },
+      {
+        appointmentDate: nowDate,
+        endTime: {
+          $gt: nowTime,
+        },
+      },
+    ],
+  };
+
+  const [
+    total,
+    pending,
+    approved,
+    awaitingCompletion,
+    completed,
+    cancelled,
+    rejected,
+    expired,
+  ] = await Promise.all([
+    Appointment.countDocuments(baseFilter),
+
+    Appointment.countDocuments({
+      doctorId,
+      paymentStatus: {
+        $in: VISIBLE_PAYMENT_STATUSES,
+      },
+      status: "pending",
+    }),
+
+    Appointment.countDocuments({
+      doctorId,
+      paymentStatus: {
+        $in: VISIBLE_PAYMENT_STATUSES,
+      },
+      status: "approved",
+      ...appointmentEndNotPassedFilter,
+    }),
+
+    Appointment.countDocuments({
+      doctorId,
+      paymentStatus: {
+        $in: VISIBLE_PAYMENT_STATUSES,
+      },
+      status: "approved",
+      ...appointmentEndPassedFilter,
+    }),
+
+    Appointment.countDocuments({
+      doctorId,
+      paymentStatus: {
+        $in: VISIBLE_PAYMENT_STATUSES,
+      },
+      status: "completed",
+    }),
+
+    Appointment.countDocuments({
+      doctorId,
+      paymentStatus: {
+        $in: VISIBLE_PAYMENT_STATUSES,
+      },
+      status: "cancelled",
+    }),
+
+    Appointment.countDocuments({
+      doctorId,
+      paymentStatus: {
+        $in: VISIBLE_PAYMENT_STATUSES,
+      },
+      status: "rejected",
+    }),
+
+    Appointment.countDocuments({
+      doctorId,
+      paymentStatus: {
+        $in: VISIBLE_PAYMENT_STATUSES,
+      },
+      status: "expired",
+    }),
+  ]);
+
+  return {
+    total,
+    pending,
+    approved,
+    awaitingCompletion,
+    completed,
+    cancelled,
+    rejected,
+    expired,
+  };
 };
 
 export const findDoctorAppointmentById = ({ doctorId, appointmentId }) => {
@@ -148,21 +449,128 @@ export const findDoctorAppointmentById = ({ doctorId, appointmentId }) => {
     .lean();
 };
 
-export const findAdminAppointments = ({ status }) => {
-  const filter = {};
+// ==============================
+// ADMIN APPOINTMENTS
+// ==============================
+const buildAdminAppointmentsFilter = ({ status, doctorId }) => {
+  const filter = {
+    paymentStatus: {
+      $in: VISIBLE_PAYMENT_STATUSES,
+    },
+  };
 
   if (status) {
     filter.status = status;
+  } else {
+    filter.status = {
+      $ne: "pending_payment",
+    };
   }
+
+  if (doctorId) {
+    filter.doctorId = doctorId;
+  }
+
+  return filter;
+};
+
+export const findAdminAppointments = ({
+  status,
+  doctorId,
+  skip = 0,
+  limit = 6,
+}) => {
+  const filter = buildAdminAppointmentsFilter({
+    status,
+    doctorId,
+  });
 
   return Appointment.find(filter)
     .populate(appointmentPopulate)
     .sort({
+      createdAt: -1,
       appointmentDate: -1,
       startTime: -1,
-      createdAt: -1,
     })
+    .skip(skip)
+    .limit(limit)
     .lean();
+};
+
+export const countAdminAppointments = ({ status, doctorId }) => {
+  const filter = buildAdminAppointmentsFilter({
+    status,
+    doctorId,
+  });
+
+  return Appointment.countDocuments(filter);
+};
+
+export const getAdminAppointmentStats = async ({ doctorId = "" }) => {
+  const baseFilter = {
+    paymentStatus: {
+      $in: VISIBLE_PAYMENT_STATUSES,
+    },
+    status: {
+      $ne: "pending_payment",
+    },
+  };
+
+  if (doctorId) {
+    baseFilter.doctorId = doctorId;
+  }
+
+  const [
+    total,
+    pending,
+    approved,
+    completed,
+    cancelled,
+    rejected,
+    expired,
+  ] = await Promise.all([
+    Appointment.countDocuments(baseFilter),
+
+    Appointment.countDocuments({
+      ...baseFilter,
+      status: "pending",
+    }),
+
+    Appointment.countDocuments({
+      ...baseFilter,
+      status: "approved",
+    }),
+
+    Appointment.countDocuments({
+      ...baseFilter,
+      status: "completed",
+    }),
+
+    Appointment.countDocuments({
+      ...baseFilter,
+      status: "cancelled",
+    }),
+
+    Appointment.countDocuments({
+      ...baseFilter,
+      status: "rejected",
+    }),
+
+    Appointment.countDocuments({
+      ...baseFilter,
+      status: "expired",
+    }),
+  ]);
+
+  return {
+    total,
+    pending,
+    approved,
+    completed,
+    cancelled,
+    rejected,
+    expired,
+  };
 };
 
 export const findAdminAppointmentById = (appointmentId) => {
@@ -171,6 +579,9 @@ export const findAdminAppointmentById = (appointmentId) => {
     .lean();
 };
 
+// ==============================
+// ACTION QUERIES
+// ==============================
 export const findAppointmentForPatientAction = ({
   patientId,
   appointmentId,
@@ -200,7 +611,14 @@ export const findAppointmentForAdminAction = ({
   return Appointment.findById(appointmentId).session(session);
 };
 
-export const findSlotDayById = ({ slotDayId, doctorId, session = null }) => {
+// ==============================
+// SLOT HELPERS
+// ==============================
+export const findSlotDayById = ({
+  slotDayId,
+  doctorId,
+  session = null,
+}) => {
   return DoctorSlot.findOne({
     _id: slotDayId,
     doctorId,
@@ -234,7 +652,9 @@ export const updateReportsAsAttached = ({
 }) => {
   return Report.updateMany(
     {
-      _id: { $in: reportIds },
+      _id: {
+        $in: reportIds,
+      },
     },
     {
       appointmentId,
@@ -247,7 +667,10 @@ export const updateReportsAsAttached = ({
 // ==============================
 // COMPLETION HELPERS
 // ==============================
-export const findPatientForCompletion = ({ patientId, session = null }) => {
+export const findPatientForCompletion = ({
+  patientId,
+  session = null,
+}) => {
   return User.findById(patientId)
     .select("_id username email referral accountStatus walletSummary")
     .session(session);
@@ -294,7 +717,10 @@ export const claimReferralRewardForCompletion = ({
   );
 };
 
-export const markReferralRewardCredited = ({ referralId, session = null }) => {
+export const markReferralRewardCredited = ({
+  referralId,
+  session = null,
+}) => {
   return Referral.findOneAndUpdate(
     {
       _id: referralId,
@@ -311,7 +737,10 @@ export const markReferralRewardCredited = ({ referralId, session = null }) => {
   );
 };
 
-export const findAutoExpirablePendingAppointments = ({ nowDate, nowTime }) => {
+export const findAutoExpirablePendingAppointments = ({
+  nowDate,
+  nowTime,
+}) => {
   return Appointment.find({
     status: "pending",
     paymentStatus: "paid",
@@ -372,8 +801,58 @@ export const findDoctorEarningByAppointmentId = ({
   }).session(session);
 };
 
-export const createDoctorEarning = async ({ payload, session = null }) => {
-  const earnings = await DoctorEarning.create([payload], { session });
+export const createDoctorEarning = async ({
+  payload,
+  session = null,
+}) => {
+  const earnings = await DoctorEarning.create([payload], {
+    session,
+  });
 
   return earnings[0];
+};
+
+// ==============================
+// COUPON RELEASE HELPER
+// ==============================
+export const releaseCompletedCouponUsageForAppointment = async ({
+  appointmentId,
+  reason = "",
+  session = null,
+}) => {
+  const couponUsage = await CouponUsage.findOneAndUpdate(
+    {
+      appointmentId,
+      status: "completed",
+    },
+    {
+      status: "cancelled",
+      releasedAt: new Date(),
+      releaseReason: reason,
+    },
+    {
+      new: true,
+      session,
+    }
+  );
+
+  if (!couponUsage) {
+    return null;
+  }
+
+  await Coupon.updateOne(
+    {
+      _id: couponUsage.couponId,
+      usedCount: {
+        $gt: 0,
+      },
+    },
+    {
+      $inc: {
+        usedCount: -1,
+      },
+    }
+  ).session(session);
+
+  return couponUsage;
 };

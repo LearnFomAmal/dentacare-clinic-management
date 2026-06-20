@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { X } from "lucide-react";
 
 import Button from "../ui/Button";
@@ -36,15 +36,26 @@ function RejectAppointmentModal({
   const [reasonType, setReasonType] = useState("doctor_unavailable");
   const [reason, setReason] = useState("");
 
-  if (!open) return null;
+  useEffect(() => {
+    if (!open) return;
+
+    setReasonType("doctor_unavailable");
+    setReason("");
+  }, [open]);
 
   const handleConfirm = () => {
+    if (loading) return;
+
     onConfirm({
       appointmentId: appointment?._id,
       reasonType,
       reason,
     });
   };
+
+  if (!open) {
+    return null;
+  }
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 px-4">
@@ -64,7 +75,7 @@ function RejectAppointmentModal({
             type="button"
             onClick={onClose}
             disabled={loading}
-            className="rounded-xl p-2 text-[#9CA3AF] transition hover:bg-slate-100 hover:text-[#111827]"
+            className="rounded-xl p-2 text-[#9CA3AF] transition hover:bg-slate-100 hover:text-[#111827] disabled:cursor-not-allowed disabled:opacity-60"
           >
             <X size={18} />
           </button>
@@ -93,8 +104,10 @@ function RejectAppointmentModal({
                 value={item.value}
                 checked={reasonType === item.value}
                 onChange={(event) => setReasonType(event.target.value)}
-                className="h-4 w-4 accent-[#9381FF]"
+                disabled={loading}
+                className="h-4 w-4 accent-[#9381FF] disabled:cursor-not-allowed"
               />
+
               {item.label}
             </label>
           ))}
@@ -105,8 +118,9 @@ function RejectAppointmentModal({
           onChange={(event) => setReason(event.target.value)}
           rows={4}
           maxLength={300}
+          disabled={loading}
           placeholder="Write rejection reason..."
-          className="mt-5 w-full resize-none rounded-2xl border border-[#E5E7EB] px-4 py-3 text-sm font-medium outline-none transition focus:border-[#9381FF] focus:ring-4 focus:ring-[#9381FF]/10"
+          className="mt-5 w-full resize-none rounded-2xl border border-[#E5E7EB] px-4 py-3 text-sm font-medium outline-none transition focus:border-[#9381FF] focus:ring-4 focus:ring-[#9381FF]/10 disabled:cursor-not-allowed disabled:bg-slate-100"
         />
 
         <div className="mt-6 flex justify-end gap-3">
@@ -114,7 +128,7 @@ function RejectAppointmentModal({
             type="button"
             onClick={onClose}
             disabled={loading}
-            className="h-11 rounded-2xl px-5 text-sm font-extrabold text-[#6B7280] transition hover:bg-slate-100"
+            className="h-11 rounded-2xl px-5 text-sm font-extrabold text-[#6B7280] transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60"
           >
             Cancel
           </button>

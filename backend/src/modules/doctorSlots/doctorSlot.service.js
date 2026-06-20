@@ -68,6 +68,11 @@ const MAX_EXTRA_SLOTS_PER_DAY = 2;
 const MIN_SLOT_DURATION_MINUTES = 15;
 const MAX_SLOT_DURATION_MINUTES = 120;
 
+const CLINIC_OPEN_TIME = "09:00";
+const CLINIC_CLOSE_TIME = "19:30";
+const CLINIC_TIME_ERROR =
+  "Slot time must be between 09:00 AM and 07:30 PM";
+
 // ==============================
 // DATE + TIME HELPERS
 // ==============================
@@ -251,14 +256,14 @@ const transformSlotDayForDoctor = (slotDay) => {
     isPastDate: dayIsPast,
     canManageSlots: !dayIsPast && !plainSlotDay.isHoliday,
     canMarkHoliday:
-      !dayIsPast &&
-      !plainSlotDay.isHoliday &&
-      !isSunday(plainSlotDay.date) &&
-      !hasBookedSlot(plainSlotDay),
+  !dayIsPast &&
+  !plainSlotDay.isHoliday &&
+  !isSunday(plainSlotDay.date) &&
+  !hasLockedSlot(plainSlotDay),
     canUndoHoliday:
       !dayIsPast && plainSlotDay.isHoliday && !isSunday(plainSlotDay.date),
-    canRestoreDefaults:
-      !dayIsPast && !isSunday(plainSlotDay.date) && !hasBookedSlot(plainSlotDay),
+   canRestoreDefaults:
+  !dayIsPast && !isSunday(plainSlotDay.date) && !hasLockedSlot(plainSlotDay),
   };
 };
 
@@ -313,15 +318,27 @@ const validateSlotDuration = (startTime, endTime) => {
   }
 };
 
+const validateSlotWithinClinicHours = (startTime, endTime) => {
+  const start = timeToMinutes(startTime);
+  const end = timeToMinutes(endTime);
+  const clinicOpen = timeToMinutes(CLINIC_OPEN_TIME);
+  const clinicClose = timeToMinutes(CLINIC_CLOSE_TIME);
+
+  if (start < clinicOpen || end > clinicClose) {
+    throw new AppError(CLINIC_TIME_ERROR, 400);
+  }
+};
+
 const getActiveSlots = (slotDay) => {
   return slotDay.slots.filter(
     (slot) => !slot.isDeleted && slot.status !== "blocked"
   );
 };
-
-const hasBookedSlot = (slotDay) => {
+const hasLockedSlot = (slotDay) => {
   return slotDay.slots.some(
-    (slot) => !slot.isDeleted && slot.status === "booked"
+    (slot) =>
+      !slot.isDeleted &&
+      ["booked", "reserved"].includes(slot.status)
   );
 };
 
@@ -398,8 +415,9 @@ export const addDoctorSlotService = async (doctorId, payload) => {
 
   const { date, startTime, endTime } = payload;
 
-  validateSlotDuration(startTime, endTime);
-  ensureSlotTimeIsFuture({ date, startTime, endTime });
+validateSlotDuration(startTime, endTime);
+validateSlotWithinClinicHours(startTime, endTime);
+ensureSlotTimeIsFuture({ date, startTime, endTime });
 
   if (isSunday(date)) {
     throw new AppError("Cannot add slots on Sunday holiday", 400);
@@ -450,9 +468,10 @@ export const editDoctorSlotService = async (
   validateObjectId(slotId, "slot id");
   validateEditSlotInput(payload);
 
-  const { startTime, endTime } = payload;
+const { startTime, endTime } = payload;
 
-  validateSlotDuration(startTime, endTime);
+validateSlotDuration(startTime, endTime);
+validateSlotWithinClinicHours(startTime, endTime);
 
   const slotDay = await findSlotDayByIdAndDoctor(slotDayId, doctorId);
 
@@ -583,16 +602,29 @@ export const applyRecurringSlotsService = async (doctorId, payload) => {
     throw new AppError("Cannot apply recurring from holiday", 400);
   }
 
-  const sourceSlots = getActiveSlots(sourceSlotDay).filter((slot) => {
-    return !isSlotExpired({
-      date: sourceSlotDay.date,
-      endTime: slot.endTime,
-    });
+ const sourceSlots = getActiveSlots(sourceSlotDay).filter((slot) => {
+  const expired = isSlotExpired({
+    date: sourceSlotDay.date,
+    endTime: slot.endTime,
   });
 
-  if (sourceSlots.length === 0) {
-    throw new AppError("No future active slots found to repeat", 400);
-  }
+  const insideClinicHours =
+    timeToMinutes(slot.startTime) >= timeToMinutes(CLINIC_OPEN_TIME) &&
+    timeToMinutes(slot.endTime) <= timeToMinutes(CLINIC_CLOSE_TIME);
+
+  return (
+    slot.status === "available" &&
+    !expired &&
+    insideClinicHours
+  );
+});
+
+ if (sourceSlots.length === 0) {
+  throw new AppError(
+    "No valid future active slots found to repeat within clinic hours",
+    400
+  );
+}
 
   const copiedDates = [];
   const skippedDates = [];
@@ -610,13 +642,13 @@ export const applyRecurringSlotsService = async (doctorId, payload) => {
 
     const targetSlotDay = await ensureSlotDay(doctorId, targetDate);
 
-    if (hasBookedSlot(targetSlotDay)) {
-      skippedDates.push({
-        date: targetDate,
-        reason: "Date has booked slots",
-      });
-      continue;
-    }
+ if (hasLockedSlot(targetSlotDay)) {
+  skippedDates.push({
+    date: targetDate,
+    reason: "Date has booked or reserved slots",
+  });
+  continue;
+}
 
     targetSlotDay.isHoliday = false;
     targetSlotDay.dayOfWeek = getDayOfWeek(targetDate);
@@ -661,12 +693,12 @@ export const markSlotDayHolidayService = async (doctorId, slotDayId) => {
     throw new AppError("This date is already marked as holiday", 400);
   }
 
-  if (hasBookedSlot(slotDay)) {
-    throw new AppError(
-      "Cannot mark this date as holiday because it has booked slots",
-      400
-    );
-  }
+  if (hasLockedSlot(slotDay)) {
+  throw new AppError(
+    "Cannot mark this date as holiday because it has booked or reserved slots",
+    400
+  );
+}
 
   slotDay.isHoliday = true;
   slotDay.slots = [];
@@ -722,12 +754,12 @@ export const restoreDefaultSlotsService = async (doctorId, slotDayId) => {
     );
   }
 
-  if (hasBookedSlot(slotDay)) {
-    throw new AppError(
-      "Cannot restore defaults because this date has booked slots",
-      400
-    );
-  }
+ if (hasLockedSlot(slotDay)) {
+  throw new AppError(
+    "Cannot restore defaults because this date has booked or reserved slots",
+    400
+  );
+}
 
   slotDay.isHoliday = false;
   slotDay.dayOfWeek = getDayOfWeek(slotDay.date);

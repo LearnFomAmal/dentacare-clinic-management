@@ -162,7 +162,7 @@ export const canCancelAppointment = (appointment) => {
     return false;
   }
 
-  return !isAppointmentEndTimePast(appointment);
+  return !isAppointmentStartTimePast(appointment);
 };
 
 export const canRescheduleAppointment = (appointment) => {
@@ -172,7 +172,7 @@ export const canRescheduleAppointment = (appointment) => {
     return false;
   }
 
-  return !isAppointmentEndTimePast(appointment);
+  return !isAppointmentStartTimePast(appointment);
 };
 
 export const canDecideAppointment = (appointment) => {
@@ -181,7 +181,7 @@ export const canDecideAppointment = (appointment) => {
   return (
     appointment.status === "pending" &&
     appointment.paymentStatus === "paid" &&
-    !isAppointmentEndTimePast(appointment)
+    !isAppointmentStartTimePast(appointment)
   );
 };
 

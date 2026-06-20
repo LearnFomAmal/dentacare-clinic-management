@@ -117,12 +117,40 @@ const calculateReferralDiscountPreview = ({ config, amount }) => {
   return Math.floor(Math.min(discount, numericAmount));
 };
 
+const formatCouponDate = (value) => {
+  if (!value) return "";
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) return "";
+
+  return date.toLocaleDateString("en-IN", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  });
+};
+
+const getCouponValidityText = (coupon) => {
+  const fromText = formatCouponDate(coupon?.validFrom);
+  const toText = formatCouponDate(coupon?.validTo);
+
+  if (fromText && toText) {
+    return `Valid ${fromText} - ${toText}`;
+  }
+
+  if (toText) {
+    return `Valid till ${toText}`;
+  }
+
+  return "";
+};
 function BookAppointmentPage() {
   const { doctorId } = useParams();
   const navigate = useNavigate();
   const dispatch = useAppDispatch();
   const [searchParams] = useSearchParams();
-
+ 
   const { user } = useAppSelector((state) => state.auth);
 
   const {
@@ -165,7 +193,7 @@ function BookAppointmentPage() {
   const [localPreviewUrl, setLocalPreviewUrl] = useState("");
 const [timeConflictWarning, setTimeConflictWarning] = useState(null);
 const [pendingBookingPayload, setPendingBookingPayload] = useState(null);
-
+ const [bannerCouponRemoved, setBannerCouponRemoved] = useState(false);
 
 
   const [reportForm, setReportForm] = useState({
@@ -188,14 +216,19 @@ const [pendingBookingPayload, setPendingBookingPayload] = useState(null);
 
   const doctor = selectedDoctor;
   const consultationFee = doctor?.professionalInfo?.consultationFee || 0;
-   useEffect(() => {
-  if (!bannerCouponCode) return;
+useEffect(() => {
+  if (!bannerCouponCode || bannerCouponRemoved) return;
 
   setCouponCode(bannerCouponCode.toUpperCase());
-}, [bannerCouponCode]);
-
+}, [bannerCouponCode, bannerCouponRemoved]);
 useEffect(() => {
-  if (!bannerCouponCode || !doctorId || !consultationFee || appliedCoupon) {
+  if (
+    !bannerCouponCode ||
+    bannerCouponRemoved ||
+    !doctorId ||
+    !consultationFee ||
+    appliedCoupon
+  ) {
     return;
   }
 
@@ -216,6 +249,7 @@ useEffect(() => {
 }, [
   dispatch,
   bannerCouponCode,
+  bannerCouponRemoved,
   doctorId,
   consultationFee,
   appliedCoupon,
@@ -294,6 +328,13 @@ const referralDiscount = canShowReferralDiscountPreview
       }
     };
   }, [localPreviewUrl, cropSourceUrl]);
+
+  useEffect(() => {
+  if (bannerCouponCode) return;
+
+  setCouponCode("");
+  dispatch(clearAppliedCoupon());
+}, [dispatch, bannerCouponCode]);
 
   const handleReportFormChange = (event) => {
     const { name, value, files } = event.target;
@@ -489,10 +530,28 @@ const referralDiscount = canShowReferralDiscountPreview
     }
   };
 
-  const handleRemoveCoupon = () => {
-    setCouponCode("");
-    dispatch(clearAppliedCoupon());
-  };
+ const handleRemoveCoupon = () => {
+  setBannerCouponRemoved(true);
+  setCouponCode("");
+  dispatch(clearAppliedCoupon());
+
+  const nextParams = new URLSearchParams(searchParams);
+  nextParams.delete("coupon");
+
+  const queryString = nextParams.toString();
+
+  navigate(
+    {
+      pathname: `/book-appointment/${doctorId}`,
+      search: queryString ? `?${queryString}` : "",
+    },
+    {
+      replace: true,
+    }
+  );
+
+  toast.success("Coupon removed");
+};
 
 const submitBooking = async (payload) => {
   const result = await dispatch(initiateAppointment(payload)).unwrap();
@@ -507,7 +566,7 @@ const submitBooking = async (payload) => {
     return;
   }
 
-  clearBookingDraft();
+  clearBookingDraft(doctorId);
 
   toast.success(result.message || "Appointment initiated successfully");
 
@@ -540,7 +599,7 @@ const handleContinueToPayment = async () => {
   }
 
   if (selectedSlot.isReservedByMe && selectedSlot.existingAppointmentId) {
-    clearBookingDraft();
+    clearBookingDraft(doctorId);
 
     toast.success("This slot is already reserved for you. Continue payment.");
 
@@ -1135,6 +1194,8 @@ function CouponApplyBox({
   onApply,
   onRemove,
 }) {
+  const appliedCouponValidity = getCouponValidityText(appliedCoupon);
+
   return (
     <div className="mt-4 rounded-2xl border border-[#EEF0F6] bg-[#F8FAFC] p-4">
       <p className="text-sm font-extrabold text-[#111827]">Apply Coupon</p>
@@ -1171,7 +1232,13 @@ function CouponApplyBox({
 
       {appliedCoupon && (
         <div className="mt-3 rounded-xl bg-green-50 p-3 text-xs font-bold text-green-700">
-          {appliedCoupon.code} applied successfully
+          <p>{appliedCoupon.code} applied successfully</p>
+
+          {appliedCouponValidity && (
+            <p className="mt-1 text-[11px] font-extrabold text-green-800">
+              {appliedCouponValidity}
+            </p>
+          )}
         </div>
       )}
 
@@ -1181,43 +1248,61 @@ function CouponApplyBox({
             Available coupons
           </p>
 
-          {availableCoupons.slice(0, 3).map((coupon) => (
-            <button
-              key={coupon._id}
-              type="button"
-              disabled={!coupon.isUserEligible}
-              onClick={() => setCouponCode(coupon.code)}
-              className="w-full rounded-xl border border-[#E5E7EB] bg-white p-3 text-left text-xs transition hover:border-[#9381FF] disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              <div className="flex items-center justify-between gap-3">
-                <span className="font-extrabold text-[#111827]">
-                  {coupon.code}
-                </span>
+          {availableCoupons.slice(0, 3).map((coupon) => {
+            const validityText = getCouponValidityText(coupon);
 
-                <span className="font-extrabold text-green-600">
-                  Save ₹{coupon.discountPreview || 0}
-                </span>
-              </div>
+            return (
+              <button
+                key={coupon._id}
+                type="button"
+                disabled={!coupon.isUserEligible}
+                onClick={() => setCouponCode(coupon.code)}
+                className="w-full rounded-xl border border-[#E5E7EB] bg-white p-3 text-left text-xs transition hover:border-[#9381FF] disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                <div className="flex items-center justify-between gap-3">
+                  <span className="font-extrabold text-[#111827]">
+                    {coupon.code}
+                  </span>
 
-              <p className="mt-1 text-[#6B7280]">{coupon.title}</p>
-            </button>
-          ))}
+                  <span className="font-extrabold text-green-600">
+                    Save ₹{coupon.discountPreview || 0}
+                  </span>
+                </div>
+
+                <p className="mt-1 text-[#6B7280]">{coupon.title}</p>
+
+                {validityText && (
+                  <p className="mt-1 font-extrabold text-[#9381FF]">
+                    {validityText}
+                  </p>
+                )}
+
+                {!coupon.isUserEligible && coupon.ineligibleReason && (
+                  <p className="mt-1 font-bold text-red-500">
+                    {coupon.ineligibleReason}
+                  </p>
+                )}
+              </button>
+            );
+          })}
         </div>
       )}
-     {!appliedCoupon &&
-  !isLoadingCoupons &&
-  (!availableCoupons || availableCoupons.length === 0) && (
-    <div className="mt-4 rounded-xl border border-dashed border-[#D1D5DB] bg-white p-3">
-      <p className="text-xs font-extrabold uppercase text-[#9CA3AF]">
-        No coupons available
-      </p>
 
-      <p className="mt-1 text-xs leading-5 text-[#6B7280]">
-        There are no active coupons for this doctor or specialty right now.
-        You can still continue booking normally.
-      </p>
-    </div>
-  )}
+      {!appliedCoupon &&
+        !isLoadingCoupons &&
+        (!availableCoupons || availableCoupons.length === 0) && (
+          <div className="mt-4 rounded-xl border border-dashed border-[#D1D5DB] bg-white p-3">
+            <p className="text-xs font-extrabold uppercase text-[#9CA3AF]">
+              No coupons available
+            </p>
+
+            <p className="mt-1 text-xs leading-5 text-[#6B7280]">
+              There are no active coupons for this doctor or specialty right now.
+              You can still continue booking normally.
+            </p>
+          </div>
+        )}
+
       {isLoadingCoupons && (
         <p className="mt-3 text-xs font-bold text-[#6B7280]">
           Loading coupons...

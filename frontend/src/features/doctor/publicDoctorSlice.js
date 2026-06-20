@@ -15,13 +15,42 @@ import {
 const getErrorMessage = (error, fallback) => {
   return error?.response?.data?.message || error?.message || fallback;
 };
+const normalizeList = (data, key) => {
+  if (Array.isArray(data)) return data;
+  if (Array.isArray(data?.[key])) return data[key];
+  if (Array.isArray(data?.data)) return data.data;
+  return [];
+};
 
+const normalizeDoctorListPayload = (data) => {
+  if (Array.isArray(data)) {
+    return {
+      doctors: data,
+      pagination: {
+        page: 1,
+        limit: data.length,
+        totalDoctors: data.length,
+        totalPages: 1,
+      },
+    };
+  }
+
+  return {
+    doctors: normalizeList(data, "doctors"),
+    pagination: data?.pagination || {
+      page: 1,
+      limit: 9,
+      totalDoctors: normalizeList(data, "doctors").length,
+      totalPages: 1,
+    },
+  };
+};
 export const fetchPublicSpecialties = createAsyncThunk(
   "publicDoctors/fetchPublicSpecialties",
   async (_, { rejectWithValue }) => {
     try {
       const response = await getPublicSpecialtiesApi();
-      return response.data || [];
+      return normalizeList(response.data, "specialties");
     } catch (error) {
       return rejectWithValue(
         getErrorMessage(error, "Failed to fetch specialties")
@@ -46,7 +75,7 @@ export const fetchPublicDoctors = createAsyncThunk(
   limit: filters.limit,
 });
 
-      return response.data;
+  return normalizeDoctorListPayload(response.data); 
     } catch (error) {
       return rejectWithValue(
         getErrorMessage(error, "Failed to fetch doctors")

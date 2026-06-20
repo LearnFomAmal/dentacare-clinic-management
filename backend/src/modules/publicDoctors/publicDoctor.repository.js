@@ -22,7 +22,7 @@ export const countPublicDoctors = (filter) => {
 export const findPublicDoctors = ({ filter, skip, limit, sort }) => {
   return Doctor.find(filter)
     .select(
-      "_id firstName lastName email specialization professionalInfo settings stats accountStatus createdAt"
+      "_id firstName lastName email specialization professionalInfo settings stats accountStatus verification createdAt"
     )
     .sort(sort)
     .skip(skip)
@@ -33,15 +33,17 @@ export const findPublicDoctors = ({ filter, skip, limit, sort }) => {
 export const findPublicDoctorById = (doctorId, activeSpecialtyIds) => {
   return Doctor.findOne({
     _id: doctorId,
+    "accountStatus.isEmailVerified": true,
     "accountStatus.isVerified": true,
     "accountStatus.isBlocked": false,
     "accountStatus.isDeleted": false,
+    "verification.status": "approved",
     "specialization.specialtyId": {
       $in: activeSpecialtyIds,
     },
   })
     .select(
-      "_id firstName lastName email specialization professionalInfo stats accountStatus createdAt"
+      "_id firstName lastName email specialization professionalInfo stats accountStatus verification createdAt"
     )
     .lean();
 };

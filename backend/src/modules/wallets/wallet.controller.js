@@ -2,9 +2,11 @@ import asyncHandler from "../../shared/utils/asyncHandler.js";
 import { sendResponse } from "../../shared/utils/response.js";
 
 import {
+  createWalletRazorpayOrderService,
   getMyWalletService,
   getMyWalletTransactionsService,
-  topupWalletService,
+  verifyWalletRazorpayTopupService,
+  cancelWalletRazorpayTopupService,
 } from "./wallet.service.js";
 
 const getPatientId = (req) => {
@@ -36,11 +38,54 @@ export const getMyWalletTransactionsController = asyncHandler(
   }
 );
 
-export const topupWalletController = asyncHandler(async (req, res) => {
-  const data = await topupWalletService({
-    userId: getPatientId(req),
-    body: req.body,
-  });
 
-  sendResponse(res, 200, true, "Wallet topped up successfully", data);
-});
+export const createWalletRazorpayOrderController = asyncHandler(
+  async (req, res) => {
+    const data = await createWalletRazorpayOrderService({
+      userId: getPatientId(req),
+      body: req.body,
+    });
+
+    sendResponse(
+      res,
+      201,
+      true,
+      "Wallet Razorpay order created successfully",
+      data
+    );
+  }
+);
+
+export const verifyWalletRazorpayTopupController = asyncHandler(
+  async (req, res) => {
+    const data = await verifyWalletRazorpayTopupService({
+      userId: getPatientId(req),
+      body: req.body,
+    });
+
+    sendResponse(
+      res,
+      200,
+      true,
+      "Wallet topped up successfully",
+      data
+    );
+  }
+);
+
+export const cancelWalletRazorpayTopupController = asyncHandler(
+  async (req, res) => {
+    const data = await cancelWalletRazorpayTopupService({
+      userId: getPatientId(req),
+      body: req.body,
+    });
+
+    sendResponse(
+      res,
+      200,
+      true,
+      "Wallet top-up cancelled successfully",
+      data
+    );
+  }
+);

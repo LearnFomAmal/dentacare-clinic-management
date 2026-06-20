@@ -1,7 +1,18 @@
 import mongoose from "mongoose";
 
 import AppError from "../../shared/errors/AppError.js";
-
+const allowedReferenceTypes = [
+  "appointment",
+  "payment",
+  "review",
+  "referral",
+  "report",
+  "doctor",
+  "coupon",
+  "banner",
+  "system",
+  "",
+];
 export const validateObjectId = (id, fieldName = "id") => {
   if (!mongoose.Types.ObjectId.isValid(id)) {
     throw new AppError(`Invalid ${fieldName}`, 400);
@@ -16,9 +27,9 @@ export const validatePagination = ({ page, limit }) => {
     throw new AppError("Page must be greater than 0", 400);
   }
 
-  if (finalLimit < 1 || finalLimit > 50) {
-    throw new AppError("Limit must be between 1 and 50", 400);
-  }
+  if (finalLimit < 1 || finalLimit > 100) {
+  throw new AppError("Limit must be between 1 and 100", 400);
+}
 
   return {
     page: finalPage,
@@ -54,7 +65,20 @@ export const validateNotificationPayload = (payload) => {
   if (!payload.message || !payload.message.trim()) {
     throw new AppError("Notification message is required", 400);
   }
+  if (payload.title.trim().length > 120) {
+  throw new AppError("Notification title cannot exceed 120 characters", 400);
+}
 
+if (payload.message.trim().length > 500) {
+  throw new AppError("Notification message cannot exceed 500 characters", 400);
+}
+
+if (
+  payload.referenceType !== undefined &&
+  !allowedReferenceTypes.includes(payload.referenceType)
+) {
+  throw new AppError("Invalid notification reference type", 400);
+}
   if (payload.recipientId) {
     validateObjectId(payload.recipientId, "recipient id");
   }

@@ -5,7 +5,20 @@ export const getLocalDateString = (date = new Date()) => {
 
   return `${year}-${month}-${day}`;
 };
+export const getNextFiveLocalDays = () => {
+  const today = getLocalDateString();
 
+  return Array.from({ length: 5 }, (_, index) => {
+    const date = addLocalDays(today, index);
+
+    return {
+      date,
+      label: getDayLabel(date, index),
+      day: getDayNumber(date),
+      month: getShortMonth(date),
+    };
+  });
+};
 export const addLocalDays = (dateString, days) => {
   const [year, month, day] = dateString.split("-").map(Number);
 

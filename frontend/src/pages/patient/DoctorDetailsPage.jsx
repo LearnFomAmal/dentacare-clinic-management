@@ -34,7 +34,7 @@ import { saveBookingDraft } from "../../utils/bookingDraftStorage";
 
 import {
   getLocalDateString,
-  getNextSevenLocalDays,
+ getNextFiveLocalDays,
   isDateBeforeToday,
 } from "../../utils/dateUtils";
 
@@ -74,7 +74,7 @@ function DoctorDetailsPage() {
 
   const selectedSlot = selectedSlotsByDoctor[doctorId];
 
-  const days = useMemo(() => getNextSevenLocalDays(), []);
+  const days = useMemo(() => getNextFiveLocalDays(), []);
 
   const safeSelectedDate = isDateBeforeToday(selectedDate)
     ? getLocalDateString()
@@ -311,7 +311,7 @@ const handleContinueBooking = () => {
                   type="button"
                   onClick={handleContinueBooking}
                   disabled={!selectedSlot || !selectedSlot?.isBookable}
-                  className="h-13 min-w-[220px] rounded-2xl bg-[#9381FF] px-8 py-4 text-sm font-extrabold text-white shadow-[0_14px_30px_rgba(147,129,255,0.26)] transition hover:bg-[#7E6EF2] disabled:cursor-not-allowed disabled:bg-[#C4BFFF] disabled:shadow-none"
+                  className="h-[52px] min-w-[220px] rounded-2xl bg-[#9381FF] px-8 py-4 text-sm font-extrabold text-white shadow-[0_14px_30px_rgba(147,129,255,0.26)] transition hover:bg-[#7E6EF2] disabled:cursor-not-allowed disabled:bg-[#C4BFFF] disabled:shadow-none"
                 >
                   Continue Booking
                 </button>

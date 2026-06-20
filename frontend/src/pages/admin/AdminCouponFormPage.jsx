@@ -235,7 +235,12 @@ function AdminCouponFormPage() {
     if (Number(data.maxUsagePerUser || 1) < 1) {
       return "Max usage per user must be at least 1";
     }
-
+    if (
+  Number(data.maxUsage || 0) > 0 &&
+  Number(data.maxUsagePerUser || 1) > Number(data.maxUsage || 0)
+) {
+  return "Max usage per user cannot be greater than max total usage. Set max total usage to 0 for unlimited total usage.";
+}
     return "";
   };
 
@@ -490,11 +495,13 @@ function AdminCouponFormPage() {
                   Usage Logic
                 </p>
 
-                <p className="mt-2 text-sm leading-6 text-[#6B7280]">
-                  Set <strong>Max Total Usage</strong> to 0 for unlimited total
-                  usage. Set <strong>Max Usage Per User</strong> to 3 if one
-                  patient can use the same coupon three times.
-                </p>
+             <p className="mt-2 text-sm leading-6 text-[#6B7280]">
+  <strong>Max Total Usage</strong> means how many times this coupon can be
+  used by all patients combined. Set it to 0 for unlimited global usage.
+  <strong> Max Usage Per User</strong> means how many times one patient can
+  use this coupon. If max total usage is 1, only one successful booking can
+  use this coupon in the whole clinic.
+</p>
               </div>
 
               <div className="flex flex-col gap-3 sm:flex-row sm:justify-end">

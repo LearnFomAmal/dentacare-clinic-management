@@ -34,12 +34,12 @@ function PaymentFailedPage() {
             Book Again
           </Link>
 
-          <Link
-            to={ROUTES.MY_APPOINTMENTS}
-            className="mt-3 inline-flex h-12 w-full items-center justify-center rounded-2xl border border-red-200 text-sm font-extrabold text-red-600 transition hover:bg-red-50"
-          >
-            Back to Appointments
-          </Link>
+        <Link
+        to={ROUTES.PATIENT_DASHBOARD}
+        className="mt-3 inline-flex h-12 w-full items-center justify-center rounded-2xl border border-red-200 text-sm font-extrabold text-red-600 transition hover:bg-red-50"
+             >
+            Back to Dashboard
+       </Link>
         </section>
       </main>
     </PatientLayout>

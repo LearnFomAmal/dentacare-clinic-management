@@ -2,7 +2,7 @@ import express from "express";
 
 import { protect } from "../../middlewares/auth.middleware.js";
 import { protectAdmin } from "../../middlewares/adminAuth.middleware.js";
-import { protectDoctor } from "../../middlewares/doctorAuth.middleware.js";
+import { protectDoctor,requireVerifiedDoctor} from "../../middlewares/doctorAuth.middleware.js";
 
 import {
   approveReviewByAdminController,
@@ -37,7 +37,7 @@ router.delete("/:reviewId", protect, deleteMyReviewController);
 // ==============================
 // DOCTOR ROUTES
 // ==============================
-router.get("/doctor/me", protectDoctor, getDoctorOwnReviewsController);
+router.get("/doctor/me", protectDoctor,requireVerifiedDoctor, getDoctorOwnReviewsController);
 
 // ==============================
 // PUBLIC DOCTOR REVIEW ROUTES

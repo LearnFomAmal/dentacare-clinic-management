@@ -30,7 +30,17 @@ const getNotificationTargetPath = ({ notification, role }) => {
     if (role === "doctor") return ROUTES.DOCTOR_DASHBOARD;
     return ROUTES.PATIENT_DASHBOARD;
   }
+       if (referenceType === "doctor") {
+    if (role === "admin") {
+      return ROUTES.ADMIN_DOCTOR_DETAILS.replace(":id", referenceId);
+    }
 
+    if (role === "doctor") {
+      return ROUTES.DOCTOR_VERIFICATION_STATUS;
+    }
+
+    return ROUTES.PATIENT_DASHBOARD;
+  }
   if (referenceType === "appointment") {
     if (role === "admin") {
       return ROUTES.ADMIN_APPOINTMENT_DETAILS.replace(
@@ -216,14 +226,27 @@ function NotificationBell({ role }) {
     setOpen((prev) => !prev);
   };
 
-  const handleMarkAllRead = async () => {
-    try {
-      await dispatch(markAllNotificationsRead(role)).unwrap();
-      toast.success("All notifications marked as read");
-    } catch (err) {
-      toast.error(err || "Failed to update notifications");
-    }
-  };
+const handleMarkAllRead = async () => {
+  try {
+    await dispatch(markAllNotificationsRead(role)).unwrap();
+
+    await dispatch(
+      fetchNotifications({
+        role,
+        params: {
+          page: 1,
+          limit: 15,
+        },
+      })
+    ).unwrap();
+
+    await dispatch(fetchUnreadNotificationCount(role)).unwrap();
+
+    toast.success("All notifications marked as read");
+  } catch (err) {
+    toast.error(err || "Failed to update notifications");
+  }
+};
 
   const handleNotificationClick = async (notification) => {
     try {

@@ -47,3 +47,38 @@ export const uploadBufferToCloudinary = ({
     uploadStream.end(buffer);
   });
 };
+
+export const uploadFileBufferToCloudinary = ({
+  buffer,
+  folder,
+  publicId,
+  resourceType = "auto",
+}) => {
+  return new Promise((resolve, reject) => {
+    const uploadStream = cloudinary.uploader.upload_stream(
+      {
+        folder,
+        public_id: publicId,
+        resource_type: resourceType,
+        overwrite: true,
+        invalidate: true,
+        unique_filename: false,
+      },
+      (error, result) => {
+        if (error || !result?.secure_url) {
+          reject(
+            new AppError(
+              "Failed to upload file. Please try again.",
+              500
+            )
+          );
+          return;
+        }
+
+        resolve(result);
+      }
+    );
+
+    uploadStream.end(buffer);
+  });
+};

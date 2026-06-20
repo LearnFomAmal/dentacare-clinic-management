@@ -5,7 +5,9 @@ import { protect } from "../../middlewares/auth.middleware.js";
 import {
   getMyWalletController,
   getMyWalletTransactionsController,
-  topupWalletController,
+  createWalletRazorpayOrderController,
+  verifyWalletRazorpayTopupController,
+  cancelWalletRazorpayTopupController,
 } from "./wallet.controller.js";
 
 const router = express.Router();
@@ -18,6 +20,22 @@ router.get(
   getMyWalletTransactionsController
 );
 
-router.post("/topup", protect, topupWalletController);
+router.post(
+  "/razorpay/create-order",
+  protect,
+  createWalletRazorpayOrderController
+);
+
+router.post(
+  "/razorpay/verify",
+  protect,
+  verifyWalletRazorpayTopupController
+);
+
+router.patch(
+  "/razorpay/cancel",
+  protect,
+  cancelWalletRazorpayTopupController
+);
 
 export default router;

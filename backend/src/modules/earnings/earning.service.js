@@ -3,6 +3,7 @@ import AppError from "../../shared/errors/AppError.js";
 
 import {
   countDoctorEarningTransactions,
+  findDoctorForEarning,
   getDoctorEarningSummary,
   getDoctorEarningTransactions,
 } from "./earning.repository.js";
@@ -124,7 +125,11 @@ export const getDoctorEarningsService = async ({ doctorId, query = {} }) => {
   validateObjectId(doctorId, "doctor id");
 
   const doctorObjectId = new mongoose.Types.ObjectId(doctorId);
+  const doctor = await findDoctorForEarning(doctorObjectId);
 
+if (!doctor) {
+  throw new AppError("Doctor not found", 404);
+}
   const { page, limit, skip } = getPagination(query);
 
   const todayRange = buildIstDayRange();

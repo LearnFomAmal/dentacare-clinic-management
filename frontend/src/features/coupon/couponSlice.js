@@ -10,7 +10,12 @@ import {
   updateCouponStatusApi,
   validateCouponApi,
 } from "./couponService";
-
+const normalizeCouponList = (data) => {
+  if (Array.isArray(data)) return data;
+  if (Array.isArray(data?.coupons)) return data.coupons;
+  if (Array.isArray(data?.data)) return data.data;
+  return [];
+};
 const getErrorMessage = (error, fallback) => {
   return error?.response?.data?.message || error?.message || fallback;
 };
@@ -20,7 +25,7 @@ export const fetchAvailableCoupons = createAsyncThunk(
   async (params, { rejectWithValue }) => {
     try {
       const response = await getAvailableCouponsApi(params);
-      return response.data || [];
+      return normalizeCouponList(response.data);
     } catch (error) {
       return rejectWithValue(getErrorMessage(error, "Failed to fetch coupons"));
     }

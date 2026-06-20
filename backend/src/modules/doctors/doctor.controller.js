@@ -15,6 +15,9 @@ import {
   validateDoctorForgotPasswordInput,
   validateDoctorResetPasswordInput,
  validateDoctorConsultationFeeInput,
+ validateDoctorSelfRegisterInput,
+validateDoctorRegisterOtpInput,
+validateAdminRejectDoctorVerificationInput,
 } from "./doctor.validator.js";
 
 import {
@@ -37,8 +40,16 @@ import {
   resetDoctorPasswordService,
   resendForgotPasswordOtpService,
   getDoctorDetailsService,
- updateDoctorConsultationFeeService,
- updateDoctorProfileImageService,
+  updateDoctorConsultationFeeService,
+  updateDoctorProfileImageService,
+  registerDoctorService,
+  verifyDoctorRegisterOtpService,
+  resendDoctorRegisterOtpService,
+  getMyDoctorVerificationService,
+  uploadDoctorVerificationDocumentsService,
+  getDoctorVerificationRequestsService,
+  approveDoctorVerificationService,
+  rejectDoctorVerificationService,
 } from "./doctor.service.js";
 
 
@@ -246,13 +257,15 @@ export const updateDoctorThemeController = asyncHandler(
 // ==============================
 export const getAllDoctorsController = asyncHandler(async (req, res) => {
   const filters = {
-    specialization: req.query.specialization,
-    experience: req.query.experience,
-    rating: req.query.rating,
-    fee: req.query.fee,
-    search: req.query.search,
-    status: req.query.status, // blocked/unblocked
-  };
+  specialization: req.query.specialization,
+  experience: req.query.experience,
+  rating: req.query.rating,
+  fee: req.query.fee,
+  search: req.query.search,
+  status: req.query.status, // blocked/unblocked
+  verificationStatus: req.query.verificationStatus,
+  professionalStatus: req.query.professionalStatus, // verified/unverified
+};
 
   const options = {
     page: Number(req.query.page) || 1,
@@ -333,7 +346,7 @@ export const verifyDoctorAccountController =
       res,
       200,
       true,
-      "Doctor account verified successfully"
+      "Doctor email verified successfully. Please login and upload documents for admin verification."
     );
   });
 
@@ -515,6 +528,145 @@ export const updateDoctorProfileImageController = asyncHandler(
       true,
       "Profile image updated successfully",
       updatedDoctor
+    );
+  }
+);
+
+export const registerDoctorController = asyncHandler(async (req, res) => {
+  validateDoctorSelfRegisterInput(req.body);
+
+  const result = await registerDoctorService(req.body);
+
+  sendResponse(
+    res,
+    200,
+    true,
+    "Doctor registration OTP sent successfully",
+    result
+  );
+});
+
+export const verifyDoctorRegisterOtpController = asyncHandler(
+  async (req, res) => {
+    const { email, otp } = req.body;
+
+    validateDoctorRegisterOtpInput(email, otp);
+
+    const doctor = await verifyDoctorRegisterOtpService({
+      email,
+      otp,
+    });
+
+    sendResponse(
+      res,
+      201,
+      true,
+      "Doctor email verified successfully. Please login and upload documents for admin verification.",
+      doctor
+    );
+  }
+);
+
+export const resendDoctorRegisterOtpController = asyncHandler(
+  async (req, res) => {
+    const { email } = req.body;
+
+    validateDoctorResendOtpInput(email);
+
+    await resendDoctorRegisterOtpService(email);
+
+    sendResponse(res, 200, true, "Doctor registration OTP resent");
+  }
+);
+
+export const getMyDoctorVerificationController = asyncHandler(
+  async (req, res) => {
+    const data = await getMyDoctorVerificationService(
+      req.doctor.doctorId
+    );
+
+    sendResponse(
+      res,
+      200,
+      true,
+      "Doctor verification details fetched",
+      data
+    );
+  }
+);
+
+export const uploadDoctorVerificationDocumentsController = asyncHandler(
+  async (req, res) => {
+    const doctor = await uploadDoctorVerificationDocumentsService({
+      doctorId: req.doctor.doctorId,
+      files: req.files,
+    });
+
+    sendResponse(
+      res,
+      200,
+      true,
+      "Verification documents uploaded successfully",
+      doctor
+    );
+  }
+);
+
+export const getDoctorVerificationRequestsController = asyncHandler(
+  async (req, res) => {
+    const data = await getDoctorVerificationRequestsService({
+      query: req.query,
+    });
+
+    sendResponse(
+      res,
+      200,
+      true,
+      "Doctor verification requests fetched successfully",
+      data
+    );
+  }
+);
+
+export const approveDoctorVerificationController = asyncHandler(
+  async (req, res) => {
+    const adminId =
+      req.admin?.adminId || req.admin?._id || req.admin?.id;
+
+    const doctor = await approveDoctorVerificationService({
+      doctorId: req.params.id,
+      adminId,
+    });
+
+    sendResponse(
+      res,
+      200,
+      true,
+      "Doctor verification approved successfully",
+      doctor
+    );
+  }
+);
+
+export const rejectDoctorVerificationController = asyncHandler(
+  async (req, res) => {
+    validateAdminRejectDoctorVerificationInput(req.body);
+
+    const adminId =
+      req.admin?.adminId || req.admin?._id || req.admin?.id;
+
+    const doctor = await rejectDoctorVerificationService({
+      doctorId: req.params.id,
+      adminId,
+      body: req.body,
+    });
+
+    sendResponse(
+      res,
+      200,
+      true,
+      "Doctor verification rejected successfully",
+      doctor
     );
   }
 );

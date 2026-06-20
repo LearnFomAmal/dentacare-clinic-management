@@ -27,15 +27,20 @@ const getCookieNames = (userType) => {
   return names;
 };
 
-const clearOptions = {
-  httpOnly: true,
-  secure: env.NODE_ENV === "production",
-  sameSite: "lax",
-  path: "/",
+const getClearOptions = () => {
+  const isProduction = env.NODE_ENV === "production";
+
+  return {
+    httpOnly: true,
+    secure: isProduction,
+    sameSite: isProduction ? "none" : "lax",
+    path: "/",
+  };
 };
 
 const clearAuthCookies = (res, userType) => {
   const names = getCookieNames(userType);
+  const clearOptions = getClearOptions();
 
   res.clearCookie(names.accessToken, clearOptions);
   res.clearCookie(names.refreshToken, clearOptions);

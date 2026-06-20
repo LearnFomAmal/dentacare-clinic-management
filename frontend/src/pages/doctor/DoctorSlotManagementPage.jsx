@@ -46,11 +46,12 @@ const RECURRING_OPTIONS = [
     label: "Apply to next 2 days",
     value: "2",
   },
-  {
-    label: "Apply to next 7 days",
-    value: "7",
-  },
 ];
+
+const CLINIC_OPEN_TIME = "09:00";
+const CLINIC_CLOSE_TIME = "19:30";
+const CLINIC_TIME_ERROR =
+  "Slots must be between 09:00 AM and 07:30 PM";
 
 const getTodayDateString = () => {
   return new Intl.DateTimeFormat("en-CA", {
@@ -110,7 +111,7 @@ const getDurationLabel = (startTime, endTime) => {
   return `${minutes}min`;
 };
 
-const isValidSlotTime = (startTime, endTime) => {
+const isValidSlotDuration = (startTime, endTime) => {
   if (!startTime || !endTime) return false;
 
   const duration = timeToMinutes(endTime) - timeToMinutes(startTime);
@@ -118,14 +119,34 @@ const isValidSlotTime = (startTime, endTime) => {
   return duration >= 15 && duration <= 120;
 };
 
+const isSlotWithinClinicHours = (startTime, endTime) => {
+  if (!startTime || !endTime) return false;
+
+  const start = timeToMinutes(startTime);
+  const end = timeToMinutes(endTime);
+  const clinicOpen = timeToMinutes(CLINIC_OPEN_TIME);
+  const clinicClose = timeToMinutes(CLINIC_CLOSE_TIME);
+
+  return start >= clinicOpen && end <= clinicClose;
+};
+
+const isValidSlotTime = (startTime, endTime) => {
+  return (
+    isValidSlotDuration(startTime, endTime) &&
+    isSlotWithinClinicHours(startTime, endTime)
+  );
+};
+
 const buildSlotDateTime = ({ date, time }) => {
   return new Date(`${date}T${time}:00+05:30`);
 };
 
-const isSlotExpiredOnFrontend = ({ date, endTime }) => {
-  if (!date || !endTime) return false;
+const isSlotExpiredOnFrontend = ({ date, startTime, endTime }) => {
+  const time = startTime || endTime;
 
-  return buildSlotDateTime({ date, time: endTime }) <= new Date();
+  if (!date || !time) return false;
+
+  return buildSlotDateTime({ date, time }) <= new Date();
 };
 
 const getActiveSlots = (slotDay) => {
@@ -136,10 +157,12 @@ const getActiveSlots = (slotDay) => {
   );
 };
 
-const hasBookedSlot = (slotDay) => {
+const hasLockedSlot = (slotDay) => {
   return Boolean(
     slotDay?.slots?.some(
-      (slot) => !slot.isDeleted && slot.status === "booked"
+      (slot) =>
+        !slot.isDeleted &&
+        ["booked", "reserved"].includes(slot.status)
     )
   );
 };
@@ -148,10 +171,11 @@ const getSlotStatusMeta = ({ slotDay, slot }) => {
   const expired =
     slot.isExpired ||
     slot.displayStatus === "expired" ||
-    isSlotExpiredOnFrontend({
-      date: slotDay?.date,
-      endTime: slot.endTime,
-    });
+   isSlotExpiredOnFrontend({
+  date: slotDay?.date,
+  startTime: slot.startTime,
+  endTime: slot.endTime,
+});
 
   if (expired) {
     return {
@@ -224,9 +248,9 @@ function DoctorSlotManagementPage() {
   const [restoreModalOpen, setRestoreModalOpen] = useState(false);
 
   const [formValues, setFormValues] = useState({
-    startTime: "17:00",
-    endTime: "18:00",
-  });
+  startTime: "09:00",
+  endTime: "10:00",
+});
 
   useEffect(() => {
     dispatch(
@@ -266,11 +290,15 @@ function DoctorSlotManagementPage() {
     return slotDays.find((item) => item.date === selectedDate) || null;
   }, [slotDays, selectedDate]);
 
+const selectedDayHasLockedSlot = useMemo(() => {
+  return hasLockedSlot(selectedSlotDay);
+}, [selectedSlotDay]);
+
   const activeSlots = useMemo(() => {
     return getActiveSlots(selectedSlotDay);
   }, [selectedSlotDay]);
 
-  const selectedDayHasBookedSlot = hasBookedSlot(selectedSlotDay);
+
 
   const canManageSelectedDay = Boolean(
     selectedSlotDay &&
@@ -282,7 +310,7 @@ function DoctorSlotManagementPage() {
     selectedSlotDay &&
       selectedSlotDay.canRestoreDefaults !== false &&
       !isSundaySlotDay(selectedSlotDay) &&
-      !selectedDayHasBookedSlot
+      !selectedDayHasLockedSlot
   );
 
   const openAddModal = () => {
@@ -301,10 +329,10 @@ function DoctorSlotManagementPage() {
       return;
     }
 
-    setFormValues({
-      startTime: "17:00",
-      endTime: "18:00",
-    });
+ setFormValues({
+  startTime: "09:00",
+  endTime: "10:00",
+});
 
     setSlotModal({
       open: true,
@@ -343,10 +371,10 @@ function DoctorSlotManagementPage() {
       slot: null,
     });
 
-    setFormValues({
-      startTime: "17:00",
-      endTime: "18:00",
-    });
+   setFormValues({
+   startTime: "09:00",
+   endTime: "10:00",
+   });
   };
 
   const handleSlotFormChange = (event) => {
@@ -369,10 +397,15 @@ function DoctorSlotManagementPage() {
       return;
     }
 
-    if (!isValidSlotTime(formValues.startTime, formValues.endTime)) {
-      toast.error("Slot duration must be between 15 minutes and 2 hours");
-      return;
-    }
+if (!isValidSlotDuration(formValues.startTime, formValues.endTime)) {
+  toast.error("Slot duration must be between 15 minutes and 2 hours");
+  return;
+}
+
+if (!isSlotWithinClinicHours(formValues.startTime, formValues.endTime)) {
+  toast.error(CLINIC_TIME_ERROR);
+  return;
+}
 
     try {
       if (slotModal.mode === "add") {
@@ -468,8 +501,8 @@ function DoctorSlotManagementPage() {
       return;
     }
 
-    if (mode === "mark" && selectedDayHasBookedSlot) {
-      toast.error("Cannot mark holiday because this date has booked slots");
+    if (mode === "mark" && selectedDayHasLockedSlot) {
+      toast.error("Cannot mark holiday because this date has booked or reserved slots");
       return;
     }
 
@@ -693,7 +726,7 @@ function DoctorSlotManagementPage() {
                       disabled={
                         isMutating ||
                         isSundaySlotDay(selectedSlotDay) ||
-                        selectedDayHasBookedSlot ||
+                        selectedDayHasLockedSlot ||
                         selectedSlotDay?.isPastDate
                       }
                       className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-orange-200 bg-orange-50 px-5 text-sm font-bold text-orange-700 transition hover:bg-orange-100 disabled:cursor-not-allowed disabled:opacity-60"
@@ -1003,8 +1036,13 @@ function SlotCard({ slotDay, slot, onEdit, onDelete, disabled }) {
 
 function SlotModal({ mode, values, loading, onChange, onClose, onSubmit }) {
   const durationLabel = getDurationLabel(values.startTime, values.endTime);
-  const valid = isValidSlotTime(values.startTime, values.endTime);
+const validDuration = isValidSlotDuration(values.startTime, values.endTime);
+const validClinicHours = isSlotWithinClinicHours(
+  values.startTime,
+  values.endTime
+);
 
+const valid = validDuration && validClinicHours;
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 px-4">
       <div className="w-full max-w-[430px] rounded-2xl bg-white p-6 shadow-[0_20px_60px_rgba(0,0,0,0.2)] dark:bg-slate-900">
@@ -1035,13 +1073,15 @@ function SlotModal({ mode, values, loading, onChange, onClose, onSubmit }) {
             </span>
 
             <div className="relative">
-              <input
-                type="time"
-                name="startTime"
-                value={values.startTime}
+            <input
+              type="time"
+              name="startTime"
+               min={CLINIC_OPEN_TIME}
+              max={CLINIC_CLOSE_TIME}
+             value={values.startTime}
                 onChange={onChange}
                 className="h-11 w-full rounded-lg border border-slate-200 bg-white px-3 pr-9 text-sm font-medium text-black outline-none transition focus:border-[#9381FF] focus:ring-2 focus:ring-[#9381FF]/20 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
-              />
+            />
 
               <Clock
                 size={16}
@@ -1056,17 +1096,19 @@ function SlotModal({ mode, values, loading, onChange, onClose, onSubmit }) {
             </span>
 
             <div className="relative">
-              <input
-                type="time"
-                name="endTime"
-                value={values.endTime}
-                onChange={onChange}
-                className={`h-11 w-full rounded-lg border bg-white px-3 pr-9 text-sm font-medium text-black outline-none transition focus:ring-2 dark:bg-slate-950 dark:text-slate-100 ${
-                  valid
-                    ? "border-slate-200 focus:border-[#9381FF] focus:ring-[#9381FF]/20 dark:border-slate-700"
-                    : "border-red-400 focus:border-red-400 focus:ring-red-200"
-                }`}
-              />
+            <input
+  type="time"
+  name="endTime"
+  min={CLINIC_OPEN_TIME}
+  max={CLINIC_CLOSE_TIME}
+  value={values.endTime}
+  onChange={onChange}
+  className={`h-11 w-full rounded-lg border bg-white px-3 pr-9 text-sm font-medium text-black outline-none transition focus:ring-2 dark:bg-slate-950 dark:text-slate-100 ${
+    valid
+      ? "border-slate-200 focus:border-[#9381FF] focus:ring-[#9381FF]/20 dark:border-slate-700"
+      : "border-red-400 focus:border-red-400 focus:ring-red-200"
+  }`}
+/>
 
               <Clock
                 size={16}
@@ -1074,17 +1116,27 @@ function SlotModal({ mode, values, loading, onChange, onClose, onSubmit }) {
               />
             </div>
 
-            {!valid && (
-              <p className="text-xs font-medium text-red-500">
-                Slot duration must be between 15 minutes and 2 hours.
-              </p>
-            )}
+           {!validDuration && (
+  <p className="text-xs font-medium text-red-500">
+    Slot duration must be between 15 minutes and 2 hours.
+  </p>
+)}
+
+{validDuration && !validClinicHours && (
+  <p className="text-xs font-medium text-red-500">
+    {CLINIC_TIME_ERROR}
+  </p>
+)}
           </label>
         </div>
 
         <div className="mt-5 rounded-lg bg-[#F3EFFF] px-4 py-3 text-sm font-semibold text-[#7C5CFC]">
           Total Slot Duration: {durationLabel}
         </div>
+
+        <div className="mt-3 rounded-lg bg-blue-50 px-4 py-3 text-xs font-bold leading-5 text-blue-700">
+  Clinic hours: 09:00 AM to 07:30 PM. Slots must fully fit inside this time.
+</div>
 
         <div className="mt-6 flex justify-end gap-3">
           <button

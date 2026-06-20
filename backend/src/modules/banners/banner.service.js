@@ -2,16 +2,17 @@ import mongoose from "mongoose";
 import { v2 as cloudinary } from "cloudinary";
 
 import AppError from "../../shared/errors/AppError.js";
-
+import { env } from "../../config/env.js";
 import {
   countAdminBanners,
   createBanner,
   findActiveBannersByLocation,
   findActiveCouponById,
   findActiveSpecialtyById,
-  findAdminBanners,
-  findBannerById,
-  findBannerDocumentById,
+ findAdminBanners,
+findAdminBannersForComputedStatus,
+findBannerById,
+findBannerDocumentById,
   softDeleteBannerById,
   updateBannerById,
 } from "./banner.repository.js";
@@ -24,7 +25,11 @@ import {
   validateUpdateBannerInput,
   validateUpdateBannerStatusInput,
 } from "./banner.validator.js";
-
+cloudinary.config({
+  cloud_name: env.CLOUDINARY_CLOUD_NAME,
+  api_key: env.CLOUDINARY_API_KEY,
+  api_secret: env.CLOUDINARY_API_SECRET,
+});
 const uploadBufferToCloudinary = ({ fileBuffer, folder }) => {
   return new Promise((resolve, reject) => {
     const uploadStream = cloudinary.uploader.upload_stream(
@@ -57,22 +62,170 @@ const deleteCloudinaryImage = async (publicId) => {
   }
 };
 
-const buildRedirectUrl = ({ type, redirectUrl, specialtyId, couponCode }) => {
-  if (redirectUrl && redirectUrl.trim()) {
-    return redirectUrl.trim();
-  }
-
+const buildRedirectUrl = ({ type, specialtyId, couponCode }) => {
   if (type === "referral") {
-    return "/referral";
+    return "/referrals";
   }
 
   if (type === "specialty_coupon") {
-    return `/doctors?specialty=${specialtyId}&coupon=${couponCode}`;
+    const params = new URLSearchParams();
+
+    if (specialtyId) {
+      params.set("specialty", specialtyId.toString());
+    }
+
+    if (couponCode) {
+      params.set("coupon", couponCode);
+    }
+
+    return `/doctors?${params.toString()}`;
   }
 
-  return "/";
+  return "/doctors";
 };
 
+const getPlainBanner = (banner) => {
+  return banner?.toObject ? banner.toObject() : banner;
+};
+
+const getBannerComputedStatus = (banner) => {
+  const plainBanner = getPlainBanner(banner);
+  const now = new Date();
+
+  if (!plainBanner.isActive) {
+    return {
+      computedStatus: "inactive",
+      computedStatusLabel: "Inactive",
+      isCurrentlyVisible: false,
+    };
+  }
+
+  if (plainBanner.startDate && new Date(plainBanner.startDate) > now) {
+    return {
+      computedStatus: "upcoming",
+      computedStatusLabel: "Upcoming",
+      isCurrentlyVisible: false,
+    };
+  }
+
+  if (plainBanner.endDate && new Date(plainBanner.endDate) < now) {
+    return {
+      computedStatus: "expired",
+      computedStatusLabel: "Expired",
+      isCurrentlyVisible: false,
+    };
+  }
+
+  if (plainBanner.type === "specialty_coupon") {
+    const specialty = plainBanner.specialtyId || null;
+    const coupon = plainBanner.couponId || null;
+
+    if (!specialty || !coupon) {
+      return {
+        computedStatus: "offer_unavailable",
+        computedStatusLabel: "Offer Unavailable",
+        isCurrentlyVisible: false,
+      };
+    }
+
+    if (specialty.status && specialty.status !== "active") {
+      return {
+        computedStatus: "specialty_inactive",
+        computedStatusLabel: "Specialty Inactive",
+        isCurrentlyVisible: false,
+      };
+    }
+
+    if (coupon.isDeleted || !coupon.isActive) {
+      return {
+        computedStatus: "coupon_inactive",
+        computedStatusLabel: "Coupon Inactive",
+        isCurrentlyVisible: false,
+      };
+    }
+
+    if (coupon.validFrom && new Date(coupon.validFrom) > now) {
+      return {
+        computedStatus: "coupon_upcoming",
+        computedStatusLabel: "Coupon Upcoming",
+        isCurrentlyVisible: false,
+      };
+    }
+
+    if (coupon.validTo && new Date(coupon.validTo) < now) {
+      return {
+        computedStatus: "coupon_expired",
+        computedStatusLabel: "Coupon Expired",
+        isCurrentlyVisible: false,
+      };
+    }
+
+    if (
+      Number(coupon.maxUsage || 0) > 0 &&
+      Number(coupon.usedCount || 0) >= Number(coupon.maxUsage || 0)
+    ) {
+      return {
+        computedStatus: "coupon_usage_finished",
+        computedStatusLabel: "Coupon Usage Finished",
+        isCurrentlyVisible: false,
+      };
+    }
+  }
+
+  return {
+    computedStatus: "active",
+    computedStatusLabel: "Active",
+    isCurrentlyVisible: true,
+  };
+};
+
+const attachBannerComputedStatus = (banner) => {
+  if (!banner) return banner;
+
+  const plainBanner = getPlainBanner(banner);
+
+  return {
+    ...plainBanner,
+    ...getBannerComputedStatus(plainBanner),
+  };
+};
+
+const attachBannersComputedStatus = (banners = []) => {
+  return banners.map(attachBannerComputedStatus);
+};
+
+const matchesComputedBannerStatus = (banner, status) => {
+  if (!status) return true;
+
+  const bannerStatus = banner.computedStatus;
+
+  if (status === "active") {
+    return bannerStatus === "active";
+  }
+
+  if (status === "inactive") {
+    return [
+      "inactive",
+      "coupon_inactive",
+      "specialty_inactive",
+      "offer_unavailable",
+    ].includes(bannerStatus);
+  }
+
+  if (status === "upcoming") {
+    return ["upcoming", "coupon_upcoming"].includes(bannerStatus);
+  }
+
+  if (status === "expired") {
+    return ["expired", "coupon_expired"].includes(bannerStatus);
+  }
+
+  if (status === "usage_finished") {
+    return bannerStatus === "coupon_usage_finished";
+  }
+
+  return bannerStatus === status;
+};
 const validateSpecialtyCouponBannerRelation = async ({
   specialtyId,
   couponId,
@@ -109,7 +262,16 @@ const validateSpecialtyCouponBannerRelation = async ({
   if (now > coupon.validTo) {
     throw new AppError("Selected coupon has expired", 400);
   }
+  if (now < coupon.validFrom) {
+  throw new AppError("Selected coupon is not valid yet", 400);
+}
 
+if (
+  Number(coupon.maxUsage || 0) > 0 &&
+  Number(coupon.usedCount || 0) >= Number(coupon.maxUsage || 0)
+) {
+  throw new AppError("Selected coupon usage limit is already finished", 400);
+}
   return {
     specialty,
     coupon,
@@ -151,23 +313,27 @@ export const createBannerService = async ({ adminId, body, file }) => {
     type: body.type,
     locations,
     ctaText: body.ctaText?.trim() || "View Offer",
-    redirectUrl: buildRedirectUrl({
-      type: body.type,
-      redirectUrl: body.redirectUrl,
-      specialtyId: body.specialtyId,
-      couponCode,
-    }),
+  redirectUrl: buildRedirectUrl({
+  type: body.type,
+  specialtyId: body.specialtyId,
+  couponCode,
+}),
     specialtyId,
     couponId,
     couponCode,
-    startDate: new Date(body.startDate),
-    endDate: new Date(body.endDate),
+        startDate: body.startDate ? new Date(body.startDate) : null,
+    endDate: body.endDate ? new Date(body.endDate) : null,
     priority: Number(body.priority || 1),
     isActive: normalizeBoolean(body.isActive, true),
     createdBy: adminId ? new mongoose.Types.ObjectId(adminId) : null,
   };
 
-  return createBanner(payload);
+  const banner = await createBanner(payload);
+
+const populatedBanner = await findBannerById(banner._id);
+
+return attachBannerComputedStatus(populatedBanner);
+
 };
 
 export const getAdminBannersService = async ({ query }) => {
@@ -211,12 +377,32 @@ export const getAdminBannersService = async ({ query }) => {
     filter.locations = location;
   }
 
-  if (status === "active") {
-    filter.isActive = true;
-  }
+  if (status) {
+    const allBanners = await findAdminBannersForComputedStatus({
+      filter,
+    });
 
-  if (status === "inactive") {
-    filter.isActive = false;
+    const bannersWithStatus = attachBannersComputedStatus(allBanners);
+
+    const filteredBanners = bannersWithStatus.filter((banner) =>
+      matchesComputedBannerStatus(banner, status)
+    );
+
+    const skip = (numericPage - 1) * numericLimit;
+    const paginatedBanners = filteredBanners.slice(
+      skip,
+      skip + numericLimit
+    );
+
+    return {
+      banners: paginatedBanners,
+      pagination: {
+        page: numericPage,
+        limit: numericLimit,
+        totalBanners: filteredBanners.length,
+        totalPages: Math.ceil(filteredBanners.length / numericLimit),
+      },
+    };
   }
 
   const skip = (numericPage - 1) * numericLimit;
@@ -231,7 +417,7 @@ export const getAdminBannersService = async ({ query }) => {
   ]);
 
   return {
-    banners,
+    banners: attachBannersComputedStatus(banners),
     pagination: {
       page: numericPage,
       limit: numericLimit,
@@ -250,7 +436,7 @@ export const getAdminBannerDetailsService = async ({ bannerId }) => {
     throw new AppError("Banner not found", 404);
   }
 
-  return banner;
+  return attachBannerComputedStatus(banner);
 };
 
 export const updateBannerService = async ({ bannerId, body, file }) => {
@@ -260,11 +446,34 @@ export const updateBannerService = async ({ bannerId, body, file }) => {
   });
 
   const existingBanner = await findBannerDocumentById(bannerId);
-
+    
   if (!existingBanner) {
     throw new AppError("Banner not found", 404);
   }
+    const finalStartDate =
+  body.startDate !== undefined
+    ? body.startDate
+      ? new Date(body.startDate)
+      : null
+    : existingBanner.startDate;
 
+const finalEndDate =
+  body.endDate !== undefined
+    ? body.endDate
+      ? new Date(body.endDate)
+      : null
+    : existingBanner.endDate;
+
+if ((finalStartDate && !finalEndDate) || (!finalStartDate && finalEndDate)) {
+  throw new AppError(
+    "Both start date and end date are required for scheduled banners",
+    400
+  );
+}
+
+if (finalStartDate && finalEndDate && finalStartDate >= finalEndDate) {
+  throw new AppError("End date must be after start date", 400);
+}
   const finalType = body.type || existingBanner.type;
 
   const finalLocations =
@@ -344,11 +553,11 @@ export const updateBannerService = async ({ bannerId, body, file }) => {
   }
 
   if (body.startDate !== undefined) {
-    payload.startDate = new Date(body.startDate);
+    payload.startDate = body.startDate ? new Date(body.startDate) : null;
   }
 
   if (body.endDate !== undefined) {
-    payload.endDate = new Date(body.endDate);
+    payload.endDate = body.endDate ? new Date(body.endDate) : null;
   }
 
   if (body.isActive !== undefined) {
@@ -359,12 +568,11 @@ export const updateBannerService = async ({ bannerId, body, file }) => {
   payload.couponId = couponId;
   payload.couponCode = couponCode;
 
-  payload.redirectUrl = buildRedirectUrl({
-    type: finalType,
-    redirectUrl: body.redirectUrl,
-    specialtyId: finalSpecialtyId,
-    couponCode,
-  });
+ payload.redirectUrl = buildRedirectUrl({
+  type: finalType,
+  specialtyId: finalSpecialtyId,
+  couponCode,
+});
 
   if (file) {
     const uploadedImage = await uploadBufferToCloudinary({
@@ -378,10 +586,13 @@ export const updateBannerService = async ({ bannerId, body, file }) => {
     await deleteCloudinaryImage(existingBanner.imagePublicId);
   }
 
-  return updateBannerById({
-    bannerId,
-    payload,
-  });
+  const banner = await updateBannerById({
+  bannerId,
+  payload,
+});
+
+return attachBannerComputedStatus(banner);
+
 };
 
 export const updateBannerStatusService = async ({ bannerId, body }) => {
@@ -401,7 +612,7 @@ export const updateBannerStatusService = async ({ bannerId, body }) => {
     throw new AppError("Banner not found", 404);
   }
 
-  return banner;
+  return attachBannerComputedStatus(banner);
 };
 
 export const deleteBannerService = async ({ bannerId }) => {
@@ -415,7 +626,9 @@ export const deleteBannerService = async ({ bannerId }) => {
 
   const banner = await softDeleteBannerById(bannerId);
 
-  return banner;
+  await deleteCloudinaryImage(existingBanner.imagePublicId);
+
+  return attachBannerComputedStatus(banner);
 };
 
 export const getPublicBannersByLocationService = async ({ location }) => {
@@ -427,18 +640,92 @@ export const getPublicBannersByLocationService = async ({ location }) => {
     location,
   });
 
-  return banners.map((banner) => ({
-    _id: banner._id,
-    title: banner.title,
-    description: banner.description,
-    imageUrl: banner.imageUrl,
-    type: banner.type,
-    locations: banner.locations,
-    ctaText: banner.ctaText,
-    redirectUrl: banner.redirectUrl,
-    specialty: banner.specialtyId || null,
-    coupon: banner.couponId || null,
-    couponCode: banner.couponCode,
-    priority: banner.priority,
-  }));
+  const now = new Date();
+
+const visibleBanners = banners.filter((banner) => {
+    if (banner.type === "referral") {
+      return true;
+    }
+
+    if (banner.type === "specialty_coupon") {
+     const specialty = banner.specialtyId || null;
+const coupon = banner.couponId || null;
+
+if (!specialty || !coupon) {
+  return false;
+}
+
+if (specialty.status !== "active") {
+  return false;
+}
+
+if (coupon.isDeleted || !coupon.isActive) {
+  return false;
+}
+
+if (coupon.validFrom && new Date(coupon.validFrom) > now) {
+  return false;
+}
+
+if (coupon.validTo && new Date(coupon.validTo) < now) {
+  return false;
+}
+
+if (
+  Number(coupon.maxUsage || 0) > 0 &&
+  Number(coupon.usedCount || 0) >= Number(coupon.maxUsage || 0)
+) {
+  return false;
+}
+
+const couponSpecialtyId =
+  coupon.applicableSpecialtyId?.toString?.() || "";
+
+const bannerSpecialtyId = specialty._id?.toString?.() || "";
+
+if (couponSpecialtyId && couponSpecialtyId !== bannerSpecialtyId) {
+  return false;
+}
+
+return true;
+    }
+
+    return false;
+  });
+
+  return visibleBanners.map((banner) => {
+    const coupon = banner.couponId || null;
+    const specialty = banner.specialtyId || null;
+
+    return {
+      _id: banner._id,
+      title: banner.title,
+      description: banner.description,
+      imageUrl: banner.imageUrl,
+      type: banner.type,
+      locations: banner.locations,
+      ctaText: banner.ctaText,
+
+      redirectUrl: buildRedirectUrl({
+        type: banner.type,
+        specialtyId: specialty?._id || banner.specialtyId,
+        couponCode: banner.couponCode,
+      }),
+
+      specialty,
+      specialtyId: specialty?._id || null,
+
+      coupon,
+      couponId: coupon?._id || null,
+      couponCode: banner.couponCode || coupon?.code || "",
+
+      couponValidFrom: coupon?.validFrom || null,
+      couponValidTo: coupon?.validTo || null,
+
+      startDate: banner.startDate || null,
+      endDate: banner.endDate || null,
+
+      priority: banner.priority,
+    };
+  });
 };

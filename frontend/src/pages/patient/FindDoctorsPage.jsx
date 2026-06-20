@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import {
   BriefcaseBusiness,
   IndianRupee,
@@ -22,13 +22,18 @@ import {
   fetchPublicDoctors,
   fetchPublicSpecialties,
   setDoctorFilter,
+  setDoctorPage,
 } from "../../features/doctor/publicDoctorSlice";
 
 function FindDoctorsPage() {
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
- 
+
+  const [searchParams, setSearchParams] = useSearchParams();
+  const searchKey = searchParams.toString();
+
+  const [hasHydratedUrlFilters, setHasHydratedUrlFilters] = useState(false);
+
   const {
     doctors,
     specialties,
@@ -40,59 +45,96 @@ function FindDoctorsPage() {
   } = useAppSelector((state) => state.publicDoctors);
 
   const {
-   doctorPageBanners,
-   error: bannerError,
+    doctorPageBanners,
+    error: bannerError,
   } = useAppSelector((state) => state.banners);
-const couponFromBanner = searchParams.get("coupon") || "";
+
+  const couponFromBanner = searchParams.get("coupon") || "";
+
   useEffect(() => {
     dispatch(fetchPublicSpecialties());
+    dispatch(fetchDoctorPageBanners());
   }, [dispatch]);
 
+  // ✅ IMPORTANT:
+  // Read URL specialty only when the URL actually changes.
+  // Do NOT depend on filters.specialtyId here, otherwise manual filter changes get reset.
   useEffect(() => {
-    dispatch(fetchPublicDoctors());
-  }, [
-    dispatch,
-   filters.search,
-filters.specialtyId,
-filters.minExperience,
-filters.minRating,
-filters.sort,
-filters.page,
-  ]);
+    const specialtyIdFromUrl = searchParams.get("specialty") || "";
 
- useEffect(() => {
-  if (!error) return;
-
-  toast.error(error);
-  dispatch(clearPublicDoctorError());
- }, [error, dispatch]);
-  
-
- useEffect(() => {
-  dispatch(fetchDoctorPageBanners());
-}, [dispatch]);
-
-useEffect(() => {
-  const specialtyId = searchParams.get("specialty");
-
-  if (specialtyId && specialtyId !== filters.specialtyId) {
     dispatch(
       setDoctorFilter({
         name: "specialtyId",
-        value: specialtyId,
+        value: specialtyIdFromUrl,
       })
     );
-  }
-}, [dispatch, searchParams, filters.specialtyId]);
 
-useEffect(() => {
-  if (!bannerError) return;
+    setHasHydratedUrlFilters(true);
+  }, [dispatch, searchKey]);
 
-  dispatch(clearBannerError());
-}, [bannerError, dispatch]);
+  useEffect(() => {
+    if (!hasHydratedUrlFilters) return;
+
+    dispatch(fetchPublicDoctors());
+  }, [
+    dispatch,
+    hasHydratedUrlFilters,
+    filters.search,
+    filters.specialtyId,
+    filters.minExperience,
+    filters.minRating,
+    filters.sort,
+    filters.page,
+  ]);
+
+  useEffect(() => {
+    if (!error) return;
+
+    toast.error(error);
+    dispatch(clearPublicDoctorError());
+  }, [error, dispatch]);
+
+  useEffect(() => {
+    if (!bannerError) return;
+
+    dispatch(clearBannerError());
+  }, [bannerError, dispatch]);
 
   const handleFilterChange = (name, value) => {
-    dispatch(setDoctorFilter({ name, value }));
+    const nextValue = value || "";
+
+    dispatch(
+      setDoctorFilter({
+        name,
+        value: nextValue,
+      })
+    );
+
+    // ✅ If user manually changes specialty, update/remove the URL specialty.
+    // Also remove banner coupon because that coupon may belong to the old specialty.
+    if (name === "specialtyId") {
+      const nextParams = new URLSearchParams(searchParams);
+
+      if (nextValue) {
+        nextParams.set("specialty", nextValue);
+      } else {
+        nextParams.delete("specialty");
+      }
+
+      nextParams.delete("coupon");
+
+      setSearchParams(nextParams, {
+        replace: true,
+      });
+    }
+  };
+
+  const handleViewDoctorDetails = (doctorId) => {
+    const query = couponFromBanner
+      ? `?coupon=${encodeURIComponent(couponFromBanner)}`
+      : "";
+
+    navigate(`/doctors/${doctorId}${query}`);
   };
 
   return (
@@ -118,17 +160,18 @@ useEffect(() => {
 
             <div className="inline-flex w-fit items-center gap-2 rounded-2xl bg-[#F8FAFC] px-5 py-3 text-sm font-bold text-[#6B7280]">
               <SlidersHorizontal size={17} />
-              {pagination.totalDoctors} doctors
+              {pagination?.totalDoctors || 0} doctors
             </div>
-            
           </div>
         </section>
-   <BannerCarousel
-  banners={doctorPageBanners}
-  title="Specialty Offers"
-  description="Use active specialty coupons while choosing your dentist."
-  compact
-/>
+
+        <BannerCarousel
+          banners={doctorPageBanners}
+          title="Specialty Offers"
+          description="Use active specialty coupons while choosing your dentist."
+          compact
+        />
+
         <section className="rounded-3xl border border-[#EEF0F6] bg-white p-5 shadow-[0_18px_48px_rgba(17,24,39,0.05)]">
           <div className="grid gap-3 md:grid-cols-[1fr_220px_170px_170px_160px]">
             <div className="relative">
@@ -144,7 +187,7 @@ useEffect(() => {
                   handleFilterChange("search", event.target.value)
                 }
                 placeholder="Search doctors by name or specialty"
-                className="h-13 w-full rounded-2xl border border-[#E5E7EB] bg-white py-4 pl-12 pr-4 text-sm font-semibold outline-none transition focus:border-[#9381FF] focus:ring-4 focus:ring-[#9381FF]/10"
+                className="h-[52px] w-full rounded-2xl border border-[#E5E7EB] bg-white py-4 pl-12 pr-4 text-sm font-semibold outline-none transition focus:border-[#9381FF] focus:ring-4 focus:ring-[#9381FF]/10"
               />
             </div>
 
@@ -154,9 +197,10 @@ useEffect(() => {
                 handleFilterChange("specialtyId", event.target.value)
               }
               disabled={isLoadingSpecialties}
-              className="h-13 rounded-2xl border border-[#E5E7EB] bg-white px-4 py-4 text-sm font-bold text-[#374151] outline-none transition focus:border-[#9381FF] focus:ring-4 focus:ring-[#9381FF]/10"
+              className="h-[52px] rounded-2xl border border-[#E5E7EB] bg-white px-4 py-4 text-sm font-bold text-[#374151] outline-none transition focus:border-[#9381FF] focus:ring-4 focus:ring-[#9381FF]/10"
             >
               <option value="">All Specializations</option>
+
               {specialties.map((specialty) => (
                 <option key={specialty._id} value={specialty._id}>
                   {specialty.displayName || specialty.name}
@@ -169,7 +213,7 @@ useEffect(() => {
               onChange={(event) =>
                 handleFilterChange("minExperience", event.target.value)
               }
-              className="h-13 rounded-2xl border border-[#E5E7EB] bg-white px-4 py-4 text-sm font-bold text-[#374151] outline-none transition focus:border-[#9381FF] focus:ring-4 focus:ring-[#9381FF]/10"
+              className="h-[52px] rounded-2xl border border-[#E5E7EB] bg-white px-4 py-4 text-sm font-bold text-[#374151] outline-none transition focus:border-[#9381FF] focus:ring-4 focus:ring-[#9381FF]/10"
             >
               <option value="">Experience</option>
               <option value="0">0+ years</option>
@@ -177,26 +221,28 @@ useEffect(() => {
               <option value="10">10+ years</option>
               <option value="15">15+ years</option>
             </select>
-              <select
-  value={filters.minRating || ""}
-  onChange={(event) =>
-    handleFilterChange("minRating", event.target.value)
-  }
-  className="h-13 rounded-2xl border border-[#E5E7EB] bg-white px-4 py-4 text-sm font-bold text-[#374151] outline-none transition focus:border-[#9381FF] focus:ring-4 focus:ring-[#9381FF]/10"
->
-  <option value="">Rating</option>
-  <option value="5">5 star</option>
-  <option value="4">4+ rating</option>
-  <option value="3">3+ rating</option>
-  <option value="2">2+ rating</option>
-  <option value="1">1+ rating</option>
-</select>
+
+            <select
+              value={filters.minRating || ""}
+              onChange={(event) =>
+                handleFilterChange("minRating", event.target.value)
+              }
+              className="h-[52px] rounded-2xl border border-[#E5E7EB] bg-white px-4 py-4 text-sm font-bold text-[#374151] outline-none transition focus:border-[#9381FF] focus:ring-4 focus:ring-[#9381FF]/10"
+            >
+              <option value="">Rating</option>
+              <option value="5">5 star</option>
+              <option value="4">4+ rating</option>
+              <option value="3">3+ rating</option>
+              <option value="2">2+ rating</option>
+              <option value="1">1+ rating</option>
+            </select>
+
             <select
               value={filters.sort}
               onChange={(event) =>
                 handleFilterChange("sort", event.target.value)
               }
-              className="h-13 rounded-2xl border border-[#E5E7EB] bg-white px-4 py-4 text-sm font-bold text-[#374151] outline-none transition focus:border-[#9381FF] focus:ring-4 focus:ring-[#9381FF]/10"
+              className="h-[52px] rounded-2xl border border-[#E5E7EB] bg-white px-4 py-4 text-sm font-bold text-[#374151] outline-none transition focus:border-[#9381FF] focus:ring-4 focus:ring-[#9381FF]/10"
             >
               <option value="latest">Latest</option>
               <option value="experience_desc">Most Experienced</option>
@@ -227,15 +273,45 @@ useEffect(() => {
                 <DoctorListCard
                   key={doctor._id}
                   doctor={doctor}
-                 onViewDetails={() => {
-  const query = couponFromBanner
-    ? `?coupon=${encodeURIComponent(couponFromBanner)}`
-    : "";
-
-  navigate(`/doctors/${doctor._id}${query}`);
-}}
+                  onViewDetails={() => handleViewDoctorDetails(doctor._id)}
                 />
               ))}
+            </div>
+          )}
+
+          {pagination?.totalPages > 1 && (
+            <div className="mt-8 flex items-center justify-between gap-4">
+              <button
+                type="button"
+                disabled={pagination.page <= 1 || isLoadingDoctors}
+                onClick={() =>
+                  dispatch(setDoctorPage(Math.max(1, pagination.page - 1)))
+                }
+                className="h-11 rounded-2xl border border-[#E5E7EB] bg-white px-5 text-sm font-extrabold text-[#6B7280] transition hover:border-[#9381FF] hover:text-[#9381FF] disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Previous
+              </button>
+
+              <p className="text-sm font-bold text-[#6B7280]">
+                Page {pagination.page} of {pagination.totalPages}
+              </p>
+
+              <button
+                type="button"
+                disabled={
+                  pagination.page >= pagination.totalPages || isLoadingDoctors
+                }
+                onClick={() =>
+                  dispatch(
+                    setDoctorPage(
+                      Math.min(pagination.totalPages, pagination.page + 1)
+                    )
+                  )
+                }
+                className="h-11 rounded-2xl border border-[#E5E7EB] bg-white px-5 text-sm font-extrabold text-[#6B7280] transition hover:border-[#9381FF] hover:text-[#9381FF] disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Next
+              </button>
             </div>
           )}
         </section>
@@ -247,6 +323,7 @@ useEffect(() => {
 function DoctorListCard({ doctor, onViewDetails }) {
   const fullName = doctor.fullName || "Doctor";
   const profileImage = doctor.professionalInfo?.profileImage;
+
   const specialty =
     doctor.specialization?.displayName ||
     doctor.specialization?.name ||
@@ -280,12 +357,9 @@ function DoctorListCard({ doctor, onViewDetails }) {
           </p>
 
           <div className="mt-3 flex items-center gap-1 text-sm font-bold text-[#111827]">
-            <Star
-              size={15}
-              fill="currentColor"
-              className="text-[#F59E0B]"
-            />
+            <Star size={15} fill="currentColor" className="text-[#F59E0B]" />
             {doctor.stats?.averageRating || 0}
+
             <span className="font-medium text-[#9CA3AF]">
               ({doctor.stats?.totalReviews || 0} reviews)
             </span>
@@ -341,7 +415,7 @@ function InfoBox({ icon: Icon, label, value }) {
 }
 
 function getSpecialtyDescription(specialty) {
-  const value = specialty.toLowerCase();
+  const value = String(specialty || "").toLowerCase();
 
   if (value.includes("orthodont")) {
     return "Specializes in braces, aligners, bite correction, and improving teeth alignment for a healthier smile.";

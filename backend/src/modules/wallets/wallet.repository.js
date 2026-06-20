@@ -4,7 +4,29 @@ import Payment from "../../models/Payment.js";
 import User from "../../models/User.js";
 import Wallet from "../../models/Wallet.js";
 import WalletTransaction from "../../models/WalletTransaction.js";
-
+export const markPendingTopupCancelledByOrderId = ({
+  userId,
+  razorpayOrderId,
+  session = null,
+}) => {
+  return WalletTransaction.findOneAndUpdate(
+    {
+      userId,
+      reason: "topup",
+      referenceType: "topup",
+      status: "pending",
+      "gateway.orderId": razorpayOrderId,
+    },
+    {
+      status: "cancelled",
+      description: "Wallet top-up cancelled before payment completion",
+    },
+    {
+      new: true,
+      session,
+    }
+  );
+};
 export const findWalletByUserId = ({ userId, session = null }) => {
   return Wallet.findOne({
     userId,
@@ -118,10 +140,22 @@ export const findWalletTransactions = ({
   userId,
   skip = 0,
   limit = 10,
+  reason = "",
+  status = "success",
 }) => {
-  return WalletTransaction.find({
+  const filter = {
     userId,
-  })
+  };
+
+  if (reason) {
+    filter.reason = reason;
+  }
+
+  if (status && status !== "all") {
+    filter.status = status;
+  }
+
+  return WalletTransaction.find(filter)
     .sort({
       createdAt: -1,
     })
@@ -130,10 +164,24 @@ export const findWalletTransactions = ({
     .lean();
 };
 
-export const countWalletTransactions = (userId) => {
-  return WalletTransaction.countDocuments({
+export const countWalletTransactions = ({
+  userId,
+  reason = "",
+  status = "success",
+}) => {
+  const filter = {
     userId,
-  });
+  };
+
+  if (reason) {
+    filter.reason = reason;
+  }
+
+  if (status && status !== "all") {
+    filter.status = status;
+  }
+
+  return WalletTransaction.countDocuments(filter);
 };
 
 export const updateUserWalletSummary = ({
@@ -198,4 +246,85 @@ export const markPaymentAsRefunded = ({
 
 export const toObjectId = (id) => {
   return new mongoose.Types.ObjectId(id);
+};
+
+
+
+export const findPendingTopupByOrderId = ({
+  userId,
+  razorpayOrderId,
+  session = null,
+}) => {
+  return WalletTransaction.findOne({
+    userId,
+    reason: "topup",
+    referenceType: "topup",
+    status: "pending",
+    "gateway.orderId": razorpayOrderId,
+  }).session(session);
+};
+
+export const findSuccessfulTopupByRazorpayPaymentId = ({
+  razorpayPaymentId,
+  session = null,
+}) => {
+  return WalletTransaction.findOne({
+    reason: "topup",
+    referenceType: "topup",
+    status: "success",
+    "gateway.paymentId": razorpayPaymentId,
+  }).session(session);
+};
+
+export const markTopupTransactionSuccess = ({
+  transactionId,
+  razorpayPaymentId,
+  razorpaySignature,
+  balanceAfter,
+  session = null,
+}) => {
+  return WalletTransaction.findOneAndUpdate(
+    {
+      _id: transactionId,
+      reason: "topup",
+      status: "pending",
+    },
+    {
+      status: "success",
+      balanceAfter,
+      "gateway.paymentId": razorpayPaymentId,
+      "gateway.signature": razorpaySignature,
+    },
+    {
+      new: true,
+      session,
+    }
+  );
+};
+
+export const findSuccessfulWalletTransactionByReference = ({
+  userId,
+  reason,
+  referenceType,
+  referenceId,
+  session = null,
+}) => {
+  return WalletTransaction.findOne({
+    userId,
+    reason,
+    referenceType,
+    referenceId,
+    status: "success",
+  }).session(session);
+};
+
+export const findActiveWalletUserById = ({
+  userId,
+  session = null,
+}) => {
+  return User.findOne({
+    _id: userId,
+    "accountStatus.isDeleted": false,
+    "accountStatus.isBlocked": false,
+  }).session(session);
 };

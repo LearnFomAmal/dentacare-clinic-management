@@ -27,17 +27,24 @@ const buildRecipientFilter = ({ recipientRole, recipientId }) => {
   };
 
   if (recipientRole === "admin") {
-    filter.$or = [
+    const adminRecipientFilter = [
       {
         recipientId: null,
       },
-      {
-        recipientId: new mongoose.Types.ObjectId(recipientId),
-      },
     ];
+
+    if (recipientId && mongoose.Types.ObjectId.isValid(recipientId)) {
+      adminRecipientFilter.push({
+        recipientId: new mongoose.Types.ObjectId(recipientId),
+      });
+    }
+
+    filter.$or = adminRecipientFilter;
 
     return filter;
   }
+
+  validateObjectId(recipientId, `${recipientRole} id`);
 
   filter.recipientId = new mongoose.Types.ObjectId(recipientId);
 
@@ -104,7 +111,9 @@ export const getNotificationsService = async ({
   recipientId,
   query,
 }) => {
-  validateObjectId(recipientId, `${recipientRole} id`);
+  if (recipientRole !== "admin") {
+    validateObjectId(recipientId, `${recipientRole} id`);
+  }
 
   const { page, limit } = validatePagination(query);
   const skip = (page - 1) * limit;
@@ -141,7 +150,9 @@ export const getUnreadNotificationCountService = async ({
   recipientRole,
   recipientId,
 }) => {
-  validateObjectId(recipientId, `${recipientRole} id`);
+  if (recipientRole !== "admin") {
+    validateObjectId(recipientId, `${recipientRole} id`);
+  }
 
   const filter = buildRecipientFilter({
     recipientRole,
@@ -187,7 +198,9 @@ export const markAllNotificationsAsReadService = async ({
   recipientRole,
   recipientId,
 }) => {
-  validateObjectId(recipientId, `${recipientRole} id`);
+  if (recipientRole !== "admin") {
+    validateObjectId(recipientId, `${recipientRole} id`);
+  }
 
   const filter = buildRecipientFilter({
     recipientRole,

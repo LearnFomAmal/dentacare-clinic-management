@@ -261,6 +261,10 @@ export const findDoctorsForReviewSearch = (search) => {
 export const findDoctorExistsForReview = (doctorId) => {
   return Doctor.findOne({
     _id: doctorId,
+    "accountStatus.isEmailVerified": true,
+    "accountStatus.isVerified": true,
+    "accountStatus.isBlocked": false,
     "accountStatus.isDeleted": false,
-  }).select("_id stats accountStatus");
+    "verification.status": "approved",
+  }).select("_id stats accountStatus verification");
 };

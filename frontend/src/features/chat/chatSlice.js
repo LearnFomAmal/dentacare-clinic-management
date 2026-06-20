@@ -138,23 +138,41 @@ const chatSlice = createSlice({
     },
 
     updateChatFromSocket: (state, action) => {
-      const chat = action.payload;
+  const chat = action.payload;
 
-      if (!chat?._id) return;
+  if (!chat?._id) return;
 
-      state.currentChat =
-        state.currentChat?._id === chat._id ? chat : state.currentChat;
+  if (state.currentChat?._id === chat._id) {
+    state.currentChat = chat;
+  }
 
-      const existingIndex = state.chats.findIndex(
-        (item) => String(item._id) === String(chat._id)
-      );
+  const existingIndex = state.chats.findIndex(
+    (item) => String(item._id) === String(chat._id)
+  );
 
-      if (existingIndex >= 0) {
-        state.chats[existingIndex] = chat;
-      } else {
-        state.chats.unshift(chat);
-      }
-    },
+  if (existingIndex >= 0) {
+    state.chats.splice(existingIndex, 1);
+  }
+
+  state.chats.unshift(chat);
+},
+    markMessagesReadFromSocket: (state, action) => {
+  const readerRole = action.payload?.readerRole;
+
+  if (!readerRole) return;
+
+  state.messages = state.messages.map((message) => {
+    if (message.receiverRole === readerRole) {
+      return {
+        ...message,
+        isRead: true,
+        readAt: message.readAt || new Date().toISOString(),
+      };
+    }
+
+    return message;
+  });
+},
   },
 
   extraReducers: (builder) => {
@@ -253,6 +271,7 @@ export const {
   addRealtimeMessage,
   clearChatError,
   clearCurrentChat,
+  markMessagesReadFromSocket,
   setCurrentChatFromSocket,
   updateChatFromSocket,
 } = chatSlice.actions;

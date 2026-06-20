@@ -1,8 +1,46 @@
 import { Gift, Megaphone, TicketPercent } from "lucide-react";
 
+const formatDate = (value) => {
+  if (!value) return "";
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) return "";
+
+  return date.toLocaleDateString("en-IN", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  });
+};
+
+const getBannerValidityText = (banner) => {
+  const coupon = banner?.coupon || banner?.couponId || null;
+
+  const validFrom =
+    coupon?.validFrom || banner?.couponValidFrom || banner?.startDate || "";
+
+  const validTo =
+    coupon?.validTo || banner?.couponValidTo || banner?.endDate || "";
+
+  const fromText = formatDate(validFrom);
+  const toText = formatDate(validTo);
+
+  if (fromText && toText) {
+    return `Valid ${fromText} - ${toText}`;
+  }
+
+  if (toText) {
+    return `Valid till ${toText}`;
+  }
+
+  return "";
+};
+
 function BannerCard({ banner, onClick, compact = false }) {
   const isReferral = banner.type === "referral";
   const Icon = isReferral ? Gift : TicketPercent;
+  const validityText = getBannerValidityText(banner);
 
   return (
     <article
@@ -24,11 +62,11 @@ function BannerCard({ banner, onClick, compact = false }) {
         className="absolute inset-0 h-full w-full object-cover transition duration-500 group-hover:scale-105"
       />
 
-      <div className="absolute inset-0 bg-gradient-to-r from-[#111827]/78 via-[#111827]/45 to-transparent" />
+      <div className="absolute inset-0 bg-gradient-to-r from-[#111827]/82 via-[#111827]/52 to-transparent" />
 
-      <div className="relative z-10 flex h-full max-w-[70%] flex-col justify-between p-6">
+      <div className="relative z-10 flex h-full max-w-[74%] flex-col justify-between p-6">
         <div>
-          <div className="mb-4 inline-flex items-center gap-2 rounded-full bg-white/95 px-3 py-1.5 text-xs font-extrabold uppercase tracking-[0.8px] text-[#9381FF]">
+          <div className="mb-3 inline-flex items-center gap-2 rounded-full bg-white/95 px-3 py-1.5 text-xs font-extrabold uppercase tracking-[0.8px] text-[#9381FF]">
             <Icon size={15} />
             {isReferral ? "Referral Reward" : "Specialty Offer"}
           </div>
@@ -38,8 +76,14 @@ function BannerCard({ banner, onClick, compact = false }) {
           </h3>
 
           {banner.description && (
-            <p className="mt-2 line-clamp-2 text-sm font-medium leading-6 text-white/85">
+            <p className="mt-2 line-clamp-2 text-sm font-medium leading-6 text-white/90">
               {banner.description}
+            </p>
+          )}
+
+          {!isReferral && validityText && (
+            <p className="mt-2 inline-flex rounded-full bg-white/15 px-3 py-1 text-xs font-extrabold text-white ring-1 ring-white/25">
+              {validityText}
             </p>
           )}
         </div>

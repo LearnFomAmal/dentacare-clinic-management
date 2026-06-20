@@ -8,7 +8,12 @@ import {
   uploadBookingReportApi,
   uploadDoctorPrescriptionApi,
 } from "./reportService";
-
+const normalizeList = (data, key) => {
+  if (Array.isArray(data)) return data;
+  if (Array.isArray(data?.[key])) return data[key];
+  if (Array.isArray(data?.data)) return data.data;
+  return [];
+};
 const getErrorMessage = (error, fallback) => {
   return (
     error?.response?.data?.message ||
@@ -41,7 +46,7 @@ export const fetchDraftReports = createAsyncThunk(
     try {
       const response = await getDraftReportsApi();
 
-      return response.data || [];
+      return normalizeList(response.data, "reports");
     } catch (error) {
       return rejectWithValue(
         getErrorMessage(error, "Failed to fetch reports")
@@ -95,7 +100,7 @@ export const fetchPatientAppointmentReports = createAsyncThunk(
     try {
       const response = await getPatientAppointmentReportsApi(appointmentId);
 
-      return response.data || [];
+     return normalizeList(response.data, "reports"); 
     } catch (error) {
       return rejectWithValue(
         getErrorMessage(error, "Failed to fetch appointment reports")
@@ -110,7 +115,7 @@ export const fetchDoctorAppointmentReports = createAsyncThunk(
     try {
       const response = await getDoctorAppointmentReportsApi(appointmentId);
 
-      return response.data || [];
+      return normalizeList(response.data, "reports");
     } catch (error) {
       return rejectWithValue(
         getErrorMessage(error, "Failed to fetch appointment reports")

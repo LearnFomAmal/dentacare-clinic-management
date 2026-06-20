@@ -25,13 +25,75 @@ import {
   updateCouponStatus,
 } from "../../features/coupon/couponSlice";
 
+const getCouponStatus = (coupon) => {
+  const now = new Date();
+
+  if (coupon.computedStatus && coupon.computedStatusLabel) {
+    return {
+      status: coupon.computedStatus,
+      label: coupon.computedStatusLabel,
+    };
+  }
+
+  if (!coupon.isActive) {
+    return {
+      status: "inactive",
+      label: "Inactive",
+    };
+  }
+
+  if (coupon.validFrom && new Date(coupon.validFrom) > now) {
+    return {
+      status: "upcoming",
+      label: "Upcoming",
+    };
+  }
+
+  if (coupon.validTo && new Date(coupon.validTo) < now) {
+    return {
+      status: "expired",
+      label: "Expired",
+    };
+  }
+
+  if (
+    Number(coupon.maxUsage || 0) > 0 &&
+    Number(coupon.usedCount || 0) >= Number(coupon.maxUsage || 0)
+  ) {
+    return {
+      status: "usage_finished",
+      label: "Global Usage Finished",
+    };
+  }
+
+  return {
+    status: "active",
+    label: "Active",
+  };
+};
+
 const getCouponStatusClass = (coupon) => {
-  if (coupon.isActive) {
+  const { status } = getCouponStatus(coupon);
+
+  if (status === "active") {
     return "border-green-200 bg-green-50 text-green-700";
   }
 
-  return "border-red-200 bg-red-50 text-red-700";
+  if (status === "upcoming") {
+    return "border-blue-200 bg-blue-50 text-blue-700";
+  }
+
+  if (status === "expired") {
+    return "border-red-200 bg-red-50 text-red-700";
+  }
+
+  if (status === "usage_finished") {
+    return "border-orange-200 bg-orange-50 text-orange-700";
+  }
+
+  return "border-slate-200 bg-slate-100 text-slate-700";
 };
+
 
 const formatDate = (value) => {
   if (!value) return "N/A";
@@ -165,8 +227,11 @@ function AdminCouponsPage() {
             className="h-12 rounded-2xl border border-[#E5E7EB] bg-white px-4 text-sm font-bold text-[#374151] outline-none dark:border-slate-800 dark:bg-slate-900 dark:text-slate-100"
           >
             <option value="">All Status</option>
-            <option value="active">Active Only</option>
-            <option value="inactive">Inactive Only</option>
+            <option value="active">Active</option>
+            <option value="inactive">Inactive</option>
+            <option value="upcoming">Upcoming</option>
+            <option value="expired">Expired</option>
+            <option value="usage_finished">Usage Finished</option>
           </select>
         </section>
 
@@ -197,7 +262,7 @@ function AdminCouponsPage() {
                     <th className="px-6 py-4">Coupon</th>
                     <th className="px-6 py-4">Discount</th>
                     <th className="px-6 py-4">Specialty</th>
-                    <th className="px-6 py-4">Usage</th>
+                    <th className="px-6 py-4">Global Usage</th>
                     <th className="px-6 py-4">Validity</th>
                     <th className="px-6 py-4">Status</th>
                     <th className="px-6 py-4 text-right">Actions</th>
@@ -246,8 +311,8 @@ function AdminCouponsPage() {
                         </p>
 
                         <p className="mt-1 text-xs text-[#6B7280]">
-                          Per user: {coupon.maxUsagePerUser}
-                        </p>
+  Per patient limit: {coupon.maxUsagePerUser}
+</p>
                       </td>
 
                       <td className="px-6 py-5">
@@ -266,7 +331,7 @@ function AdminCouponsPage() {
                             coupon
                           )}`}
                         >
-                          {coupon.isActive ? "Active" : "Inactive"}
+                          {getCouponStatus(coupon).label}
                         </span>
                       </td>
 

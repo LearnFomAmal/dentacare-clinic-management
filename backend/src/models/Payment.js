@@ -6,7 +6,7 @@ const paymentSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: "Appointment",
       required: true,
-      index: true,
+      
     },
 
     patientId: {
@@ -96,7 +96,7 @@ const paymentSchema = new mongoose.Schema(
         type: String,
         default: "",
         trim: true,
-        index: true,
+        
       },
 
       paymentId: {
@@ -137,6 +137,47 @@ const paymentSchema = new mongoose.Schema(
     },
   },
   { timestamps: true }
+);
+
+
+paymentSchema.index(
+  {
+    appointmentId: 1,
+  },
+  {
+    unique: true,
+    partialFilterExpression: {
+      status: "paid",
+    },
+  }
+);
+
+paymentSchema.index(
+  {
+    "razorpay.paymentId": 1,
+  },
+  {
+    unique: true,
+    partialFilterExpression: {
+      "razorpay.paymentId": {
+        $gt: "",
+      },
+    },
+  }
+);
+
+paymentSchema.index(
+  {
+    "razorpay.orderId": 1,
+  },
+  {
+    unique: true,
+    partialFilterExpression: {
+      "razorpay.orderId": {
+        $gt: "",
+      },
+    },
+  }
 );
 
 const Payment = mongoose.model("Payment", paymentSchema);

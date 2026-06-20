@@ -3,6 +3,8 @@ import {
   ArrowLeft,
   Ban,
   BriefcaseBusiness,
+  CheckCircle2,
+  FileText,
   GraduationCap,
   Mail,
   Phone,
@@ -11,10 +13,12 @@ import {
   UserRound,
   Wallet,
   Star,
+  XCircle,
 } from "lucide-react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import toast from "react-hot-toast";
-
+import axiosInstance from "../../api/axios";
+import { API_ENDPOINTS } from "../../api/endpoints";
 import DashboardLayout from "../../components/layout/DashboardLayout";
 import SettingsSection from "../../components/common/SettingsSection";
 import ConfirmModal from "../../components/ui/ConfirmModal";
@@ -38,7 +42,11 @@ function AdminDoctorDetailsPage() {
     open: false,
     action: null,
   });
-
+const [approveModal, setApproveModal] = useState(false);
+const [rejectModal, setRejectModal] = useState(false);
+const [rejectionReason, setRejectionReason] = useState("");
+const [blockDoctorOnReject, setBlockDoctorOnReject] = useState(false);
+const [isUpdatingVerification, setIsUpdatingVerification] = useState(false);
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
 
   const fetchDoctorDetails = async () => {
@@ -141,7 +149,90 @@ function AdminDoctorDetailsPage() {
   const getEditFeePath = () => {
     return ROUTES.ADMIN_EDIT_DOCTOR_FEE.replace(":id", id);
   };
-  
+  const verificationStatus =
+  doctor?.verification?.status || "not_submitted";
+
+const hasAllVerificationDocuments =
+  doctor?.documents?.educationCertificate?.url &&
+  doctor?.documents?.qualificationCertificate?.url &&
+  doctor?.documents?.registrationCertificate?.url;
+
+const canApproveVerification =
+  verificationStatus === "pending" &&
+  hasAllVerificationDocuments &&
+  doctor?.accountStatus?.isEmailVerified;
+
+const canRejectVerification = verificationStatus === "pending";
+  const handleApproveVerification = async () => {
+  if (!doctor?._id) return;
+
+  try {
+    setIsUpdatingVerification(true);
+
+    const response = await axiosInstance.patch(
+      API_ENDPOINTS.DOCTOR.ADMIN_APPROVE_VERIFICATION(doctor._id)
+    );
+
+    toast.success(
+      response?.data?.message ||
+        "Doctor verification approved successfully"
+    );
+
+    setApproveModal(false);
+    await fetchDoctorDetails();
+  } catch (error) {
+    const message =
+      error?.response?.data?.message ||
+      error?.message ||
+      "Failed to approve doctor verification";
+
+    toast.error(message);
+  } finally {
+    setIsUpdatingVerification(false);
+  }
+};
+
+const handleRejectVerification = async () => {
+  if (!doctor?._id) return;
+
+  if (!rejectionReason.trim()) {
+    toast.error("Rejection reason is required");
+    return;
+  }
+
+  try {
+    setIsUpdatingVerification(true);
+
+    const response = await axiosInstance.patch(
+      API_ENDPOINTS.DOCTOR.ADMIN_REJECT_VERIFICATION(doctor._id),
+      {
+        rejectionReason: rejectionReason.trim(),
+        blockDoctor: blockDoctorOnReject,
+      }
+    );
+
+    toast.success(
+      response?.data?.message ||
+        "Doctor verification rejected successfully"
+    );
+
+    setRejectModal(false);
+    setRejectionReason("");
+    setBlockDoctorOnReject(false);
+
+    await fetchDoctorDetails();
+  } catch (error) {
+    const message =
+      error?.response?.data?.message ||
+      error?.message ||
+      "Failed to reject doctor verification";
+
+    toast.error(message);
+  } finally {
+    setIsUpdatingVerification(false);
+  }
+};
+
   if (isLoading) {
     return (
       <DashboardLayout title="Doctor Details">
@@ -154,103 +245,143 @@ function AdminDoctorDetailsPage() {
     );
   }
 
-  return (
-    <DashboardLayout title="Doctor Details">
-      <div className="mb-6">
-        <Link
-          to={ROUTES.ADMIN_DOCTORS}
-          className="inline-flex items-center gap-2 text-sm font-bold text-[#4C59A6] hover:underline"
-        >
-          <ArrowLeft size={16} />
-          Back to doctors
-        </Link>
-      </div>
+   return (
+  <DashboardLayout title="Doctor Details">
+    <div className="mb-6">
+      <Link
+        to={ROUTES.ADMIN_DOCTORS}
+        className="inline-flex items-center gap-2 text-sm font-bold text-[#4C59A6] hover:underline"
+      >
+        <ArrowLeft size={16} />
+        Back to doctors
+      </Link>
+    </div>
 
-      <div className="grid gap-6 xl:grid-cols-[1fr_0.8fr]">
-        <SettingsSection
-          title="Doctor Profile"
-          description="Doctor professional and contact information."
-        >
-          <div className="mb-8 flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex items-center gap-4">
-              <div className="flex h-16 w-16 items-center justify-center rounded-3xl bg-[#B8B8FF]/40 text-[#4C59A6]">
-                <Stethoscope size={30} />
+    <div className="space-y-6">
+      <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1.15fr)_minmax(380px,0.85fr)]">
+        {/* LEFT COLUMN */}
+        <div className="space-y-6">
+          <SettingsSection
+            title="Doctor Profile"
+            description="Doctor professional and contact information."
+          >
+            <div className="mb-6 flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex min-w-0 items-center gap-4">
+                <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-3xl bg-[#B8B8FF]/40 text-[#4C59A6]">
+                  <Stethoscope size={30} />
+                </div>
+
+                <div className="min-w-0">
+                  <h2 className="truncate font-manrope text-2xl font-extrabold text-[#2D333B]">
+                    {doctor?.name || "Doctor"}
+                  </h2>
+
+                  <p className="truncate text-sm text-[#595F69]">
+                    {doctor?.email || "No email available"}
+                  </p>
+                </div>
               </div>
 
-              <div>
-                <h2 className="font-manrope text-2xl font-extrabold text-[#2D333B]">
-                  {doctor?.name || "Doctor"}
-                </h2>
+              <div className="flex shrink-0 flex-wrap gap-3">
+                <Link
+                  to={getEditFeePath()}
+                  className="rounded-3xl bg-[#4C59A6] px-5 py-3 text-sm font-bold text-white transition hover:bg-[#404b91]"
+                >
+                  Edit Fee
+                </Link>
 
-                <p className="text-sm text-[#595F69]">
-                  {doctor?.email || "No email available"}
-                </p>
+                <button
+                  type="button"
+                  onClick={openStatusModal}
+                  className={`rounded-3xl px-5 py-3 text-sm font-bold transition ${
+                    doctor?.accountStatus?.isBlocked
+                      ? "bg-green-50 text-green-600 hover:bg-green-100"
+                      : "bg-red-50 text-red-600 hover:bg-red-100"
+                  }`}
+                >
+                  {doctor?.accountStatus?.isBlocked
+                    ? "Unblock Doctor"
+                    : "Block Doctor"}
+                </button>
               </div>
             </div>
 
-            <div className="flex flex-wrap gap-3">
-              <Link
-                to={getEditFeePath()}
-                className="rounded-3xl bg-[#4C59A6] px-5 py-3 text-sm font-bold text-white transition hover:bg-[#404b91]"
-              >
-                Edit Fee
-              </Link>
+            <div className="grid gap-4 md:grid-cols-2">
+              <DetailCard
+                icon={Mail}
+                label="Email"
+                value={doctor?.email || "Not available"}
+              />
 
-              <button
-                type="button"
-                onClick={openStatusModal}
-                className={`rounded-3xl px-5 py-3 text-sm font-bold transition ${
-                  doctor?.accountStatus?.isBlocked
-                    ? "bg-green-50 text-green-600 hover:bg-green-100"
-                    : "bg-red-50 text-red-600 hover:bg-red-100"
-                }`}
-              >
-                {doctor?.accountStatus?.isBlocked
-                  ? "Unblock Doctor"
-                  : "Block Doctor"}
-              </button>
+              <DetailCard
+                icon={Phone}
+                label="Phone"
+                value={doctor?.phone || "Not available"}
+              />
+
+              <DetailCard
+                icon={Stethoscope}
+                label="Specialty"
+                value={
+                  doctor?.specialization?.displayName ||
+                  doctor?.specialization?.name ||
+                  "Not assigned"
+                }
+              />
+
+              <DetailCard
+                icon={BriefcaseBusiness}
+                label="Experience"
+                value={`${doctor?.experience ?? 0} years`}
+              />
+
+              <DetailCard
+                icon={GraduationCap}
+                label="Education"
+                value={doctor?.education || "Not available"}
+              />
+
+              <DetailCard
+                icon={Wallet}
+                label="Consultation Fee"
+                value={`₹${doctor?.consultationFee ?? 0}`}
+              />
             </div>
-          </div>
+          </SettingsSection>
 
-          <div className="grid gap-4 md:grid-cols-2">
-            <DetailCard
-              icon={Mail}
-              label="Email"
-              value={doctor?.email || "Not available"}
-            />
+          <SettingsSection
+            title="Profile Stats"
+            description="Current doctor activity summary."
+          >
+            <div className="grid gap-4 md:grid-cols-2">
+              <DetailCard
+                icon={Star}
+                label="Average Rating"
+                value={`${doctor?.stats?.averageRating || 0} / 5`}
+              />
 
-            <DetailCard
-              icon={Phone}
-              label="Phone"
-              value={doctor?.phone || "Not available"}
-            />
+              <DetailCard
+                icon={ShieldCheck}
+                label="Total Reviews"
+                value={doctor?.stats?.totalReviews || 0}
+              />
 
-            <DetailCard
-              icon={Stethoscope}
-              label="Specialty"
-              value={doctor?.specialization?.name || "Not assigned"}
-            />
+              <DetailCard
+                icon={UserRound}
+                label="Total Patients"
+                value={doctor?.stats?.totalPatients || 0}
+              />
 
-            <DetailCard
-              icon={BriefcaseBusiness}
-              label="Experience"
-              value={`${doctor?.experience ?? 0} years`}
-            />
+              <DetailCard
+                icon={BriefcaseBusiness}
+                label="Total Appointments"
+                value={doctor?.stats?.totalAppointments || 0}
+              />
+            </div>
+          </SettingsSection>
+        </div>
 
-            <DetailCard
-              icon={GraduationCap}
-              label="Education"
-              value={doctor?.education || "Not available"}
-            />
-
-            <DetailCard
-              icon={Wallet}
-              label="Consultation Fee"
-              value={`₹${doctor?.consultationFee ?? 0}`}
-            />
-          </div>
-        </SettingsSection>
-
+        {/* RIGHT COLUMN */}
         <div className="space-y-6">
           <SettingsSection
             title="Account Status"
@@ -258,8 +389,18 @@ function AdminDoctorDetailsPage() {
           >
             <div className="space-y-4 text-sm">
               <StatusRow
-                label="Verified"
+                label="Email Verified"
+                value={doctor?.accountStatus?.isEmailVerified ? "Yes" : "No"}
+              />
+
+              <StatusRow
+                label="Professional Verified"
                 value={doctor?.accountStatus?.isVerified ? "Yes" : "No"}
+              />
+
+              <StatusRow
+                label="Verification Status"
+                value={doctor?.verification?.status || "not_submitted"}
               />
 
               <StatusRow
@@ -276,97 +417,239 @@ function AdminDoctorDetailsPage() {
 
               <StatusRow
                 label="Must Change Password"
-                value={
-                  doctor?.accountStatus?.mustChangePassword ? "Yes" : "No"
-                }
+                value={doctor?.accountStatus?.mustChangePassword ? "Yes" : "No"}
               />
             </div>
           </SettingsSection>
 
           <SettingsSection
-            title="Profile Stats"
-            description="Current doctor activity summary."
-          >
-            <div className="grid gap-4">
-            <DetailCard
-               icon={Star}
-                 label="Average Rating"
-                value={`${doctor?.stats?.averageRating || 0} / 5`}
-             />
-
-            <DetailCard
-             icon={ShieldCheck}
-            label="Total Reviews"
-            value={doctor?.stats?.totalReviews || 0}
-             />
-
-              <DetailCard
-                icon={UserRound}
-                label="Total Patients"
-                value={doctor?.stats?.totalPatients || 0}
-              />
-
-              <DetailCard
-                icon={BriefcaseBusiness}
-                label="Total Appointments"
-                value={doctor?.stats?.totalAppointments || 0}
-              />
-            </div>
-          </SettingsSection>
-
-          <SettingsSection
-  title="Doctor Reviews"
-  description="View and moderate reviews submitted for this doctor."
+  title="Verification Action"
+  description="Approve or reject doctor professional verification."
 >
-  <div className="rounded-2xl bg-[#F8FAFC] p-5">
-    <p className="flex items-center gap-2 text-2xl font-extrabold text-[#111827]">
-      <Star size={22} fill="currentColor" className="text-[#F59E0B]" />
-      {doctor?.stats?.averageRating || 0}
-    </p>
+  <div className="space-y-4">
+    <div className="rounded-2xl bg-[#F8FAFC] p-4 text-sm font-semibold text-[#374151]">
+      <p>
+        Current status:{" "}
+        <span className="font-extrabold capitalize text-[#4C59A6]">
+          {verificationStatus.replace("_", " ")}
+        </span>
+      </p>
 
-    <p className="mt-1 text-sm font-bold text-[#6B7280]">
-      Based on {doctor?.stats?.totalReviews || 0} approved reviews.
-    </p>
+      {!hasAllVerificationDocuments && (
+        <p className="mt-2 text-red-600">
+          Doctor has not uploaded all required documents.
+        </p>
+      )}
 
-    <Link
-      to={`${ROUTES.ADMIN_REVIEWS}?doctorId=${doctor?._id}`}
-      className="mt-4 inline-flex h-11 items-center justify-center rounded-2xl bg-[#9381FF] px-5 text-sm font-extrabold text-white transition hover:bg-[#7E6EF2]"
-    >
-      Manage Doctor Reviews
-    </Link>
+      {verificationStatus === "pending" && (
+        <p className="mt-2 text-orange-700">
+          Review all certificates before approving.
+        </p>
+      )}
+
+      {verificationStatus === "approved" && (
+        <p className="mt-2 text-green-700">
+          This doctor is already professionally verified. No verification action is available.
+        </p>
+      )}
+
+      {verificationStatus === "rejected" && (
+        <p className="mt-2 text-red-700">
+          This verification request was rejected. Doctor can re-upload documents.
+        </p>
+      )}
+
+      {verificationStatus === "not_submitted" && (
+        <p className="mt-2 text-blue-700">
+          Doctor has not submitted verification documents yet.
+        </p>
+      )}
+    </div>
+
+    {verificationStatus === "pending" && (
+      <div className="grid gap-3 sm:grid-cols-2">
+        <button
+          type="button"
+          disabled={!canApproveVerification || isUpdatingVerification}
+          onClick={() => setApproveModal(true)}
+          className="inline-flex h-11 items-center justify-center gap-2 rounded-2xl bg-green-600 px-4 text-sm font-extrabold text-white transition hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          <CheckCircle2 size={17} />
+          Approve
+        </button>
+
+        <button
+          type="button"
+          disabled={!canRejectVerification || isUpdatingVerification}
+          onClick={() => setRejectModal(true)}
+          className="inline-flex h-11 items-center justify-center gap-2 rounded-2xl bg-red-600 px-4 text-sm font-extrabold text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          <XCircle size={17} />
+          Reject
+        </button>
+      </div>
+    )}
   </div>
 </SettingsSection>
+
+          <SettingsSection
+            title="Verification Documents"
+            description="Certificates uploaded by doctor for admin approval."
+          >
+            <div className="space-y-3 text-sm">
+              <DocumentLink
+                label="Education Certificate"
+                url={doctor?.documents?.educationCertificate?.url}
+              />
+
+              <DocumentLink
+                label="Qualification Certificate"
+                url={doctor?.documents?.qualificationCertificate?.url}
+              />
+
+              <DocumentLink
+                label="Registration Certificate"
+                url={doctor?.documents?.registrationCertificate?.url}
+              />
+
+              {doctor?.verification?.rejectionReason && (
+                <p className="rounded-2xl bg-red-50 p-4 text-sm font-semibold text-red-600">
+                  Rejection Reason: {doctor.verification.rejectionReason}
+                </p>
+              )}
+            </div>
+          </SettingsSection>
+
+          <SettingsSection
+            title="Doctor Reviews"
+            description="View and moderate reviews submitted for this doctor."
+          >
+            <div className="rounded-2xl bg-[#F8FAFC] p-5">
+              <p className="flex items-center gap-2 text-2xl font-extrabold text-[#111827]">
+                <Star
+                  size={22}
+                  fill="currentColor"
+                  className="text-[#F59E0B]"
+                />
+                {doctor?.stats?.averageRating || 0}
+              </p>
+
+              <p className="mt-1 text-sm font-bold text-[#6B7280]">
+                Based on {doctor?.stats?.totalReviews || 0} approved reviews.
+              </p>
+
+              <Link
+                to={`${ROUTES.ADMIN_REVIEWS}?doctorId=${doctor?._id}`}
+                className="mt-4 inline-flex h-11 items-center justify-center rounded-2xl bg-[#9381FF] px-5 text-sm font-extrabold text-white transition hover:bg-[#7E6EF2]"
+              >
+                Manage Doctor Reviews
+              </Link>
+            </div>
+          </SettingsSection>
         </div>
       </div>
-     <DoctorEarningsSection
-  earnings={earnings}
-  isLoading={isLoadingEarnings}
-/>
-      <ConfirmModal
-        open={statusModal.open}
-        title={
-          statusModal.action === "block"
-            ? "Block Doctor?"
-            : "Unblock Doctor?"
-        }
-        description={`Are you sure you want to ${
-          statusModal.action === "block" ? "block" : "unblock"
-        } "${doctor?.name || "this doctor"}"?`}
-        confirmText={
-          statusModal.action === "block" ? "Block" : "Unblock"
-        }
-        danger={statusModal.action === "block"}
-        loading={isUpdatingStatus}
-        onConfirm={confirmStatusChange}
-        onCancel={closeStatusModal}
+
+      <DoctorEarningsSection
+        earnings={earnings}
+        isLoading={isLoadingEarnings}
       />
-    </DashboardLayout>
+    </div>
+
+    <ConfirmModal
+      open={statusModal.open}
+      title={
+        statusModal.action === "block"
+          ? "Block Doctor?"
+          : "Unblock Doctor?"
+      }
+      description={`Are you sure you want to ${
+        statusModal.action === "block" ? "block" : "unblock"
+      } "${doctor?.name || "this doctor"}"?`}
+      confirmText={statusModal.action === "block" ? "Block" : "Unblock"}
+      danger={statusModal.action === "block"}
+      loading={isUpdatingStatus}
+      onConfirm={confirmStatusChange}
+      onCancel={closeStatusModal}
+    />
+
+    <ConfirmModal
+      open={approveModal}
+      title="Approve Doctor Verification?"
+      description={`Are you sure you want to approve "${
+        doctor?.name || "this doctor"
+      }"? The doctor will be able to manage slots and receive appointments.`}
+      confirmText="Approve"
+      loading={isUpdatingVerification}
+      onConfirm={handleApproveVerification}
+      onCancel={() => setApproveModal(false)}
+    />
+
+    {rejectModal && (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+        <div className="w-full max-w-lg rounded-3xl bg-white p-6 shadow-xl">
+          <h2 className="text-xl font-extrabold text-[#111827]">
+            Reject Doctor Verification
+          </h2>
+
+          <p className="mt-2 text-sm leading-6 text-[#6B7280]">
+            Add a clear rejection reason. The doctor can re-upload documents
+            unless you also block the account.
+          </p>
+
+          <textarea
+            value={rejectionReason}
+            onChange={(event) => setRejectionReason(event.target.value)}
+            rows={5}
+            placeholder="Enter rejection reason..."
+            className="mt-5 w-full rounded-2xl border border-[#E5E7EB] p-4 text-sm font-semibold text-[#374151] outline-none transition focus:border-[#4C59A6] focus:ring-4 focus:ring-[#4C59A6]/10"
+          />
+
+          <label className="mt-4 flex cursor-pointer items-center gap-3 text-sm font-bold text-[#374151]">
+            <input
+              type="checkbox"
+              checked={blockDoctorOnReject}
+              onChange={(event) =>
+                setBlockDoctorOnReject(event.target.checked)
+              }
+              className="h-4 w-4"
+            />
+            Block this doctor account also
+          </label>
+
+          <div className="mt-6 flex justify-end gap-3">
+            <button
+              type="button"
+              onClick={() => {
+                setRejectModal(false);
+                setRejectionReason("");
+                setBlockDoctorOnReject(false);
+              }}
+              disabled={isUpdatingVerification}
+              className="h-11 rounded-2xl border border-[#E5E7EB] px-5 text-sm font-extrabold text-[#6B7280]"
+            >
+              Cancel
+            </button>
+
+            <button
+              type="button"
+              onClick={handleRejectVerification}
+              disabled={isUpdatingVerification}
+              className="h-11 rounded-2xl bg-red-600 px-5 text-sm font-extrabold text-white transition hover:bg-red-700 disabled:opacity-60"
+            >
+              {isUpdatingVerification ? "Rejecting..." : "Reject"}
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+  </DashboardLayout>
+
   );
 }
 
 function DetailCard({ icon: Icon, label, value }) {
   return (
-    <div className="rounded-2xl border border-[rgba(172,178,189,0.15)] bg-[#F8FAFC] p-5">
+    <div className="min-h-[128px] rounded-2xl border border-[rgba(172,178,189,0.15)] bg-[#F8FAFC] p-5">
       <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-2xl bg-[#B8B8FF]/40 text-[#4C59A6]">
         <Icon size={20} />
       </div>
@@ -375,7 +658,7 @@ function DetailCard({ icon: Icon, label, value }) {
         {label}
       </p>
 
-      <p className="mt-1 break-words font-semibold text-[#2D333B]">
+      <p className="mt-1 break-words text-base font-extrabold text-[#2D333B]">
         {value}
       </p>
     </div>
@@ -571,5 +854,24 @@ function AdminDoctorTransactionRow({ transaction }) {
     </tr>
   );
 }
+function DocumentLink({ label, url }) {
+  return (
+    <div className="flex items-center justify-between rounded-2xl bg-[#F8FAFC] p-4">
+      <span className="font-bold text-[#374151]">{label}</span>
 
+      {url ? (
+        <a
+          href={url}
+          target="_blank"
+          rel="noreferrer"
+          className="font-bold text-[#4C59A6] hover:underline"
+        >
+          View
+        </a>
+      ) : (
+        <span className="text-[#9CA3AF]">Not uploaded</span>
+      )}
+    </div>
+  );
+}
 export default AdminDoctorDetailsPage;

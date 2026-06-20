@@ -98,7 +98,7 @@ function MyChatsPage() {
           </h2>
 
           <p className="mt-2 text-sm text-[#6B7280]">
-            Chats will appear here after opening an approved appointment chat.
+          Chats will appear here after an appointment is approved. Completed or cancelled appointment chats stay visible as read-only history.
           </p>
         </div>
       ) : (

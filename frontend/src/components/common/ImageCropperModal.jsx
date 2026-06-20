@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Cropper from "react-easy-crop";
 import { RotateCcw, X } from "lucide-react";
 import toast from "react-hot-toast";
@@ -26,7 +26,18 @@ function ImageCropperModal({
   const [rotation, setRotation] = useState(0);
   const [croppedAreaPixels, setCroppedAreaPixels] = useState(null);
   const [isCropping, setIsCropping] = useState(false);
+  useEffect(() => {
+  if (!open) return;
 
+  setCrop({
+    x: 0,
+    y: 0,
+  });
+
+  setZoom(1);
+  setRotation(0);
+  setCroppedAreaPixels(null);
+}, [open, imageSrc]);
   const handleCropComplete = useCallback((_, croppedPixels) => {
     setCroppedAreaPixels(croppedPixels);
   }, []);

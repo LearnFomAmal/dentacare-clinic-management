@@ -1,28 +1,35 @@
 import Doctor from "../../models/Doctor.js";
 
-export const createDoctor = (payload) =>{
-  return Doctor.create(payload)
-}
+export const createDoctor = (payload) => {
+  return Doctor.create(payload);
+};
 
-export const findDoctorByEmail = (email) =>{
-    return Doctor.findOne({email})
-}
+export const findDoctorByEmail = (email) => {
+  return Doctor.findOne({
+    email,
+  });
+};
 
-export const findDoctorByEmailWithPassword = (email) =>{
-    return Doctor.findOne({email}).select("+password")
-}
+export const findDoctorByEmailWithPassword = (email) => {
+  return Doctor.findOne({
+    email,
+  }).select("+password");
+};
 
-export const findDoctorById = (doctorId) =>{
-  return Doctor.findById(doctorId)
-}
+export const findDoctorById = (doctorId) => {
+  return Doctor.findById(doctorId);
+};
 
-export const updateDoctorById = (doctorId,payload) => {
-    return Doctor.findByIdAndUpdate(doctorId,payload,{
-  new: true,
-  runValidators: true,
-}
-)
-}
+export const findDoctorByIdWithPassword = (doctorId) => {
+  return Doctor.findById(doctorId).select("+password");
+};
+
+export const updateDoctorById = (doctorId, payload) => {
+  return Doctor.findByIdAndUpdate(doctorId, payload, {
+    new: true,
+    runValidators: true,
+  }).select("-password");
+};
 
 export const softDeleteDoctorById = (doctorId) => {
   return Doctor.findByIdAndUpdate(
@@ -31,9 +38,10 @@ export const softDeleteDoctorById = (doctorId) => {
       "accountStatus.isDeleted": true,
     },
     {
-      returnDocument: "after",
+      new: true,
+      runValidators: true,
     }
-  );
+  ).select("-password");
 };
 
 export const blockDoctorById = (doctorId) => {
@@ -43,9 +51,10 @@ export const blockDoctorById = (doctorId) => {
       "accountStatus.isBlocked": true,
     },
     {
-      returnDocument: "after",
+      new: true,
+      runValidators: true,
     }
-  );
+  ).select("-password");
 };
 
 export const unblockDoctorById = (doctorId) => {
@@ -55,59 +64,65 @@ export const unblockDoctorById = (doctorId) => {
       "accountStatus.isBlocked": false,
     },
     {
-      returnDocument: "after",
+      new: true,
+      runValidators: true,
     }
-  );
+  ).select("-password");
 };
 
-
-// GET ALL DOCTORS
-
-
+// ==============================
+// ADMIN GET ALL DOCTORS
+// ==============================
 export const getAllDoctors = async (filters, options) => {
   const query = {
     "accountStatus.isDeleted": false,
   };
 
-  // 🔍 SPECIALIZATION
- if (filters.specialization) {
-  query["specialization.specialtyId"] = filters.specialization;
-}
+  if (filters.specialization) {
+    query["specialization.specialtyId"] = filters.specialization;
+  }
 
-  // 🔍 EXPERIENCE (min experience filter)
   if (filters.experience) {
-    query["professionalInfo.experience"] = { $gte: Number(filters.experience) };
+    query["professionalInfo.experience"] = {
+      $gte: Number(filters.experience),
+    };
   }
 
-  // 🔍 RATING (min rating filter)
   if (filters.rating) {
-    query["stats.averageRating"] = { $gte: Number(filters.rating) };
+    query["stats.averageRating"] = {
+      $gte: Number(filters.rating),
+    };
   }
 
-  // 🔍 FEE (max fee filter example)
   if (filters.fee) {
-    query["professionalInfo.consultationFee"] = { $lte: Number(filters.fee) };
+    query["professionalInfo.consultationFee"] = {
+      $lte: Number(filters.fee),
+    };
   }
 
-  // 🔍 SEARCH (name)
   if (filters.search) {
-   query.$or = [
-  {
-    firstName: {
-      $regex: filters.search,
-      $options: "i",
-    },
-  },
-  {
-    lastName: {
-      $regex: filters.search,
-      $options: "i",
-    },
-  },
-];
+    query.$or = [
+      {
+        firstName: {
+          $regex: filters.search,
+          $options: "i",
+        },
+      },
+      {
+        lastName: {
+          $regex: filters.search,
+          $options: "i",
+        },
+      },
+      {
+        email: {
+          $regex: filters.search,
+          $options: "i",
+        },
+      },
+    ];
   }
 
-  // 🔒 BLOCK / UNBLOCK
   if (filters.status === "blocked") {
     query["accountStatus.isBlocked"] = true;
   }
@@ -116,32 +131,39 @@ export const getAllDoctors = async (filters, options) => {
     query["accountStatus.isBlocked"] = false;
   }
 
-  // =========================
-  // 📌 PAGINATION LOGIC
-  // =========================
-  const page = options.page;
-  const limit = options.limit;
+  if (filters.verificationStatus) {
+    query["verification.status"] = filters.verificationStatus;
+  }
+
+  if (filters.professionalStatus === "verified") {
+    query["accountStatus.isVerified"] = true;
+  }
+
+  if (filters.professionalStatus === "unverified") {
+    query["accountStatus.isVerified"] = false;
+  }
+
+  const page = Number(options.page) || 1;
+  const limit = Number(options.limit) || 10;
   const skip = (page - 1) * limit;
 
-  // =========================
-  // 📌 SORTING LOGIC
-  // =========================
-  const sortField = options.sortBy;
+  const sortField = options.sortBy || "createdAt";
   const sortOrder = options.order === "asc" ? 1 : -1;
 
   const sort = {
     [sortField]: sortOrder,
   };
 
-  // =========================
-  // 🔥 EXECUTE QUERY
-  // =========================
-  const doctors = await Doctor.find(query)
-    .sort(sort)
-    .skip(skip)
-    .limit(limit);
+  const [doctors, total] = await Promise.all([
+    Doctor.find(query)
+      .select("-password")
+      .sort(sort)
+      .skip(skip)
+      .limit(limit)
+      .lean(),
 
-  const total = await Doctor.countDocuments(query);
+    Doctor.countDocuments(query),
+  ]);
 
   return {
     data: doctors,
@@ -154,25 +176,13 @@ export const getAllDoctors = async (filters, options) => {
   };
 };
 
-export const verifyDoctorById = (doctorId) => {
-  return Doctor.findByIdAndUpdate(
-    doctorId,
-    {
-      "accountStatus.isVerified": true,
-    },
-    {
-      returnDocument: "after",
-    }
-  );
-};
-
-
-
 export const findDoctorDetailsById = async (doctorId) => {
   return Doctor.findOne({
     _id: doctorId,
     "accountStatus.isDeleted": false,
-  }).select("-password");
+  })
+    .select("-password")
+    .lean();
 };
 
 export const updateDoctorConsultationFeeById = async (
@@ -186,6 +196,7 @@ export const updateDoctorConsultationFeeById = async (
     },
     {
       new: true,
+      runValidators: true,
     }
   ).select("-password");
 };
@@ -197,14 +208,131 @@ export const countDoctorsBySpecialtyId = (specialtyId) => {
   });
 };
 
-export const updateDoctorProfileImageById = (
-  doctorId,
-  profileImage
-) => {
+export const updateDoctorProfileImageById = (doctorId, profileImage) => {
   return Doctor.findByIdAndUpdate(
     doctorId,
     {
       "professionalInfo.profileImage": profileImage,
+    },
+    {
+      new: true,
+      runValidators: true,
+    }
+  ).select("-password");
+};
+
+// ==============================
+// DOCTOR VERIFICATION
+// ==============================
+export const findDoctorsForVerification = async ({
+  status,
+  page,
+  limit,
+}) => {
+  const query = {
+    "accountStatus.isDeleted": false,
+  };
+
+  if (status) {
+    query["verification.status"] = status;
+  } else {
+    query["verification.status"] = {
+      $in: ["not_submitted", "pending", "approved", "rejected"],
+    };
+  }
+
+  const skip = (page - 1) * limit;
+
+  const [doctors, total] = await Promise.all([
+    Doctor.find(query)
+      .select("-password")
+      .sort({
+        "verification.submittedAt": -1,
+        createdAt: -1,
+      })
+      .skip(skip)
+      .limit(limit)
+      .lean(),
+
+    Doctor.countDocuments(query),
+  ]);
+
+  return {
+    doctors,
+    pagination: {
+      total,
+      page,
+      pages: Math.ceil(total / limit),
+      limit,
+    },
+  };
+};
+
+export const updateDoctorVerificationDocumentsById = ({
+  doctorId,
+  payload,
+  allowedStatuses = ["not_submitted", "rejected"],
+}) => {
+  return Doctor.findOneAndUpdate(
+    {
+      _id: doctorId,
+      "verification.status": {
+        $in: allowedStatuses,
+      },
+      "accountStatus.isDeleted": false,
+      "accountStatus.isBlocked": false,
+    },
+    payload,
+    {
+      new: true,
+      runValidators: true,
+    }
+  ).select("-password");
+};
+
+export const approveDoctorVerificationById = ({ doctorId, adminId }) => {
+  return Doctor.findOneAndUpdate(
+    {
+      _id: doctorId,
+      "verification.status": "pending",
+      "accountStatus.isDeleted": false,
+      "accountStatus.isBlocked": false,
+    },
+    {
+      "accountStatus.isVerified": true,
+
+      "verification.status": "approved",
+      "verification.reviewedAt": new Date(),
+      "verification.reviewedBy": adminId,
+      "verification.rejectionReason": "",
+    },
+    {
+      new: true,
+      runValidators: true,
+    }
+  ).select("-password");
+};
+
+export const rejectDoctorVerificationById = ({
+  doctorId,
+  adminId,
+  rejectionReason,
+  blockDoctor = false,
+}) => {
+  return Doctor.findOneAndUpdate(
+    {
+      _id: doctorId,
+      "verification.status": "pending",
+      "accountStatus.isDeleted": false,
+    },
+    {
+      "accountStatus.isVerified": false,
+      "accountStatus.isBlocked": Boolean(blockDoctor),
+
+      "verification.status": "rejected",
+      "verification.reviewedAt": new Date(),
+      "verification.reviewedBy": adminId,
+      "verification.rejectionReason": rejectionReason,
     },
     {
       new: true,

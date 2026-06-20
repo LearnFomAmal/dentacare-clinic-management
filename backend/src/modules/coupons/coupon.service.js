@@ -27,6 +27,91 @@ const normalizeCouponCode = (code) => {
   return code.trim().toUpperCase();
 };
 
+const getCouponComputedStatus = (coupon) => {
+  const now = new Date();
+
+  if (!coupon.isActive) {
+    return {
+      computedStatus: "inactive",
+      computedStatusLabel: "Inactive",
+    };
+  }
+
+  if (coupon.validFrom && new Date(coupon.validFrom) > now) {
+    return {
+      computedStatus: "upcoming",
+      computedStatusLabel: "Upcoming",
+    };
+  }
+
+  if (coupon.validTo && new Date(coupon.validTo) < now) {
+    return {
+      computedStatus: "expired",
+      computedStatusLabel: "Expired",
+    };
+  }
+
+  if (
+    Number(coupon.maxUsage || 0) > 0 &&
+    Number(coupon.usedCount || 0) >= Number(coupon.maxUsage || 0)
+  ) {
+    return {
+      computedStatus: "usage_finished",
+      computedStatusLabel: "Usage Finished",
+    };
+  }
+
+  return {
+    computedStatus: "active",
+    computedStatusLabel: "Active",
+  };
+};
+
+const attachCouponComputedStatus = (coupon) => {
+  if (!coupon) return coupon;
+
+  const plainCoupon =
+    typeof coupon.toObject === "function" ? coupon.toObject() : coupon;
+
+  return {
+    ...plainCoupon,
+    ...getCouponComputedStatus(plainCoupon),
+  };
+};
+
+const attachCouponsComputedStatus = (coupons = []) => {
+  return coupons.map(attachCouponComputedStatus);
+};
+const getEligibleDoctorSpecialtyIdForCoupon = async (doctor) => {
+  if (!doctor) {
+    throw new AppError("Doctor not found", 404);
+  }
+
+  if (doctor.accountStatus?.isDeleted || doctor.accountStatus?.isBlocked) {
+    throw new AppError("Doctor is currently unavailable", 400);
+  }
+
+  if (!doctor.accountStatus?.isEmailVerified) {
+    throw new AppError("Doctor email is not verified", 400);
+  }
+
+  if (
+    !doctor.accountStatus?.isVerified ||
+    doctor.verification?.status !== "approved"
+  ) {
+    throw new AppError("Doctor is not approved for appointments", 400);
+  }
+
+  const activeSpecialty = await findActiveSpecialtyById(
+    doctor.specialization?.specialtyId
+  );
+
+  if (!activeSpecialty) {
+    throw new AppError("Doctor specialty is inactive", 400);
+  }
+
+  return doctor.specialization?.specialtyId?.toString();
+};
 export const calculateCouponDiscount = ({ coupon, amount }) => {
   const numericAmount = Number(amount);
 
@@ -100,12 +185,7 @@ export const validateCouponForAppointment = async ({
     throw new AppError("Doctor not found", 404);
   }
 
-  if (doctor.accountStatus?.isDeleted || doctor.accountStatus?.isBlocked) {
-    throw new AppError("Doctor is currently unavailable", 400);
-  }
-
-  const doctorSpecialtyId =
-    doctor.specialization?.specialtyId?.toString();
+const doctorSpecialtyId = await getEligibleDoctorSpecialtyIdForCoupon(doctor);
 
   if (
     coupon.applicableSpecialtyId &&
@@ -145,9 +225,12 @@ export const createCouponService = async ({ adminId, body }) => {
     includeDeleted: true,
   });
 
-  if (existingCoupon && !existingCoupon.isDeleted) {
-    throw new AppError("Coupon code already exists", 409);
-  }
+ if (existingCoupon) {
+  throw new AppError(
+    "Coupon code already exists, including deleted coupons",
+    409
+  );
+}
 
   if (body.applicableSpecialtyId) {
     const specialty = await findActiveSpecialtyById(body.applicableSpecialtyId);
@@ -175,7 +258,8 @@ export const createCouponService = async ({ adminId, body }) => {
     createdBy: adminId ? new mongoose.Types.ObjectId(adminId) : null,
   };
 
-  return createCoupon(payload);
+  const coupon = await createCoupon(payload);
+return attachCouponComputedStatus(coupon);
 };
 
 export const getAdminCouponsService = async ({ query }) => {
@@ -188,6 +272,8 @@ export const getAdminCouponsService = async ({ query }) => {
 
   const numericPage = Math.max(Number(page), 1);
   const numericLimit = Math.min(Math.max(Number(limit), 1), 50);
+
+  const now = new Date();
 
   const filter = {
     isDeleted: false,
@@ -205,10 +291,35 @@ export const getAdminCouponsService = async ({ query }) => {
 
   if (status === "active") {
     filter.isActive = true;
+    filter.validFrom = { $lte: now };
+    filter.validTo = { $gte: now };
+    filter.$expr = {
+      $or: [
+        { $eq: ["$maxUsage", 0] },
+        { $lt: ["$usedCount", "$maxUsage"] },
+      ],
+    };
   }
 
   if (status === "inactive") {
     filter.isActive = false;
+  }
+
+  if (status === "upcoming") {
+    filter.isActive = true;
+    filter.validFrom = { $gt: now };
+  }
+
+  if (status === "expired") {
+    filter.validTo = { $lt: now };
+  }
+
+  if (status === "usage_finished") {
+    filter.isActive = true;
+    filter.maxUsage = { $gt: 0 };
+    filter.$expr = {
+      $gte: ["$usedCount", "$maxUsage"],
+    };
   }
 
   const skip = (numericPage - 1) * numericLimit;
@@ -223,7 +334,7 @@ export const getAdminCouponsService = async ({ query }) => {
   ]);
 
   return {
-    coupons,
+    coupons: attachCouponsComputedStatus(coupons),
     pagination: {
       page: numericPage,
       limit: numericLimit,
@@ -244,7 +355,7 @@ export const getAdminCouponDetailsService = async ({ couponId }) => {
     throw new AppError("Coupon not found", 404);
   }
 
-  return coupon;
+ return attachCouponComputedStatus(coupon);
 };
 
 export const updateCouponService = async ({ couponId, body }) => {
@@ -296,13 +407,30 @@ if (
     400
   );
 }
+
+const finalMaxUsage =
+  body.maxUsage !== undefined
+    ? Number(body.maxUsage)
+    : Number(existingCoupon.maxUsage || 0);
+
+const finalMaxUsagePerUser =
+  body.maxUsagePerUser !== undefined
+    ? Number(body.maxUsagePerUser)
+    : Number(existingCoupon.maxUsagePerUser || 1);
+
+if (finalMaxUsage > 0 && finalMaxUsagePerUser > finalMaxUsage) {
+  throw new AppError(
+    "Max usage per user cannot be greater than max total usage. Set max total usage to 0 for unlimited total usage.",
+    400
+  );
+}
   if (body.code) {
     const code = normalizeCouponCode(body.code);
 
-    const duplicate = await findCouponByCode({
-      code,
-      includeDeleted: false,
-    });
+   const duplicate = await findCouponByCode({
+  code,
+  includeDeleted: true,
+});
 
     if (
       duplicate &&
@@ -311,14 +439,16 @@ if (
       throw new AppError("Coupon code already exists", 409);
     }
   }
-
+if (body.applicableSpecialtyId === "") {
+  body.applicableSpecialtyId = null;
+}
   if (body.applicableSpecialtyId) {
-    const specialty = await findActiveSpecialtyById(body.applicableSpecialtyId);
+  const specialty = await findActiveSpecialtyById(body.applicableSpecialtyId);
 
-    if (!specialty) {
-      throw new AppError("Specialty not found or inactive", 404);
-    }
+  if (!specialty) {
+    throw new AppError("Specialty not found or inactive", 404);
   }
+}
 
   const payload = {};
 
@@ -356,10 +486,13 @@ if (
     payload.validTo = new Date(payload.validTo);
   }
 
-  return updateCouponById({
-    couponId,
-    payload,
-  });
+ const coupon = await updateCouponById({
+  couponId,
+  payload,
+});
+
+return attachCouponComputedStatus(coupon);
+
 };
 
 export const updateCouponStatusService = async ({ couponId, body }) => {
@@ -380,7 +513,7 @@ export const updateCouponStatusService = async ({ couponId, body }) => {
     throw new AppError("Coupon not found", 404);
   }
 
-  return coupon;
+  return attachCouponComputedStatus(coupon);
 };
 
 export const deleteCouponService = async ({ couponId }) => {
@@ -392,7 +525,7 @@ export const deleteCouponService = async ({ couponId }) => {
     throw new AppError("Coupon not found", 404);
   }
 
-  return coupon;
+ return attachCouponComputedStatus(coupon);
 };
 
 export const getAvailableCouponsService = async ({ userId, query }) => {
@@ -414,7 +547,7 @@ export const getAvailableCouponsService = async ({ userId, query }) => {
     throw new AppError("Doctor not found", 404);
   }
 
-  const specialtyId = doctor.specialization?.specialtyId;
+  const specialtyId = await getEligibleDoctorSpecialtyIdForCoupon(doctor);
 
   const coupons = await findAvailableCouponsForSpecialty({
     specialtyId,
@@ -470,6 +603,8 @@ export const validateCouponService = async ({ userId, body }) => {
       maxDiscount: coupon.maxDiscount,
       minAmount: coupon.minAmount,
       applicableSpecialtyId: coupon.applicableSpecialtyId,
+      validFrom: coupon.validFrom,
+      validTo: coupon.validTo,
     },
     discount,
     finalAmount: Math.max(Number(body.appointmentAmount) - discount, 0),

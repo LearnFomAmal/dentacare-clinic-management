@@ -1,6 +1,6 @@
 import express from "express";
 
-import { protectDoctor } from "../../middlewares/doctorAuth.middleware.js";
+import { protectDoctor,requireVerifiedDoctor } from "../../middlewares/doctorAuth.middleware.js";
 import { protectAdmin } from "../../middlewares/adminAuth.middleware.js";
 
 import {
@@ -10,7 +10,7 @@ import {
 
 const router = express.Router();
 
-router.get("/doctor/me", protectDoctor, getMyDoctorEarningsController);
+router.get("/doctor/me", protectDoctor,requireVerifiedDoctor, getMyDoctorEarningsController);
 
 router.get(
   "/admin/doctors/:doctorId",

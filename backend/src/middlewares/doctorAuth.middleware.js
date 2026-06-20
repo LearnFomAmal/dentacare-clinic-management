@@ -12,10 +12,7 @@ export const protectDoctor = async (req, res, next) => {
       return next(new AppError("Unauthorized access", 401));
     }
 
-    const decoded = jwt.verify(
-      token,
-      env.ACCESS_TOKEN_SECRET
-    );
+    const decoded = jwt.verify(token, env.ACCESS_TOKEN_SECRET);
 
     if (decoded.role !== "doctor") {
       return next(new AppError("Doctor access only", 403));
@@ -39,17 +36,34 @@ export const protectDoctor = async (req, res, next) => {
       return next(new AppError("Doctor account blocked", 403));
     }
 
-    if (!doctor.accountStatus?.isVerified) {
-      return next(new AppError("Doctor account not verified", 403));
+    if (!doctor.accountStatus?.isEmailVerified) {
+      return next(new AppError("Please verify your email first", 403));
     }
 
     req.doctor = {
-      doctorId: decoded.doctorId,
-      role: decoded.role,
+      doctorId: doctor._id.toString(),
+      role: "doctor",
+
+      isEmailVerified: Boolean(doctor.accountStatus?.isEmailVerified),
+      isVerified: Boolean(doctor.accountStatus?.isVerified),
+      verificationStatus: doctor.verification?.status || "not_submitted",
     };
 
     next();
   } catch (error) {
     return next(new AppError("Invalid or expired token", 401));
   }
+};
+
+export const requireVerifiedDoctor = (req, res, next) => {
+  if (!req.doctor?.isVerified) {
+    return next(
+      new AppError(
+        "Your documents must be approved by admin before using this feature",
+        403
+      )
+    );
+  }
+
+  next();
 };

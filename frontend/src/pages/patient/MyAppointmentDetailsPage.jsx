@@ -36,8 +36,6 @@ import {
 } from "../../features/reports/reportSlice";
 
 import {
-  canCancelAppointment,
-  canRescheduleAppointment,
   formatAppointmentDate,
   formatAppointmentTime,
   getCleanStatus,
@@ -45,6 +43,7 @@ import {
   getSpecialtyName,
   getStatusBadgeClass,
   isAppointmentEndTimePast,
+  isAppointmentStartTimePast,
 } from "../../utils/appointmentUi";
 import { ROUTES } from "../../constants/routes";
 
@@ -81,8 +80,8 @@ function MyAppointmentDetailsPage() {
     error: reportError,
   } = useAppSelector((state) => state.reports);
  
-  const {
-  myReviews,
+const {
+  myReviews = [],
   isSaving: isSavingReview,
   error: reviewError,
 } = useAppSelector((state) => state.reviews);
@@ -119,10 +118,10 @@ function MyAppointmentDetailsPage() {
  
   useEffect(() => {
   dispatch(
-    fetchMyReviews({
-      page: 1,
-      limit: 100,
-    })
+  fetchMyReviews({
+  page: 1,
+  limit: 20,
+})
   );
 }, [dispatch]);
 
@@ -134,13 +133,13 @@ useEffect(() => {
 }, [reviewError, dispatch]);
 
   const appointment = selectedAppointment;
- const existingReview = myReviews.find((review) => {
+const existingReview = myReviews.find((review) => {
   const reviewAppointmentId =
     typeof review.appointmentId === "string"
       ? review.appointmentId
       : review.appointmentId?._id;
 
-  return reviewAppointmentId === appointmentId;
+  return String(reviewAppointmentId) === String(appointmentId);
 });
 
 const canReviewAppointment =
@@ -206,12 +205,43 @@ const canReviewAppointment =
     }
   };
 
-  const canCancel = canCancelAppointment(appointment);
-  const canReschedule = canRescheduleAppointment(appointment);
-  const isPastAppointment = isAppointmentEndTimePast(appointment);
+const isConsultationStarted = isAppointmentStartTimePast(appointment);
+const isConsultationFinished = isAppointmentEndTimePast(appointment);
+
+const isPaidActiveAppointment =
+  ["pending", "approved"].includes(appointment?.status) &&
+  appointment?.paymentStatus === "paid";
+
+const isConsultationRunning =
+  isPaidActiveAppointment &&
+  isConsultationStarted &&
+  !isConsultationFinished;
+
+const isApprovedAwaitingDoctorCompletion =
+  appointment?.status === "approved" &&
+  appointment?.paymentStatus === "paid" &&
+  isConsultationFinished;
+
+const canCancel =
+  isPaidActiveAppointment &&
+  !isConsultationStarted;
+
+const canReschedule =
+  isPaidActiveAppointment &&
+  !isConsultationStarted;
   const chatPath = appointment?._id
-  ? ROUTES.CHAT_APPOINTMENT.replace(":appointmentId", appointment._id)
+  ? ROUTES.APPOINTMENT_CHAT?.replace(":appointmentId", appointment._id) ||
+    ROUTES.PATIENT_APPOINTMENT_CHAT?.replace(
+      ":appointmentId",
+      appointment._id
+    ) ||
+    `/appointments/${appointment._id}/chat`
   : "";
+
+const canOpenChat =
+  appointment?.status === "approved" &&
+  appointment?.paymentStatus === "paid" &&
+  Boolean(chatPath);
  const handleSubmitReview = async ({ rating, description }) => {
   if (!description.trim()) {
     toast.error("Review description is required");
@@ -232,10 +262,13 @@ const canReviewAppointment =
 
     dispatch(
       fetchMyReviews({
-        page: 1,
-        limit: 100,
-      })
+  page: 1,
+  limit: 20,
+})
     );
+
+    dispatch(fetchMyAppointmentDetails(appointmentId));
+
   } catch (err) {
     toast.error(err || "Failed to submit review");
   }
@@ -519,7 +552,7 @@ const canReviewAppointment =
                   value={appointment.paymentSummary?.transactionId || "N/A"}
                 />
               </div>
-             {appointment.status === "approved" && chatPath && (
+  {canOpenChat && (
   <Link
     to={chatPath}
     className="mt-6 inline-flex h-12 w-full items-center justify-center gap-2 rounded-2xl bg-[#9381FF] text-sm font-extrabold text-white shadow-[0_14px_28px_rgba(147,129,255,0.24)] transition hover:bg-[#7E6EF2]"
@@ -551,19 +584,31 @@ const canReviewAppointment =
                 </button>
               )}
 
-              {isPastAppointment &&
-                ["pending", "approved"].includes(appointment.status) && (
-                  <div className="mt-6 rounded-2xl bg-orange-50 p-4">
-                    <p className="text-xs font-bold uppercase text-orange-600">
-                      Appointment time over
-                    </p>
+     {isConsultationRunning && (
+  <div className="mt-6 rounded-2xl bg-orange-50 p-4">
+    <p className="text-xs font-bold uppercase text-orange-600">
+      Consultation time started
+    </p>
 
-                    <p className="mt-2 text-sm leading-6 text-orange-700">
-                      This appointment&apos;s scheduled time has already passed.
-                      It can no longer be cancelled or rescheduled.
-                    </p>
-                  </div>
-                )}
+    <p className="mt-2 text-sm leading-6 text-orange-700">
+      This appointment can no longer be cancelled or rescheduled because the
+      consultation time has already started.
+    </p>
+  </div>
+)}
+
+{isApprovedAwaitingDoctorCompletion && (
+  <div className="mt-6 rounded-2xl bg-blue-50 p-4">
+    <p className="text-xs font-bold uppercase text-blue-600">
+      Consultation time finished
+    </p>
+
+    <p className="mt-2 text-sm leading-6 text-blue-700">
+      The consultation time is over. Please wait for the doctor to mark the
+      appointment as completed and upload the prescription.
+    </p>
+  </div>
+)}
 
               {appointment.status === "rejected" && (
                 <div className="mt-6 rounded-2xl bg-red-50 p-4">

@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from "react";
-import { Navigate } from "react-router-dom";
+import { useEffect, useMemo, useState } from "react";
+import { Navigate, useLocation } from "react-router-dom";
 
 import { useAppDispatch, useAppSelector } from "../app/hooks";
 import { ROUTES } from "../constants/routes";
@@ -11,70 +11,159 @@ import {
 } from "../utils/authStorage";
 import { verifyCurrentUser } from "../features/auth/authSlice";
 
-const getRoleHome = (role) => {
-  if (role === "admin") return ROUTES.ADMIN_DASHBOARD;
-  if (role === "doctor") return ROUTES.DOCTOR_DASHBOARD;
+const getRouteRoleFromPath = (pathname) => {
+  if (pathname === "/admin" || pathname.startsWith("/admin/")) {
+    return "admin";
+  }
+
+  if (pathname === "/doctor" || pathname.startsWith("/doctor/")) {
+    return "doctor";
+  }
+
+  return "patient";
+};
+
+const isDoctorProfessionallyVerified = (user) => {
+  return Boolean(
+    user?.accountStatus?.isVerified === true &&
+      user?.verification?.status === "approved"
+  );
+};
+
+const getRoleHome = (role, user = null) => {
+  if (role === "admin") {
+    return ROUTES.ADMIN_DASHBOARD;
+  }
+
+  if (role === "doctor") {
+    if (!isDoctorProfessionallyVerified(user)) {
+      return ROUTES.DOCTOR_VERIFICATION_STATUS;
+    }
+
+    return ROUTES.DOCTOR_DASHBOARD;
+  }
+
   return ROUTES.PATIENT_DASHBOARD;
+};
+
+const doctorVerificationAllowedRoutes = [
+  ROUTES.DOCTOR_VERIFICATION_STATUS,
+  ROUTES.DOCTOR_UPLOAD_DOCUMENTS,
+  ROUTES.DOCTOR_SETTINGS,
+];
+
+const isBlockedOrDeleted = (user) => {
+  return Boolean(
+    user?.accountStatus?.isBlocked || user?.accountStatus?.isDeleted
+  );
 };
 
 function ProtectedRoute({ children, allowedRoles = [] }) {
   const dispatch = useAppDispatch();
+  const location = useLocation();
 
   const {
     user: reduxUser,
     role: reduxRole,
     accountType: reduxAccountType,
     isAuthenticated,
-    isLoading,
   } = useAppSelector((state) => state.auth);
 
-  const hasVerifiedRef = useRef(false);
-  const [verificationDone, setVerificationDone] = useState(false);
+const routeRole = useMemo(() => {
+  const pathRole = getRouteRoleFromPath(location.pathname);
+
+  if (allowedRoles.length === 1) {
+    return allowedRoles[0];
+  }
+
+  if (pathRole === "doctor" || pathRole === "admin") {
+    return pathRole;
+  }
+
+  return reduxAccountType || getAccountType() || "patient";
+}, [allowedRoles, reduxAccountType, location.pathname]);
+
+  const cachedUser = useMemo(() => {
+    if (!routeRole) return null;
+
+    if (isAuthenticated && reduxAccountType === routeRole && reduxUser) {
+      return reduxUser;
+    }
+
+    return getAuthUser(routeRole);
+  }, [isAuthenticated, reduxAccountType, reduxUser, routeRole]);
+
+  const [serverUser, setServerUser] = useState(null);
+  const [verificationDone, setVerificationDone] = useState(Boolean(cachedUser));
   const [verificationFailed, setVerificationFailed] = useState(false);
 
-  const routeRole =
-    allowedRoles.length === 1
-      ? allowedRoles[0]
-      : reduxAccountType || getAccountType();
+  const user = serverUser || cachedUser;
 
   useEffect(() => {
-    if (!routeRole) {
-      setVerificationDone(true);
-      setVerificationFailed(true);
-      return;
-    }
+    let isMounted = true;
 
-    if (hasVerifiedRef.current) return;
+    const verifySession = async () => {
+      if (!routeRole) {
+        if (!isMounted) return;
 
-    const storedUser = getAuthUser(routeRole);
-
-    if (!storedUser && !reduxUser) {
-      clearAuthStorage(routeRole);
-      setVerificationDone(true);
-      setVerificationFailed(true);
-      return;
-    }
-
-    hasVerifiedRef.current = true;
-
-    dispatch(verifyCurrentUser(routeRole))
-      .unwrap()
-      .then(() => {
-        setVerificationDone(true);
-        setVerificationFailed(false);
-      })
-      .catch(() => {
-        clearAuthStorage(routeRole);
         setVerificationDone(true);
         setVerificationFailed(true);
-      });
-  }, [dispatch, routeRole, reduxUser]);
+        return;
+      }
+
+      const storedUser = getAuthUser(routeRole);
+      const activeCachedUser =
+        reduxAccountType === routeRole && reduxUser ? reduxUser : storedUser;
+
+      const activeCachedRole =
+        activeCachedUser?.role || activeCachedUser?.accountType || routeRole;
+
+      const cachedUserIsUsable =
+        activeCachedUser &&
+        activeCachedRole === routeRole &&
+        !isBlockedOrDeleted(activeCachedUser);
+
+      if (cachedUserIsUsable) {
+        setServerUser(null);
+        setVerificationDone(true);
+        setVerificationFailed(false);
+      } else {
+        setServerUser(null);
+        setVerificationDone(false);
+        setVerificationFailed(false);
+      }
+
+      try {
+        const result = await dispatch(verifyCurrentUser(routeRole)).unwrap();
+
+        if (!isMounted) return;
+
+        setServerUser(result.user);
+        setVerificationDone(true);
+        setVerificationFailed(false);
+      } catch {
+        clearAuthStorage(routeRole);
+
+        if (!isMounted) return;
+
+        setServerUser(null);
+        setVerificationDone(true);
+        setVerificationFailed(true);
+      }
+    };
+
+    verifySession();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [dispatch, routeRole]);
 
   if (!routeRole) {
     return <Navigate to={ROUTES.LOGIN} replace />;
   }
 
-  if (!verificationDone || isLoading) {
+  if (!verificationDone) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-[#F8FAFC]">
         <div className="rounded-3xl bg-white px-8 py-6 text-sm font-extrabold text-[#6B7280] shadow-[0_18px_48px_rgba(17,24,39,0.08)]">
@@ -88,39 +177,44 @@ function ProtectedRoute({ children, allowedRoles = [] }) {
     return <Navigate to={ROUTES.LOGIN} replace />;
   }
 
-  let user = null;
-  let normalizedRole = null;
-
-  if (isAuthenticated && reduxUser) {
-    user = reduxUser;
-    normalizedRole = reduxRole || reduxAccountType || reduxUser.role;
-  } else {
-    const storedUser = getAuthUser(routeRole);
-
-    if (!storedUser) {
-      clearAuthStorage(routeRole);
-      return <Navigate to={ROUTES.LOGIN} replace />;
-    }
-
-    user = storedUser;
-    normalizedRole = storedUser.role || storedUser.accountType || routeRole;
-  }
-
-  if (!user || normalizedRole !== routeRole) {
+  if (!user) {
     clearAuthStorage(routeRole);
     return <Navigate to={ROUTES.LOGIN} replace />;
   }
 
-  if (user.accountStatus?.isBlocked || user.accountStatus?.isDeleted) {
+  const normalizedRole = user.role || user.accountType || reduxRole || routeRole;
+
+  if (normalizedRole !== routeRole) {
     clearAuthStorage(routeRole);
     return <Navigate to={ROUTES.LOGIN} replace />;
   }
 
-  if (
-    allowedRoles.length > 0 &&
-    !allowedRoles.includes(normalizedRole)
-  ) {
-    return <Navigate to={getRoleHome(normalizedRole)} replace />;
+  if (isBlockedOrDeleted(user)) {
+    clearAuthStorage(routeRole);
+    return <Navigate to={ROUTES.LOGIN} replace />;
+  }
+
+  if (allowedRoles.length > 0 && !allowedRoles.includes(normalizedRole)) {
+    return <Navigate to={getRoleHome(normalizedRole, user)} replace />;
+  }
+
+  const isDoctorRestrictedRoute =
+    normalizedRole === "doctor" &&
+    !isDoctorProfessionallyVerified(user) &&
+    !doctorVerificationAllowedRoutes.includes(location.pathname);
+     const isVerifiedDoctorOpeningVerificationRoute =
+  normalizedRole === "doctor" &&
+  isDoctorProfessionallyVerified(user) &&
+  [
+    ROUTES.DOCTOR_VERIFICATION_STATUS,
+    ROUTES.DOCTOR_UPLOAD_DOCUMENTS,
+  ].includes(location.pathname);
+
+if (isVerifiedDoctorOpeningVerificationRoute) {
+  return <Navigate to={ROUTES.DOCTOR_SETTINGS} replace />;
+}
+  if (isDoctorRestrictedRoute) {
+    return <Navigate to={ROUTES.DOCTOR_VERIFICATION_STATUS} replace />;
   }
 
   saveAccountType(normalizedRole);

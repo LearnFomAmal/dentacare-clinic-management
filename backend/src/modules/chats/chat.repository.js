@@ -2,35 +2,72 @@ import Appointment from "../../models/Appointment.js";
 import Chat from "../../models/Chat.js";
 import ChatMessage from "../../models/ChatMessage.js";
 
-const chatPopulate = [
+const READABLE_CHAT_STATUSES = ["approved", "completed", "cancelled"];
+const READABLE_PAYMENT_STATUSES = ["paid", "refunded"];
+
+export const chatPopulate = [
   {
     path: "patientId",
-    select: "username email personalInfo.profileImage",
+    select: "username email personalInfo profileImage accountStatus",
   },
   {
     path: "doctorId",
-    select: "firstName lastName email specialization professionalInfo.profileImage",
+    select:
+      "firstName lastName email specialization professionalInfo stats accountStatus verification",
   },
   {
     path: "appointmentId",
-    select: "appointmentDate startTime endTime status paymentStatus",
+    select:
+      "appointmentDate startTime endTime status paymentStatus pricing approval cancellation completedAt",
   },
 ];
+
+const getReadableAppointmentIdsForPatient = async (patientId) => {
+  const appointments = await Appointment.find({
+    patientId,
+    status: {
+      $in: READABLE_CHAT_STATUSES,
+    },
+    paymentStatus: {
+      $in: READABLE_PAYMENT_STATUSES,
+    },
+  })
+    .select("_id")
+    .lean();
+
+  return appointments.map((appointment) => appointment._id);
+};
+
+const getReadableAppointmentIdsForDoctor = async (doctorId) => {
+  const appointments = await Appointment.find({
+    doctorId,
+    status: {
+      $in: READABLE_CHAT_STATUSES,
+    },
+    paymentStatus: {
+      $in: READABLE_PAYMENT_STATUSES,
+    },
+  })
+    .select("_id")
+    .lean();
+
+  return appointments.map((appointment) => appointment._id);
+};
 
 export const findAppointmentForChat = ({ appointmentId }) => {
   return Appointment.findById(appointmentId)
     .select(
-      "_id patientId doctorId appointmentDate startTime endTime status paymentStatus"
+      "_id patientId doctorId appointmentDate startTime endTime status paymentStatus pricing approval cancellation completedAt"
     )
     .populate([
       {
         path: "patientId",
-        select: "username email personalInfo.profileImage accountStatus",
+        select: "username email personalInfo profileImage accountStatus",
       },
       {
         path: "doctorId",
         select:
-          "firstName lastName email specialization professionalInfo accountStatus",
+          "firstName lastName email specialization professionalInfo stats accountStatus verification",
       },
     ]);
 };
@@ -42,11 +79,25 @@ export const findChatByAppointmentId = ({ appointmentId }) => {
   });
 };
 
+export const findPopulatedChatByAppointmentId = ({ appointmentId }) => {
+  return Chat.findOne({
+    appointmentId,
+    isActive: true,
+  }).populate(chatPopulate);
+};
+
 export const findChatById = ({ chatId }) => {
   return Chat.findOne({
     _id: chatId,
     isActive: true,
   });
+};
+
+export const findPopulatedChatById = ({ chatId }) => {
+  return Chat.findOne({
+    _id: chatId,
+    isActive: true,
+  }).populate(chatPopulate);
 };
 
 export const createChat = async ({ payload }) => {
@@ -56,6 +107,10 @@ export const createChat = async ({ payload }) => {
 
 export const saveChat = (chat) => {
   return chat.save();
+};
+
+export const populateChat = (chat) => {
+  return chat.populate(chatPopulate);
 };
 
 export const createChatMessage = async ({ payload }) => {
@@ -81,10 +136,19 @@ export const countMessagesByChatId = ({ chatId }) => {
   });
 };
 
-export const findChatsForPatient = ({ patientId, skip, limit }) => {
+export const findChatsForPatient = async ({ patientId, skip, limit }) => {
+  const appointmentIds = await getReadableAppointmentIdsForPatient(patientId);
+
+  if (appointmentIds.length === 0) {
+    return [];
+  }
+
   return Chat.find({
     patientId,
     isActive: true,
+    appointmentId: {
+      $in: appointmentIds,
+    },
   })
     .populate(chatPopulate)
     .sort({
@@ -96,17 +160,35 @@ export const findChatsForPatient = ({ patientId, skip, limit }) => {
     .lean();
 };
 
-export const countChatsForPatient = ({ patientId }) => {
+export const countChatsForPatient = async ({ patientId }) => {
+  const appointmentIds = await getReadableAppointmentIdsForPatient(patientId);
+
+  if (appointmentIds.length === 0) {
+    return 0;
+  }
+
   return Chat.countDocuments({
     patientId,
     isActive: true,
+    appointmentId: {
+      $in: appointmentIds,
+    },
   });
 };
 
-export const findChatsForDoctor = ({ doctorId, skip, limit }) => {
+export const findChatsForDoctor = async ({ doctorId, skip, limit }) => {
+  const appointmentIds = await getReadableAppointmentIdsForDoctor(doctorId);
+
+  if (appointmentIds.length === 0) {
+    return [];
+  }
+
   return Chat.find({
     doctorId,
     isActive: true,
+    appointmentId: {
+      $in: appointmentIds,
+    },
   })
     .populate(chatPopulate)
     .sort({
@@ -118,10 +200,19 @@ export const findChatsForDoctor = ({ doctorId, skip, limit }) => {
     .lean();
 };
 
-export const countChatsForDoctor = ({ doctorId }) => {
+export const countChatsForDoctor = async ({ doctorId }) => {
+  const appointmentIds = await getReadableAppointmentIdsForDoctor(doctorId);
+
+  if (appointmentIds.length === 0) {
+    return 0;
+  }
+
   return Chat.countDocuments({
     doctorId,
     isActive: true,
+    appointmentId: {
+      $in: appointmentIds,
+    },
   });
 };
 

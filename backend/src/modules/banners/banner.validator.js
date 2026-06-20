@@ -77,8 +77,15 @@ export const validateBannerLocations = (locations) => {
 };
 
 export const validateBannerDates = ({ startDate, endDate }) => {
-  if (!startDate || !endDate) {
-    throw new AppError("Start date and end date are required", 400);
+  if (!startDate && !endDate) {
+    return;
+  }
+
+  if ((startDate && !endDate) || (!startDate && endDate)) {
+    throw new AppError(
+      "Both start date and end date are required for scheduled banners",
+      400
+    );
   }
 
   const fromDate = new Date(startDate);
@@ -202,19 +209,21 @@ export const validateUpdateBannerInput = ({ bannerId, body }) => {
     validateBannerLocations(locations);
   }
 
-  if (body.startDate !== undefined || body.endDate !== undefined) {
-    if (!body.startDate || !body.endDate) {
-      throw new AppError(
-        "Both start date and end date are required when updating dates",
-        400
-      );
-    }
+if (body.startDate !== undefined && body.startDate) {
+  const startDate = new Date(body.startDate);
 
-    validateBannerDates({
-      startDate: body.startDate,
-      endDate: body.endDate,
-    });
+  if (Number.isNaN(startDate.getTime())) {
+    throw new AppError("Invalid banner start date", 400);
   }
+}
+
+if (body.endDate !== undefined && body.endDate) {
+  const endDate = new Date(body.endDate);
+
+  if (Number.isNaN(endDate.getTime())) {
+    throw new AppError("Invalid banner end date", 400);
+  }
+}
 
   if (body.priority !== undefined && Number(body.priority) < 1) {
     throw new AppError("Priority must be at least 1", 400);

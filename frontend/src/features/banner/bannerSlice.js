@@ -10,7 +10,24 @@ import {
   updateBannerApi,
   updateBannerStatusApi,
 } from "./bannerService";
+const normalizeListResponse = (data, key) => {
+  if (Array.isArray(data)) return data;
 
+  if (Array.isArray(data?.[key])) return data[key];
+
+  if (Array.isArray(data?.data)) return data.data;
+
+  if (Array.isArray(data?.data?.[key])) return data.data[key];
+
+  return [];
+};
+
+const normalizePaginatedResponse = (data, key) => {
+  return {
+    items: normalizeListResponse(data, key),
+    pagination: data?.pagination || data?.data?.pagination || null,
+  };
+};
 const getErrorMessage = (error, fallback) => {
   return error?.response?.data?.message || error?.message || fallback;
 };
@@ -20,7 +37,7 @@ export const fetchHomeBanners = createAsyncThunk(
   async (_, { rejectWithValue }) => {
     try {
       const response = await getHomeBannersApi();
-      return response.data || [];
+      return normalizeListResponse(response.data, "banners");
     } catch (error) {
       return rejectWithValue(
         getErrorMessage(error, "Failed to fetch home banners")
@@ -34,7 +51,7 @@ export const fetchDoctorPageBanners = createAsyncThunk(
   async (_, { rejectWithValue }) => {
     try {
       const response = await getDoctorPageBannersApi();
-      return response.data || [];
+      return normalizeListResponse(response.data, "banners");
     } catch (error) {
       return rejectWithValue(
         getErrorMessage(error, "Failed to fetch doctor page banners")
@@ -48,7 +65,7 @@ export const fetchAdminBanners = createAsyncThunk(
   async (params = {}, { rejectWithValue }) => {
     try {
       const response = await getAdminBannersApi(params);
-      return response.data;
+      return normalizePaginatedResponse(response.data, "banners");
     } catch (error) {
       return rejectWithValue(
         getErrorMessage(error, "Failed to fetch banners")
@@ -217,8 +234,8 @@ const bannerSlice = createSlice({
 
       .addCase(fetchAdminBanners.fulfilled, (state, action) => {
         state.isLoading = false;
-        state.adminBanners = action.payload?.banners || [];
-        state.pagination = action.payload?.pagination || null;
+        state.adminBanners = action.payload?.items || [];
+state.pagination = action.payload?.pagination || null;
       })
 
       .addCase(fetchAdminBanners.rejected, (state, action) => {

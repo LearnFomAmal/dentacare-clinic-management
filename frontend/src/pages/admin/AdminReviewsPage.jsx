@@ -6,12 +6,15 @@ import DashboardLayout from "../../components/layout/DashboardLayout";
 import Button from "../../components/ui/Button";
 import { useAppDispatch, useAppSelector } from "../../app/hooks";
 import { useSearchParams } from "react-router-dom";
+
 import {
   approveReview,
   clearReviewError,
   fetchAdminReviews,
   rejectReview,
 } from "../../features/review/reviewSlice";
+
+const REVIEW_PAGE_LIMIT = 10;
 
 const getDoctorName = (review) => {
   const doctor = review.doctorId;
@@ -37,29 +40,68 @@ const getStatusClass = (status) => {
   return "border-orange-200 bg-orange-50 text-orange-700";
 };
 
+const getPageNumbers = ({ currentPage, totalPages }) => {
+  const pages = [];
+
+  const safeTotalPages = Math.max(Number(totalPages || 1), 1);
+  const safeCurrentPage = Math.min(
+    Math.max(Number(currentPage || 1), 1),
+    safeTotalPages
+  );
+
+  const start = Math.max(safeCurrentPage - 2, 1);
+  const end = Math.min(safeCurrentPage + 2, safeTotalPages);
+
+  for (let page = start; page <= end; page += 1) {
+    pages.push(page);
+  }
+
+  return pages;
+};
+
 function AdminReviewsPage() {
   const dispatch = useAppDispatch();
   const [searchParams] = useSearchParams();
+
   const doctorIdFromUrl = searchParams.get("doctorId") || "";
+
   const { adminReviews, adminPagination, isLoading, isSaving, error } =
     useAppSelector((state) => state.reviews);
 
-  const [search, setSearch] = useState("");
-  const [status, setStatus] = useState("pending");
+  const [searchInput, setSearchInput] = useState("");
+  const [appliedSearch, setAppliedSearch] = useState("");
+
+  const [status, setStatus] = useState("");
   const [rating, setRating] = useState("");
+  const [page, setPage] = useState(1);
+
   const [rejectTarget, setRejectTarget] = useState(null);
   const [rejectionReason, setRejectionReason] = useState("");
 
   const queryParams = useMemo(() => {
-    return {
-      page: 1,
-      limit: 20,
-      search,
-      status,
-      rating,
-    doctorId: doctorIdFromUrl,
+    const params = {
+      page,
+      limit: REVIEW_PAGE_LIMIT,
     };
-  }, [search, status, rating ,doctorIdFromUrl]);
+
+    if (appliedSearch.trim()) {
+      params.search = appliedSearch.trim();
+    }
+
+    if (status) {
+      params.status = status;
+    }
+
+    if (rating) {
+      params.rating = rating;
+    }
+
+    if (doctorIdFromUrl) {
+      params.doctorId = doctorIdFromUrl;
+    }
+
+    return params;
+  }, [page, appliedSearch, status, rating, doctorIdFromUrl]);
 
   useEffect(() => {
     dispatch(fetchAdminReviews(queryParams));
@@ -72,10 +114,46 @@ function AdminReviewsPage() {
     dispatch(clearReviewError());
   }, [error, dispatch]);
 
+  useEffect(() => {
+    setPage(1);
+  }, [doctorIdFromUrl]);
+
+  const currentPage = Number(adminPagination?.page || page || 1);
+  const totalPages = Math.max(Number(adminPagination?.totalPages || 1), 1);
+  const totalReviews = Number(adminPagination?.totalReviews || 0);
+
+  const pageNumbers = getPageNumbers({
+    currentPage,
+    totalPages,
+  });
+
+  const canGoPrevious = currentPage > 1 && !isLoading;
+  const canGoNext = currentPage < totalPages && !isLoading;
+
+  const handleSearchSubmit = (event) => {
+    event.preventDefault();
+
+    setPage(1);
+    setAppliedSearch(searchInput.trim());
+  };
+
+  const handleStatusChange = (event) => {
+    setStatus(event.target.value);
+    setPage(1);
+  };
+
+  const handleRatingChange = (event) => {
+    setRating(event.target.value);
+    setPage(1);
+  };
+
   const handleApprove = async (reviewId) => {
     try {
       const result = await dispatch(approveReview(reviewId)).unwrap();
+
       toast.success(result.message || "Review approved successfully");
+
+      dispatch(fetchAdminReviews(queryParams));
     } catch (err) {
       toast.error(err || "Failed to approve review");
     }
@@ -98,8 +176,11 @@ function AdminReviewsPage() {
       ).unwrap();
 
       toast.success(result.message || "Review rejected successfully");
+
       setRejectTarget(null);
       setRejectionReason("");
+
+      dispatch(fetchAdminReviews(queryParams));
     } catch (err) {
       toast.error(err || "Failed to reject review");
     }
@@ -111,13 +192,16 @@ function AdminReviewsPage() {
       description="Moderate patient reviews before they appear publicly."
     >
       <main className="mx-auto max-w-[1180px]">
-        <section className="mb-6 grid gap-4 md:grid-cols-[1fr_180px_180px]">
+        <form
+          onSubmit={handleSearchSubmit}
+          className="mb-6 grid gap-4 md:grid-cols-[1fr_180px_180px_130px]"
+        >
           <div className="flex h-12 items-center gap-3 rounded-2xl border border-[#E5E7EB] bg-white px-4">
             <Search size={18} className="text-[#9CA3AF]" />
 
             <input
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
+              value={searchInput}
+              onChange={(event) => setSearchInput(event.target.value)}
               placeholder="Search patient, doctor, review..."
               className="h-full flex-1 bg-transparent text-sm font-semibold text-[#111827] outline-none"
             />
@@ -125,7 +209,7 @@ function AdminReviewsPage() {
 
           <select
             value={status}
-            onChange={(event) => setStatus(event.target.value)}
+            onChange={handleStatusChange}
             className="h-12 rounded-2xl border border-[#E5E7EB] bg-white px-4 text-sm font-bold text-[#374151] outline-none"
           >
             <option value="">All Status</option>
@@ -136,7 +220,7 @@ function AdminReviewsPage() {
 
           <select
             value={rating}
-            onChange={(event) => setRating(event.target.value)}
+            onChange={handleRatingChange}
             className="h-12 rounded-2xl border border-[#E5E7EB] bg-white px-4 text-sm font-bold text-[#374151] outline-none"
           >
             <option value="">All Ratings</option>
@@ -146,7 +230,20 @@ function AdminReviewsPage() {
             <option value="2">2 Stars</option>
             <option value="1">1 Star</option>
           </select>
-        </section>
+
+          <button
+            type="submit"
+            className="h-12 rounded-2xl bg-[#9381FF] px-5 text-sm font-extrabold text-white transition hover:bg-[#7E6EF2]"
+          >
+            Search
+          </button>
+        </form>
+
+        {doctorIdFromUrl && (
+          <div className="mb-6 rounded-2xl border border-[#E5E7EB] bg-[#F8FAFC] px-4 py-3 text-sm font-bold text-[#6B7280]">
+            Showing reviews filtered by selected doctor.
+          </div>
+        )}
 
         <section className="rounded-3xl border border-[#EEF0F6] bg-white shadow-[0_18px_48px_rgba(17,24,39,0.05)]">
           {isLoading ? (
@@ -158,6 +255,10 @@ function AdminReviewsPage() {
               <h2 className="text-xl font-extrabold text-[#111827]">
                 No reviews found
               </h2>
+
+              <p className="mt-2 text-sm font-semibold text-[#6B7280]">
+                Try changing the search, status, rating, or doctor filter.
+              </p>
             </div>
           ) : (
             <div className="overflow-x-auto">
@@ -185,7 +286,7 @@ function AdminReviewsPage() {
                         </p>
 
                         <p className="mt-1 text-xs text-[#6B7280]">
-                          {review.patientId?.email}
+                          {review.patientId?.email || "N/A"}
                         </p>
                       </td>
 
@@ -204,6 +305,7 @@ function AdminReviewsPage() {
                       <td className="px-6 py-5">
                         <div className="flex items-center gap-1 text-[#F59E0B]">
                           <Star size={17} fill="currentColor" />
+
                           <span className="text-sm font-extrabold text-[#111827]">
                             {review.rating}
                           </span>
@@ -239,6 +341,7 @@ function AdminReviewsPage() {
                             disabled={isSaving || review.status === "approved"}
                             onClick={() => handleApprove(review._id)}
                             className="flex h-10 w-10 items-center justify-center rounded-xl bg-green-50 text-green-600 transition hover:bg-green-100 disabled:cursor-not-allowed disabled:opacity-40"
+                            title="Approve review"
                           >
                             <CheckCircle2 size={18} />
                           </button>
@@ -248,6 +351,7 @@ function AdminReviewsPage() {
                             disabled={isSaving || review.status === "rejected"}
                             onClick={() => setRejectTarget(review)}
                             className="flex h-10 w-10 items-center justify-center rounded-xl bg-red-50 text-red-600 transition hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-40"
+                            title="Reject review"
                           >
                             <XCircle size={18} />
                           </button>
@@ -261,10 +365,51 @@ function AdminReviewsPage() {
           )}
         </section>
 
-        {adminPagination && (
-          <p className="mt-4 text-sm font-bold text-[#6B7280]">
-            Showing {adminReviews.length} of {adminPagination.totalReviews} reviews
-          </p>
+        {adminPagination && totalReviews > 0 && (
+          <section className="mt-5 flex flex-col gap-4 rounded-3xl border border-[#EEF0F6] bg-white p-4 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-sm font-bold text-[#6B7280]">
+              Showing {adminReviews.length} of {totalReviews} reviews · Page{" "}
+              {currentPage} of {totalPages}
+            </p>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                disabled={!canGoPrevious}
+                onClick={() => setPage((prev) => Math.max(prev - 1, 1))}
+                className="h-10 rounded-2xl border border-[#E5E7EB] px-4 text-sm font-extrabold text-[#6B7280] transition hover:border-[#9381FF] hover:text-[#9381FF] disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                Previous
+              </button>
+
+              {pageNumbers.map((pageNumber) => (
+                <button
+                  key={pageNumber}
+                  type="button"
+                  disabled={isLoading}
+                  onClick={() => setPage(pageNumber)}
+                  className={`h-10 min-w-10 rounded-2xl px-4 text-sm font-extrabold transition ${
+                    currentPage === pageNumber
+                      ? "bg-[#9381FF] text-white shadow-[0_10px_22px_rgba(147,129,255,0.25)]"
+                      : "border border-[#E5E7EB] bg-white text-[#6B7280] hover:border-[#9381FF] hover:text-[#9381FF]"
+                  }`}
+                >
+                  {pageNumber}
+                </button>
+              ))}
+
+              <button
+                type="button"
+                disabled={!canGoNext}
+                onClick={() =>
+                  setPage((prev) => Math.min(prev + 1, totalPages))
+                }
+                className="h-10 rounded-2xl border border-[#E5E7EB] px-4 text-sm font-extrabold text-[#6B7280] transition hover:border-[#9381FF] hover:text-[#9381FF] disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                Next
+              </button>
+            </div>
+          </section>
         )}
 
         {rejectTarget && (

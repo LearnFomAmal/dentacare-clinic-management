@@ -82,17 +82,17 @@ const bannerSchema = new mongoose.Schema(
       trim: true,
     },
 
-    startDate: {
-      type: Date,
-      required: true,
-      index: true,
-    },
+   startDate: {
+  type: Date,
+  default: null,
+  index: true,
+},
 
-    endDate: {
-      type: Date,
-      required: true,
-      index: true,
-    },
+endDate: {
+  type: Date,
+  default: null,
+  index: true,
+},
 
     priority: {
       type: Number,

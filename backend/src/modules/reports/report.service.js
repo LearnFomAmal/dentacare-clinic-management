@@ -21,7 +21,7 @@ import {
   validateObjectId,
   validateUploadReportInput,
 } from "./report.validator.js";
-
+import { safeCreateNotification } from "../notifications/notification.service.js";
 cloudinary.config({
   cloud_name: env.CLOUDINARY_CLOUD_NAME,
   api_key: env.CLOUDINARY_API_KEY,
@@ -198,7 +198,18 @@ export const uploadDoctorPrescriptionService = async ({
     appointmentId: appointment._id,
     report,
   });
-
+await safeCreateNotification({
+  recipientRole: "patient",
+  recipientId: appointment.patientId,
+  actorRole: "doctor",
+  actorId: doctorId,
+  actorName: "Doctor",
+  type: "report_uploaded",
+  title: "Prescription Uploaded",
+  message: "Your doctor has uploaded a prescription/report for your appointment.",
+  referenceType: "report",
+  referenceId: report._id,
+});
   return report;
 };
 

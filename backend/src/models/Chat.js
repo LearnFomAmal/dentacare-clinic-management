@@ -34,7 +34,6 @@ const chatSchema = new mongoose.Schema(
       ref: "Appointment",
       required: true,
       unique: true,
-      index: true,
     },
 
     patientId: {

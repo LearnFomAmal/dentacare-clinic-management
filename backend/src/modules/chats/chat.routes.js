@@ -1,7 +1,7 @@
 import express from "express";
 
 import { protect } from "../../middlewares/auth.middleware.js";
-import { protectDoctor } from "../../middlewares/doctorAuth.middleware.js";
+import { protectDoctor,requireVerifiedDoctor } from "../../middlewares/doctorAuth.middleware.js";
 
 import {
   getDoctorAppointmentMessagesController,
@@ -42,23 +42,26 @@ router.patch(
 // ==============================
 // DOCTOR CHAT ROUTES
 // ==============================
-router.get("/doctor/my", protectDoctor, getDoctorChatsController);
+router.get("/doctor/my", protectDoctor, requireVerifiedDoctor, getDoctorChatsController);
 
 router.get(
   "/doctor/appointments/:appointmentId/messages",
   protectDoctor,
+  requireVerifiedDoctor,
   getDoctorAppointmentMessagesController
 );
 
 router.post(
   "/doctor/appointments/:appointmentId/messages",
   protectDoctor,
+  requireVerifiedDoctor,
   sendDoctorMessageController
 );
 
 router.patch(
   "/doctor/:chatId/read",
   protectDoctor,
+  requireVerifiedDoctor,
   markDoctorChatReadController
 );
 

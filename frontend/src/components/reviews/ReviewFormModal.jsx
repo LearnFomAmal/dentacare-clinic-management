@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Star, X } from "lucide-react";
-
+import toast from "react-hot-toast";
 function ReviewFormModal({
   open,
   loading = false,
@@ -34,14 +34,31 @@ function ReviewFormModal({
         .join(" ")}`
     : "Doctor";
 
-  const handleSubmit = (event) => {
-    event.preventDefault();
+ const handleSubmit = (event) => {
+  event.preventDefault();
 
-    onSubmit({
-      rating,
-      description,
-    });
-  };
+  const cleanDescription = description.trim();
+
+  if (!cleanDescription) {
+    toast.error("Review description is required");
+    return;
+  }
+
+  if (cleanDescription.length < 10) {
+    toast.error("Review must be at least 10 characters");
+    return;
+  }
+
+  if (Number(rating) < 1 || Number(rating) > 5) {
+    toast.error("Rating must be between 1 and 5");
+    return;
+  }
+
+  onSubmit({
+    rating,
+    description: cleanDescription,
+  });
+};
 
   return (
     <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/40 px-4">

@@ -68,7 +68,9 @@ export const adminLoginService = async (
       403
     );
   }
-
+  if (admin.accountStatus?.isDeleted) {
+  throw new AppError("Admin account deleted", 403);
+}
   const isPasswordMatched =
     await comparePassword(
       password,
@@ -381,10 +383,17 @@ export const refreshAdminTokenService = async (refreshToken) => {
     role: "admin",
   });
 
-  await updateSessionRefreshToken(refreshToken, newRefreshToken);
+ const updatedSession = await updateSessionRefreshToken(
+  refreshToken,
+  newRefreshToken
+);
 
-  return {
-    accessToken: newAccessToken,
-    refreshToken: newRefreshToken,
-  };
+if (!updatedSession) {
+  throw new AppError("Session expired. Please login again.", 401);
+}
+
+return {
+  accessToken: newAccessToken,
+  refreshToken: newRefreshToken,
+};
 };

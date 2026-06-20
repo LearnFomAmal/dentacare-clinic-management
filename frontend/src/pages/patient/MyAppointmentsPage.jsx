@@ -1,5 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
-import { CalendarDays, Clock, Eye, Stethoscope } from "lucide-react";
+import {
+  CalendarDays,
+  ChevronLeft,
+  ChevronRight,
+  Clock,
+  Eye,
+  RefreshCcw,
+  Stethoscope,
+} from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
 
@@ -18,6 +26,8 @@ import {
   getStatusBadgeClass,
 } from "../../utils/appointmentUi";
 
+const APPOINTMENT_PAGE_LIMIT = 6;
+
 const STATUS_TABS = [
   { label: "All", value: "" },
   { label: "Pending", value: "pending" },
@@ -26,22 +36,38 @@ const STATUS_TABS = [
   { label: "Cancelled", value: "cancelled" },
   { label: "Rejected", value: "rejected" },
   { label: "Expired", value: "expired" },
-  { label: "Payment Pending", value: "pending_payment" },
 ];
 
 function MyAppointmentsPage() {
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
 
-  const { myAppointments, isLoadingList, error } = useAppSelector(
-    (state) => state.appointments
-  );
+  const {
+    myAppointments,
+    myAppointmentStats,
+    myAppointmentsPagination,
+    isLoadingList,
+    error,
+  } = useAppSelector((state) => state.appointments);
 
   const [activeStatus, setActiveStatus] = useState("");
+  const [page, setPage] = useState(1);
+
+  const fetchAppointments = ({ pageNumber = page } = {}) => {
+    dispatch(
+      fetchMyAppointments({
+        status: activeStatus || undefined,
+        page: pageNumber,
+        limit: APPOINTMENT_PAGE_LIMIT,
+      })
+    );
+  };
 
   useEffect(() => {
-    dispatch(fetchMyAppointments(activeStatus ? { status: activeStatus } : {}));
-  }, [dispatch, activeStatus]);
+    fetchAppointments({
+      pageNumber: page,
+    });
+  }, [dispatch, activeStatus, page]);
 
   useEffect(() => {
     if (!error) return;
@@ -50,46 +76,104 @@ function MyAppointmentsPage() {
     dispatch(clearAppointmentError());
   }, [error, dispatch]);
 
-  const stats = useMemo(() => {
-    return {
-      total: myAppointments.length,
-      pending: myAppointments.filter((item) => item.status === "pending")
-        .length,
-      approved: myAppointments.filter((item) => item.status === "approved")
-        .length,
-      completed: myAppointments.filter((item) => item.status === "completed")
-        .length,
-      cancelled: myAppointments.filter((item) => item.status === "cancelled")
-        .length,
-        expired: myAppointments.filter((item) => item.status === "expired").length,
-    };
-  }, [myAppointments]);
+  const stats = myAppointmentStats || {
+    total: 0,
+    pending: 0,
+    approved: 0,
+    completed: 0,
+    cancelled: 0,
+    rejected: 0,
+    expired: 0,
+  };
+
+  const pagination = myAppointmentsPagination || {
+    page,
+    limit: APPOINTMENT_PAGE_LIMIT,
+    totalAppointments: myAppointments.length,
+    totalPages: 1,
+  };
+
+  const canGoPrevious = Number(pagination.page || page) > 1;
+
+  const canGoNext =
+    Number(pagination.page || page) < Number(pagination.totalPages || 1);
+
+  const showingText = useMemo(() => {
+    const total = Number(pagination.totalAppointments || 0);
+
+    if (total === 0) {
+      return "Showing 0 appointments";
+    }
+
+    const currentPage = Number(pagination.page || page);
+    const limit = Number(pagination.limit || APPOINTMENT_PAGE_LIMIT);
+
+    const start = (currentPage - 1) * limit + 1;
+    const end = Math.min(currentPage * limit, total);
+
+    return `Showing ${start} - ${end} of ${total} appointments`;
+  }, [pagination, page]);
+
+  const handleStatusChange = (status) => {
+    setActiveStatus(status);
+    setPage(1);
+  };
+
+  const handleRefresh = () => {
+    fetchAppointments({
+      pageNumber: page,
+    });
+  };
+
+  const handlePreviousPage = () => {
+    if (!canGoPrevious || isLoadingList) return;
+
+    setPage((prev) => Math.max(prev - 1, 1));
+  };
+
+  const handleNextPage = () => {
+    if (!canGoNext || isLoadingList) return;
+
+    setPage((prev) => prev + 1);
+  };
 
   return (
     <DashboardLayout showPageHeader={false}>
       <main className="mx-auto max-w-[1120px] px-6 py-10">
-        <section className="mb-8">
-          <p className="text-sm font-bold uppercase tracking-[1px] text-[#9381FF]">
-            My appointments
-          </p>
+        <section className="mb-8 flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+          <div>
+            <p className="text-sm font-bold uppercase tracking-[1px] text-[#9381FF]">
+              My appointments
+            </p>
 
-          <h1 className="mt-2 text-4xl font-extrabold tracking-[-1px] text-[#111827] dark:text-slate-100">
-            Track Your Consultations
-          </h1>
+            <h1 className="mt-2 text-4xl font-extrabold tracking-[-1px] text-[#111827] dark:text-slate-100">
+              Track Your Consultations
+            </h1>
 
-          <p className="mt-3 max-w-[680px] text-base leading-7 text-[#6B7280] dark:text-slate-400">
-            View pending, approved, completed, cancelled, rejected, and payment
-            pending appointment requests.
-          </p>
+            <p className="mt-3 max-w-[680px] text-base leading-7 text-[#6B7280] dark:text-slate-400">
+              View pending, approved, completed, cancelled, rejected, and
+              expired appointment requests.
+            </p>
+          </div>
+
+          <button
+            type="button"
+            onClick={handleRefresh}
+            disabled={isLoadingList}
+            className="inline-flex h-11 items-center justify-center gap-2 rounded-2xl bg-[#F8F7FF] px-5 text-sm font-extrabold text-[#9381FF] transition hover:bg-[#F0F1FF] disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            <RefreshCcw size={16} />
+            Refresh
+          </button>
         </section>
 
         <section className="mb-6 grid gap-4 md:grid-cols-6">
-          <StatCard label="Total" value={stats.total} />
-          <StatCard label="Pending" value={stats.pending} />
-          <StatCard label="Approved" value={stats.approved} />
-          <StatCard label="Completed" value={stats.completed} />
-          <StatCard label="Cancelled" value={stats.cancelled} />
-          <StatCard label="Expired" value={stats.expired} />
+          <StatCard label="Total" value={stats.total || 0} />
+          <StatCard label="Pending" value={stats.pending || 0} />
+          <StatCard label="Approved" value={stats.approved || 0} />
+          <StatCard label="Completed" value={stats.completed || 0} />
+          <StatCard label="Cancelled" value={stats.cancelled || 0} />
+          <StatCard label="Expired" value={stats.expired || 0} />
         </section>
 
         <section className="mb-6 flex flex-wrap gap-3">
@@ -97,7 +181,7 @@ function MyAppointmentsPage() {
             <button
               key={tab.label}
               type="button"
-              onClick={() => setActiveStatus(tab.value)}
+              onClick={() => handleStatusChange(tab.value)}
               className={`h-11 rounded-2xl px-5 text-sm font-extrabold transition ${
                 activeStatus === tab.value
                   ? "bg-[#9381FF] text-white shadow-[0_12px_24px_rgba(147,129,255,0.24)]"
@@ -124,15 +208,28 @@ function MyAppointmentsPage() {
             </p>
           </div>
         ) : (
-          <section className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
-            {myAppointments.map((appointment) => (
-              <AppointmentCard
-                key={appointment._id}
-                appointment={appointment}
-                onView={() => navigate(`/my-appointments/${appointment._id}`)}
-              />
-            ))}
-          </section>
+          <>
+            <section className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+              {myAppointments.map((appointment) => (
+                <AppointmentCard
+                  key={appointment._id}
+                  appointment={appointment}
+                  onView={() => navigate(`/my-appointments/${appointment._id}`)}
+                />
+              ))}
+            </section>
+
+            <PaginationControls
+              showingText={showingText}
+              page={pagination.page || page}
+              totalPages={pagination.totalPages || 1}
+              canGoPrevious={canGoPrevious}
+              canGoNext={canGoNext}
+              isLoading={isLoadingList}
+              onPrevious={handlePreviousPage}
+              onNext={handleNextPage}
+            />
+          </>
         )}
       </main>
     </DashboardLayout>
@@ -215,14 +312,14 @@ function AppointmentCard({ appointment, onView }) {
           className="bg-red-50 text-red-700 dark:bg-red-500/10 dark:text-red-300"
         />
       )}
-     
-     {appointment.status === "expired" && (
-   <StatusNote
-    title="Expired"
-    text="This appointment expired because the scheduled time passed without approval."
-    className="bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300"
-  />
-)}
+
+      {appointment.status === "expired" && (
+        <StatusNote
+          title="Expired"
+          text="This appointment expired because the scheduled time passed without approval."
+          className="bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300"
+        />
+      )}
 
       <button
         type="button"
@@ -242,6 +339,51 @@ function StatusNote({ title, text, className }) {
       <p className="text-xs font-bold uppercase">{title}</p>
 
       <p className="mt-1 line-clamp-2 text-sm font-medium">{text}</p>
+    </div>
+  );
+}
+
+function PaginationControls({
+  showingText,
+  page,
+  totalPages,
+  canGoPrevious,
+  canGoNext,
+  isLoading,
+  onPrevious,
+  onNext,
+}) {
+  return (
+    <div className="mt-8 flex flex-col gap-4 rounded-3xl border border-[#EEF0F6] bg-white p-5 dark:border-slate-800 dark:bg-slate-900 md:flex-row md:items-center md:justify-between">
+      <p className="text-sm font-bold text-[#6B7280] dark:text-slate-400">
+        {showingText}
+      </p>
+
+      <div className="flex items-center gap-3">
+        <button
+          type="button"
+          onClick={onPrevious}
+          disabled={!canGoPrevious || isLoading}
+          className="inline-flex h-10 items-center justify-center gap-2 rounded-2xl border border-[#EEF0F6] px-4 text-sm font-extrabold text-[#6B7280] transition hover:border-[#9381FF] hover:text-[#9381FF] disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-800 dark:text-slate-400"
+        >
+          <ChevronLeft size={16} />
+          Previous
+        </button>
+
+        <span className="rounded-2xl bg-[#F8FAFC] px-4 py-2 text-sm font-extrabold text-[#111827] dark:bg-slate-950 dark:text-slate-100">
+          Page {page} of {totalPages || 1}
+        </span>
+
+        <button
+          type="button"
+          onClick={onNext}
+          disabled={!canGoNext || isLoading}
+          className="inline-flex h-10 items-center justify-center gap-2 rounded-2xl border border-[#EEF0F6] px-4 text-sm font-extrabold text-[#6B7280] transition hover:border-[#9381FF] hover:text-[#9381FF] disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-800 dark:text-slate-400"
+        >
+          Next
+          <ChevronRight size={16} />
+        </button>
+      </div>
     </div>
   );
 }

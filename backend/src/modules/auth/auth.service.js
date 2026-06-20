@@ -43,7 +43,10 @@ import {
   createOtpRecord,
   deleteOldOtps,
 } from "./auth.repository.js";
-
+import {
+  ensureEmailAvailableAcrossRoles,
+  normalizeEmail,
+} from "../../shared/utils/emailAvailability.js";
 import { hashOtp } from "../../shared/utils/hashOtp.js";
 const googleClient = new OAuth2Client(env.GOOGLE_CLIENT_ID);
 
@@ -69,7 +72,15 @@ const buildUserData = (user) => {
     authProvider: user.authProvider || "local",
     profileImage: user.personalInfo?.profileImage || "",
     theme: user.settings?.theme || "light",
+
+    accountStatus: {
+      isVerified: Boolean(user.accountStatus?.isVerified),
+      isBlocked: Boolean(user.accountStatus?.isBlocked),
+      isDeleted: Boolean(user.accountStatus?.isDeleted),
+    },
+
     isProfileComplete: isPatientProfileComplete(user),
+
     personalInfo: {
       dateOfBirth: user.personalInfo?.dateOfBirth || null,
       gender: user.personalInfo?.gender || "",
@@ -91,59 +102,63 @@ export const registerRequestService = async (data) => {
     referralCode,
   } = data;
 
-
-  const existingUser = await findUserByEmail(email);
-  if (existingUser) {
-    throw new AppError("User already exists. Please login.", 400);
-  }
-
- let referredBy = null;
-let normalizedReferralCode = "";
-
-if (referralCode && referralCode.trim()) {
-  const cleanReferralCode = referralCode.trim().toUpperCase();
-
-  const referralUser = await validateReferralCodeForRegistration({
-    referralCode: cleanReferralCode,
-    email,
+  const normalizedEmail = await ensureEmailAvailableAcrossRoles(email, {
+    currentPurpose: "register",
   });
 
-  referredBy = referralUser._id;
-  normalizedReferralCode = referralUser.referral.referralCode;
-}
+  let referredBy = null;
+  let normalizedReferralCode = "";
 
-  await deleteOldOtps(email, "register");
-const otp = generateOtp();
+  if (referralCode && referralCode.trim()) {
+    const cleanReferralCode = referralCode.trim().toUpperCase();
 
-const hashedOtp = await hashOtp(otp);
+    const referralUser = await validateReferralCodeForRegistration({
+      referralCode: cleanReferralCode,
+      email: normalizedEmail,
+    });
 
+    referredBy = referralUser._id;
+    normalizedReferralCode = referralUser.referral.referralCode;
+  }
 
+  await deleteOldOtps(normalizedEmail, "register");
+
+  const otp = generateOtp();
+  const hashedOtp = await hashOtp(otp);
   const hashedPassword = await hashPassword(password);
 
   await createOtpRecord({
-    email,
+    email: normalizedEmail,
     otp: hashedOtp,
     purpose: "register",
     expiresAt: new Date(Date.now() + 5 * 60 * 1000),
     resendAvailableAt: new Date(Date.now() + 60 * 1000),
 
     tempUserData: {
-  username,
-  password: hashedPassword,
-  dateOfBirth,
-  gender,
-  phoneNumber,
-  bloodGroup,
-  referredBy,
-  referralCodeUsed: normalizedReferralCode,
-},
+      username,
+      password: hashedPassword,
+      dateOfBirth,
+      gender,
+      phoneNumber,
+      bloodGroup,
+      referredBy,
+      referralCodeUsed: normalizedReferralCode,
+    },
   });
 
-  await sendOtpMail(email, otp);
+  await sendOtpMail(normalizedEmail, otp);
 };
 
 export const resendRegisterOtpService = async (email) => {
-  const otpRecord = await findOtpRecord(email, "register");
+  const normalizedEmail = normalizeEmail(email);
+
+  const existingUser = await findUserByEmail(normalizedEmail);
+
+  if (existingUser) {
+    throw new AppError("User already exists. Please login.", 400);
+  }
+
+  const otpRecord = await findOtpRecord(normalizedEmail, "register");
 
   if (!otpRecord) {
     throw new AppError("No OTP request found", 404);
@@ -161,18 +176,23 @@ export const resendRegisterOtpService = async (email) => {
 
   const hashedOtp = await hashOtp(newOtp);
 
-  otpRecord.otp = hashedOtp;
-  otpRecord.resendCount += 1;
-  otpRecord.expiresAt = new Date(Date.now() + 5 * 60 * 1000);
-  otpRecord.resendAvailableAt = new Date(Date.now() + 60 * 1000);
+otpRecord.otp = hashedOtp;
+otpRecord.attempts = 0;
+otpRecord.isUsed = false;
+otpRecord.resendCount += 1;
+otpRecord.expiresAt = new Date(Date.now() + 5 * 60 * 1000);
+otpRecord.resendAvailableAt = new Date(Date.now() + 60 * 1000);
 
   await otpRecord.save();
 
-  await sendOtpMail(email, newOtp);
+  await sendOtpMail(normalizedEmail, newOtp);
 };
 
 export const verifyRegisterOtpService = async (email, enteredOtp) => {
-  const otpRecord = await findOtpRecord(email, "register");
+
+   const normalizedEmail = normalizeEmail(email);
+
+   const otpRecord = await findOtpRecord(normalizedEmail, "register");
 
   if (!otpRecord) {
     throw new AppError("OTP not found", 404);
@@ -205,10 +225,12 @@ if (!isOtpMatched) {
   otpRecord.isUsed = true;
   await otpRecord.save();
   const newReferralCode = await generateUniqueReferralCode();
-
+  await ensureEmailAvailableAcrossRoles(normalizedEmail, {
+  checkPendingRegistration: false,
+ });
 const user = await createUser({
   username: temp.username,
-  email,
+  email: normalizedEmail,
   password: temp.password,
 
   personalInfo: {
@@ -246,10 +268,12 @@ if (temp.referredBy) {
   });
 }
  
-  await deleteOldOtps(email, "register");
+  await deleteOldOtps(normalizedEmail, "register");
 };
 export const loginService = async (email, password, userAgent, ipAddress) => {
-  const user = await findUserByEmailWithPassword(email);
+  const normalizedEmail = normalizeEmail(email);
+
+  const user = await findUserByEmailWithPassword(normalizedEmail);
 
   if (!user) {
     throw new AppError("Invalid email or password", 400);
@@ -314,36 +338,9 @@ const userData = buildUserData(user);
 };
 
 export const forgotPasswordRequestService = async (email) => {
-  const user = await findUserByEmail(email);
+  const normalizedEmail = normalizeEmail(email);
 
-  if (!user) {
-    throw new AppError("No account found with this email", 404);
-  }
-
-  if (user.accountStatus.isDeleted) {
-  throw new AppError("This account has been deleted", 403);
-}
-
-  await deleteOldOtps(email, "forgot_password");
-
- const otp = generateOtp();
-
-const hashedOtp = await hashOtp(otp);
-
-
-  await createOtpRecord({
-    email,
-    otp: hashedOtp,
-    purpose: "forgot_password",
-    expiresAt: new Date(Date.now() + 5 * 60 * 1000),
-    resendAvailableAt: new Date(Date.now() + 60 * 1000),
-  });
-
-  await sendOtpMail(email, otp);
-};
-
-export const resendForgotPasswordOtpService = async (email) => {
-  const user = await findUserByEmail(email);
+  const user = await findUserByEmail(normalizedEmail);
 
   if (!user) {
     throw new AppError("No account found with this email", 404);
@@ -357,7 +354,42 @@ export const resendForgotPasswordOtpService = async (email) => {
     throw new AppError("This account has been blocked", 403);
   }
 
-  const otpRecord = await findOtpRecord(email, "forgot_password");
+  await deleteOldOtps(normalizedEmail, "forgot_password");
+
+  const otp = generateOtp();
+  const hashedOtp = await hashOtp(otp);
+
+  await createOtpRecord({
+    email: normalizedEmail,
+    otp: hashedOtp,
+    purpose: "forgot_password",
+    expiresAt: new Date(Date.now() + 5 * 60 * 1000),
+    resendAvailableAt: new Date(Date.now() + 60 * 1000),
+  });
+
+  await sendOtpMail(normalizedEmail, otp);
+};
+
+export const resendForgotPasswordOtpService = async (email) => {
+  const normalizedEmail = normalizeEmail(email);
+  const user = await findUserByEmail(normalizedEmail);
+
+  if (!user) {
+    throw new AppError("No account found with this email", 404);
+  }
+
+  if (user.accountStatus.isDeleted) {
+    throw new AppError("This account has been deleted", 403);
+  }
+
+  if (user.accountStatus.isBlocked) {
+    throw new AppError("This account has been blocked", 403);
+  }
+
+  const otpRecord = await findOtpRecord(
+  normalizedEmail,
+  "forgot_password"
+);
 
   if (!otpRecord) {
     throw new AppError("No OTP request found", 404);
@@ -389,15 +421,27 @@ export const resendForgotPasswordOtpService = async (email) => {
 
   await otpRecord.save();
 
-  await sendOtpMail(email, newOtp);
+ await sendOtpMail(normalizedEmail, newOtp);
 };
 
-export const forgotPasswordVerifyOtpService = async (email, enteredOtp, newPassword) => {
-  const otpRecord = await findOtpRecord(email, "forgot_password");
+export const forgotPasswordVerifyOtpService = async (
+  email,
+  enteredOtp,
+  newPassword
+) => {
+  const normalizedEmail = normalizeEmail(email);
 
+  const otpRecord = await findOtpRecord(
+    normalizedEmail,
+    "forgot_password"
+  );
   if (!otpRecord) {
     throw new AppError("OTP not found", 404);
   }
+ 
+  if (otpRecord.isUsed) {
+  throw new AppError("OTP already used", 400);
+}
 
   if (new Date() > otpRecord.expiresAt) {
     throw new AppError("OTP expired", 400);
@@ -419,7 +463,15 @@ const isOtpMatched = await compareOtp(
   }
   otpRecord.isUsed = true;
  await otpRecord.save();
-   const user = await findUserByEmailWithPassword(email);
+  const user = await findUserByEmailWithPassword(normalizedEmail);
+
+if (!user || user.accountStatus?.isDeleted) {
+  throw new AppError("User not found", 404);
+}
+
+if (user.accountStatus?.isBlocked) {
+  throw new AppError("This account has been blocked", 403);
+}
   const isSamePassword =
   await comparePassword(
     newPassword,
@@ -435,12 +487,12 @@ if (isSamePassword) {
   const hashedPassword = await hashPassword(newPassword);
   
 
-  await updateUserPasswordByEmail(email, hashedPassword);
+  await updateUserPasswordByEmail(normalizedEmail, hashedPassword);
 
 
  await revokeAllSessionsByUserId(user._id, "user");
 
-  await deleteOldOtps(email, "forgot_password");
+  await deleteOldOtps(normalizedEmail, "forgot_password");
 };
 
 export const refreshAccessTokenService = async (refreshToken) => {
@@ -456,7 +508,11 @@ export const refreshAccessTokenService = async (refreshToken) => {
     throw new AppError("Invalid refresh token", 401);
   }
 
-    const user = await findUserById(decoded.userId);
+if (decoded.role !== "patient" || !decoded.userId) {
+  throw new AppError("Invalid token role", 403);
+}
+
+const user = await findUserById(decoded.userId);
 
 if (!user || user.accountStatus.isDeleted) {
   throw new AppError("User account no longer available", 401);
@@ -464,9 +520,6 @@ if (!user || user.accountStatus.isDeleted) {
 
 if (user.accountStatus.isBlocked) {
   throw new AppError("User account blocked", 401);
-}
-if (decoded.role !== "patient") {
-  throw new AppError("Invalid token role", 403);
 }
 
 const session = await findSessionByRefreshToken(refreshToken);
@@ -499,9 +552,16 @@ if (session.userId.toString() !== decoded.userId.toString()) {
     role: decoded.role,
   });
 
-  await updateSessionRefreshToken(refreshToken, newRefreshToken);
+ const updatedSession = await updateSessionRefreshToken(
+  refreshToken,
+  newRefreshToken
+);
 
-  return { newAccessToken, newRefreshToken };
+if (!updatedSession) {
+  throw new AppError("Session expired. Please login again.", 401);
+}
+
+return { newAccessToken, newRefreshToken };
 };
 
 export const logoutService = async (refreshToken) => {
@@ -537,7 +597,9 @@ export const googleLoginService = async ({
   }
 
   const payload = ticket.getPayload();
-
+if (!payload?.email_verified) {
+  throw new AppError("Google email is not verified", 401);
+}
   if (!payload?.email) {
     throw new AppError("Google email not found", 400);
   }
@@ -580,6 +642,9 @@ if (!user.authProvider) {
       user = await updateUserById(user._id, updatePayload);
     }
   } else {
+    await ensureEmailAvailableAcrossRoles(email, {
+  checkPendingRegistration: false,
+});
     user = await createUser({
       username,
       email,

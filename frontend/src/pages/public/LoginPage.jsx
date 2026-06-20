@@ -238,16 +238,26 @@ const handleGoogleError = () => {
             </div>
           )}
 
-          {selectedAccountType === "doctor" && (
-            <div className="text-center text-sm">
-              <Link
-                to={ROUTES.DOCTOR_VERIFY}
-                className="font-bold text-[#4C59A6] hover:underline"
-              >
-                Verify doctor account
-              </Link>
-            </div>
-          )}
+       {selectedAccountType === "doctor" && (
+  <div className="space-y-2 text-center text-sm">
+    <p>
+      <span className="text-[#595F69]">New doctor?</span>{" "}
+      <Link
+        to={ROUTES.DOCTOR_REGISTER}
+        className="font-bold text-[#4C59A6] hover:underline"
+      >
+        Register here
+      </Link>
+    </p>
+
+    <Link
+      to={ROUTES.DOCTOR_VERIFY}
+      className="font-bold text-[#4C59A6] hover:underline"
+    >
+      Verify admin-created doctor account
+    </Link>
+  </div>
+)}
         </div>
       </Card>
     </AuthLayout>

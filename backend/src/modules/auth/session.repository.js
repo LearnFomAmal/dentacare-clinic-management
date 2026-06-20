@@ -53,13 +53,12 @@ export const updateSessionRefreshToken = (
     },
     {
       refreshToken: newRefreshToken,
-      expiresAt: new Date(
-        Date.now() +
-        7 * 24 * 60 * 60 * 1000
-      ),
+      expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+      lastUsedAt: new Date(),
     },
     {
       new: true,
+      runValidators: true,
     }
   );
 };

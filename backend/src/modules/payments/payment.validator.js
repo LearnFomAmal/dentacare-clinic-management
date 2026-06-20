@@ -23,26 +23,37 @@ export const validateCreateRazorpayOrderInput = (body) => {
 };
 
 export const validateVerifyRazorpayPaymentInput = (body) => {
-  const {
-    appointmentId,
-    razorpay_order_id,
-    razorpay_payment_id,
-    razorpay_signature,
-  } = body;
+  const appointmentId = body.appointmentId;
+
+  const razorpayOrderId =
+    body.razorpay_order_id || body.razorpayOrderId;
+
+  const razorpayPaymentId =
+    body.razorpay_payment_id || body.razorpayPaymentId;
+
+  const razorpaySignature =
+    body.razorpay_signature || body.razorpaySignature;
 
   validateObjectId(appointmentId, "appointment id");
 
-  if (!razorpay_order_id || !String(razorpay_order_id).trim()) {
+  if (!razorpayOrderId || !String(razorpayOrderId).trim()) {
     throw new AppError("Razorpay order id is required", 400);
   }
 
-  if (!razorpay_payment_id || !String(razorpay_payment_id).trim()) {
+  if (!razorpayPaymentId || !String(razorpayPaymentId).trim()) {
     throw new AppError("Razorpay payment id is required", 400);
   }
 
-  if (!razorpay_signature || !String(razorpay_signature).trim()) {
+  if (!razorpaySignature || !String(razorpaySignature).trim()) {
     throw new AppError("Razorpay signature is required", 400);
   }
+
+  return {
+    appointmentId,
+    razorpayOrderId: String(razorpayOrderId).trim(),
+    razorpayPaymentId: String(razorpayPaymentId).trim(),
+    razorpaySignature: String(razorpaySignature).trim(),
+  };
 };
 
 export const validatePaymentSuccessInput = (body) => {

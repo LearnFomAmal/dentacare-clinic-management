@@ -54,6 +54,11 @@ import AdminReviewsPage from "../pages/admin/AdminReviewsPage";
 import MyChatsPage from "../pages/chat/MyChatsPage";
 import AppointmentChatPage from "../pages/chat/AppointmentChatPage";
 
+import DoctorRegisterPage from "../pages/public/DoctorRegisterPage";
+import DoctorRegisterOtpPage from "../pages/public/DoctorRegisterOtpPage";
+import DoctorVerificationStatusPage from "../pages/doctor/DoctorVerificationStatusPage";
+import DoctorUploadDocumentsPage from "../pages/doctor/DoctorUploadDocumentsPage";
+import AdminDoctorVerificationsPage from "../pages/admin/AdminDoctorVerificationsPage";
 
 function AppRoutes() {
   return (
@@ -84,7 +89,23 @@ function AppRoutes() {
           </PublicRoute>
         }
       />
+<Route
+  path={ROUTES.DOCTOR_REGISTER}
+  element={
+    <PublicRoute>
+      <DoctorRegisterPage />
+    </PublicRoute>
+  }
+/>
 
+<Route
+  path={ROUTES.DOCTOR_REGISTER_VERIFY_OTP}
+  element={
+    <PublicRoute>
+      <DoctorRegisterOtpPage />
+    </PublicRoute>
+  }
+/>
       <Route
         path={ROUTES.VERIFY_OTP}
         element={
@@ -230,7 +251,23 @@ function AppRoutes() {
           </ProtectedRoute>
         }
       />
+<Route
+  path={ROUTES.DOCTOR_VERIFICATION_STATUS}
+  element={
+    <ProtectedRoute allowedRoles={["doctor"]}>
+      <DoctorVerificationStatusPage />
+    </ProtectedRoute>
+  }
+/>
 
+<Route
+  path={ROUTES.DOCTOR_UPLOAD_DOCUMENTS}
+  element={
+    <ProtectedRoute allowedRoles={["doctor"]}>
+      <DoctorUploadDocumentsPage />
+    </ProtectedRoute>
+  }
+/>
       <Route
         path={ROUTES.DOCTOR_SLOTS}
         element={
@@ -294,7 +331,14 @@ function AppRoutes() {
           </ProtectedRoute>
         }
       />
-
+<Route
+  path={ROUTES.ADMIN_DOCTOR_VERIFICATION_REQUESTS}
+  element={
+    <ProtectedRoute allowedRoles={["admin"]}>
+      <AdminDoctorVerificationsPage />
+    </ProtectedRoute>
+  }
+/>
       <Route
         path={ROUTES.ADMIN_ADD_DOCTOR}
         element={
@@ -491,6 +535,25 @@ function AppRoutes() {
     </ProtectedRoute>
   }
 />
+
+<Route
+  path="/doctor"
+  element={
+    <ProtectedRoute allowedRoles={["doctor"]}>
+      <Navigate to={ROUTES.DOCTOR_DASHBOARD} replace />
+    </ProtectedRoute>
+  }
+/>
+
+<Route
+  path="/admin"
+  element={
+    <ProtectedRoute allowedRoles={["admin"]}>
+      <Navigate to={ROUTES.ADMIN_DASHBOARD} replace />
+    </ProtectedRoute>
+  }
+/>
+
       <Route path="*" element={<Navigate to={ROUTES.HOME} replace />} />
     </Routes>
   );

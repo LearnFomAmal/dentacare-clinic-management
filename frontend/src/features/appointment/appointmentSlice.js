@@ -21,6 +21,7 @@ import {
   rescheduleMyAppointmentApi,
   verifyRazorpayPaymentApi,
   cancelMyAppointmentApi,
+  cancelDoctorAppointmentApi,
 } from "./appointmentService";
 
 const INITIATED_APPOINTMENT_KEY = "dentacare_initiated_appointment";
@@ -83,6 +84,71 @@ const clearStoredInitiatedAppointment = () => {
 
 const getErrorMessage = (error, fallback) => {
   return error?.response?.data?.message || error?.message || fallback;
+};
+const normalizeAppointmentList = (data) => {
+  if (Array.isArray(data)) {
+    return data;
+  }
+
+  if (Array.isArray(data?.appointments)) {
+    return data.appointments;
+  }
+
+  if (Array.isArray(data?.data)) {
+    return data.data;
+  }
+
+  return [];
+};
+
+const normalizePaginatedAppointmentPayload = (data) => {
+  if (Array.isArray(data)) {
+    return {
+      appointments: data,
+      stats: {
+        total: data.length,
+        pending: data.filter((item) => item.status === "pending").length,
+        approved: data.filter((item) => item.status === "approved").length,
+        awaitingCompletion: 0,
+        completed: data.filter((item) => item.status === "completed").length,
+        cancelled: data.filter((item) => item.status === "cancelled").length,
+        rejected: data.filter((item) => item.status === "rejected").length,
+        expired: data.filter((item) => item.status === "expired").length,
+      },
+      pagination: {
+        page: 1,
+        limit: data.length || 6,
+        totalAppointments: data.length,
+        totalPages: 1,
+      },
+    };
+  }
+
+  return {
+    appointments: Array.isArray(data?.appointments)
+      ? data.appointments
+      : Array.isArray(data?.data)
+        ? data.data
+        : [],
+
+    stats: data?.stats || {
+      total: 0,
+      pending: 0,
+      approved: 0,
+      awaitingCompletion: 0,
+      completed: 0,
+      cancelled: 0,
+      rejected: 0,
+      expired: 0,
+    },
+
+    pagination: data?.pagination || {
+      page: 1,
+      limit: 6,
+      totalAppointments: 0,
+      totalPages: 1,
+    },
+  };
 };
 
 const updateAppointmentInList = (list, updatedAppointment) => {
@@ -239,7 +305,7 @@ export const fetchMyAppointments = createAsyncThunk(
     try {
       const response = await getMyAppointmentsApi(params);
 
-      return response.data || [];
+      return normalizePaginatedAppointmentPayload(response.data);
     } catch (error) {
       return rejectWithValue(
         getErrorMessage(error, "Failed to fetch my appointments")
@@ -269,7 +335,7 @@ export const fetchDoctorAppointments = createAsyncThunk(
     try {
       const response = await getDoctorAppointmentsApi(params);
 
-      return response.data || [];
+      return normalizePaginatedAppointmentPayload(response.data);
     } catch (error) {
       return rejectWithValue(
         getErrorMessage(error, "Failed to fetch doctor appointments")
@@ -329,6 +395,25 @@ export const rejectDoctorAppointment = createAsyncThunk(
   }
 );
 
+export const cancelDoctorAppointment = createAsyncThunk(
+  "appointments/cancelDoctorAppointment",
+  async (payload, { rejectWithValue }) => {
+    try {
+      const response = await cancelDoctorAppointmentApi(payload);
+
+      return {
+        appointment: response.data,
+        message:
+          response.message || "Appointment cancelled by doctor successfully",
+      };
+    } catch (error) {
+      return rejectWithValue(
+        getErrorMessage(error, "Failed to cancel appointment")
+      );
+    }
+  }
+);
+
 export const completeDoctorAppointment = createAsyncThunk(
   "appointments/completeDoctorAppointment",
   async (appointmentId, { rejectWithValue }) => {
@@ -355,7 +440,7 @@ export const fetchAdminAppointments = createAsyncThunk(
     try {
       const response = await getAdminAppointmentsApi(params);
 
-      return response.data || [];
+      return normalizePaginatedAppointmentPayload(response.data);
     } catch (error) {
       return rejectWithValue(
         getErrorMessage(error, "Failed to fetch admin appointments")
@@ -363,7 +448,6 @@ export const fetchAdminAppointments = createAsyncThunk(
     }
   }
 );
-
 export const fetchAdminAppointmentDetails = createAsyncThunk(
   "appointments/fetchAdminAppointmentDetails",
   async (appointmentId, { rejectWithValue }) => {
@@ -478,14 +562,63 @@ const appointmentSlice = createSlice({
     initiatedAppointment: getStoredInitiatedAppointment(),
 
     myAppointments: [],
+    myAppointmentStats: {
+  total: 0,
+  pending: 0,
+  approved: 0,
+  completed: 0,
+  cancelled: 0,
+  rejected: 0,
+  expired: 0,
+},
+
+myAppointmentsPagination: {
+  page: 1,
+  limit: 6,
+  totalAppointments: 0,
+  totalPages: 1,
+},
     doctorAppointments: [],
+    doctorAppointmentStats: {
+  total: 0,
+  pending: 0,
+  approved: 0,
+  awaitingCompletion: 0,
+  completed: 0,
+  cancelled: 0,
+  rejected: 0,
+  expired: 0,
+},
+
+doctorAppointmentsPagination: {
+  page: 1,
+  limit: 6,
+  totalAppointments: 0,
+  totalPages: 1,
+},
     adminAppointments: [],
+adminAppointmentStats: {
+  total: 0,
+  pending: 0,
+  approved: 0,
+  completed: 0,
+  cancelled: 0,
+  rejected: 0,
+  expired: 0,
+},
+
+adminAppointmentsPagination: {
+  page: 1,
+  limit: 6,
+  totalAppointments: 0,
+  totalPages: 1,
+},
 
     selectedAppointment: null,
     latestPayment: null,
 
     // selectedPaymentMethod: "google_pay",
-
+   selectedPaymentMethod: "razorpay",
     isInitiating: false,
     isLoadingDetails: false,
     isLoadingList: false,
@@ -629,10 +762,12 @@ const appointmentSlice = createSlice({
       })
 
       .addCase(fetchMyAppointments.fulfilled, (state, action) => {
-        state.isLoadingList = false;
-        state.myAppointments = action.payload;
-        state.error = null;
-      })
+  state.isLoadingList = false;
+  state.myAppointments = action.payload.appointments;
+  state.myAppointmentStats = action.payload.stats;
+  state.myAppointmentsPagination = action.payload.pagination;
+  state.error = null;
+})
 
       .addCase(fetchMyAppointments.rejected, (state, action) => {
         state.isLoadingList = false;
@@ -661,10 +796,12 @@ const appointmentSlice = createSlice({
       })
 
       .addCase(fetchDoctorAppointments.fulfilled, (state, action) => {
-        state.isLoadingList = false;
-        state.doctorAppointments = action.payload;
-        state.error = null;
-      })
+  state.isLoadingList = false;
+  state.doctorAppointments = action.payload.appointments;
+  state.doctorAppointmentStats = action.payload.stats;
+  state.doctorAppointmentsPagination = action.payload.pagination;
+  state.error = null;
+})
 
       .addCase(fetchDoctorAppointments.rejected, (state, action) => {
         state.isLoadingList = false;
@@ -692,11 +829,13 @@ const appointmentSlice = createSlice({
         state.error = null;
       })
 
-      .addCase(fetchAdminAppointments.fulfilled, (state, action) => {
-        state.isLoadingList = false;
-        state.adminAppointments = action.payload;
-        state.error = null;
-      })
+    .addCase(fetchAdminAppointments.fulfilled, (state, action) => {
+  state.isLoadingList = false;
+  state.adminAppointments = action.payload.appointments;
+  state.adminAppointmentStats = action.payload.stats;
+  state.adminAppointmentsPagination = action.payload.pagination;
+  state.error = null;
+})
 
       .addCase(fetchAdminAppointments.rejected, (state, action) => {
         state.isLoadingList = false;
@@ -758,6 +897,26 @@ const appointmentSlice = createSlice({
         state.isDeciding = false;
         state.error = action.payload;
       })
+      
+      .addCase(cancelDoctorAppointment.pending, (state) => {
+  state.isCancelling = true;
+  state.error = null;
+})
+
+.addCase(cancelDoctorAppointment.fulfilled, (state, action) => {
+  state.isCancelling = false;
+  state.selectedAppointment = action.payload.appointment;
+  state.doctorAppointments = updateAppointmentInList(
+    state.doctorAppointments,
+    action.payload.appointment
+  );
+  state.error = null;
+})
+
+.addCase(cancelDoctorAppointment.rejected, (state, action) => {
+  state.isCancelling = false;
+  state.error = action.payload || "Failed to cancel appointment";
+})
 
       .addCase(completeDoctorAppointment.pending, (state) => {
         state.isCompleting = true;

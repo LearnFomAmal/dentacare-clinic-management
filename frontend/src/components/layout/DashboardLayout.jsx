@@ -9,111 +9,139 @@ import {
 import {
   BadgePercent,
   CalendarCheck,
+  FileCheck2,
+  Gift,
   Home,
+  ImagePlus,
   LogOut,
   Menu,
+  MessageCircle,
   PanelLeftClose,
   PanelLeftOpen,
   Settings,
   ShieldPlus,
+  Star,
   Stethoscope,
   UsersRound,
-  Gift,
   WalletCards,
-  ImagePlus,
-  Star,
-  MessageCircle,
 } from "lucide-react";
-
 import toast from "react-hot-toast";
-
+import { logoutUser } from "../../features/auth/authSlice";
 import { ROUTES } from "../../constants/routes";
-import { logoutApi } from "../../features/auth/authService";
+
 import {
-  clearAuthStorage,
   getAccountType,
   getAuthUser,
   saveAccountType,
 } from "../../utils/authStorage";
+
 import { useAppDispatch, useAppSelector } from "../../app/hooks";
-import { clearAuth } from "../../features/auth/authSlice";
+
 import NotificationBell from "../notifications/NotificationBell";
+import { fetchMyChats } from "../../features/chat/chatSlice";
 
 const getRoleFromPath = (pathname) => {
   if (pathname === "/admin" || pathname.startsWith("/admin/")) {
     return "admin";
   }
 
-  // Important:
-  // Do NOT use pathname.startsWith("/doctor")
-  // because "/doctors" would also match and become doctor wrongly.
   if (pathname === "/doctor" || pathname.startsWith("/doctor/")) {
     return "doctor";
   }
 
   return "patient";
 };
-
-const getRoleHome = (role) => {
+const isDoctorProfessionallyVerified = (user) => {
+  return Boolean(
+    user?.accountStatus?.isVerified === true &&
+      user?.verification?.status === "approved"
+  );
+};
+const getRoleHome = (role, user = null) => {
   if (role === "admin") {
     return ROUTES.ADMIN_DASHBOARD || ROUTES.ADMIN_PROFILE;
   }
 
   if (role === "doctor") {
+    if (!isDoctorProfessionallyVerified(user)) {
+      return ROUTES.DOCTOR_VERIFICATION_STATUS;
+    }
+
     return ROUTES.DOCTOR_DASHBOARD || ROUTES.DOCTOR_SETTINGS;
   }
 
   return ROUTES.PATIENT_DASHBOARD || ROUTES.USER_SETTINGS;
 };
 
-const getRoleLinks = (role) => {
- if (role === "admin") {
-  return [
-    {
-      label: "Dashboard",
-      to: ROUTES.ADMIN_DASHBOARD || ROUTES.ADMIN_PROFILE,
-      icon: Home,
-    },
-    {
-      label: "Patients",
-      to: ROUTES.ADMIN_USERS,
-      icon: UsersRound,
-    },
-    {
-      label: "Doctors",
-      to: ROUTES.ADMIN_DOCTORS,
-      icon: Stethoscope,
-    },
-    {
-      label: "Appointments",
-      to: ROUTES.ADMIN_APPOINTMENTS,
-      icon: CalendarCheck,
-    },
-    {
-      label: "Coupons",
-      to: ROUTES.ADMIN_COUPONS,
-      icon: BadgePercent,
-    },
-    {
-      label: "Profile",
-      to: ROUTES.ADMIN_PROFILE,
-      icon: Settings,
-    },
-    {
-       label: "Banners",
-       to: ROUTES.ADMIN_BANNERS,
-       icon: ImagePlus,
-   },
-   {
-  label: "Reviews",
-  to: ROUTES.ADMIN_REVIEWS,
-  icon: Star,
-},
+const getRoleLinks = (role, user = null) => {
+  if (role === "admin") {
+    return [
+      {
+        label: "Dashboard",
+        to: ROUTES.ADMIN_DASHBOARD || ROUTES.ADMIN_PROFILE,
+        icon: Home,
+      },
+      {
+        label: "Patients",
+        to: ROUTES.ADMIN_USERS,
+        icon: UsersRound,
+      },
+      {
+        label: "Doctors",
+        to: ROUTES.ADMIN_DOCTORS,
+        icon: Stethoscope,
+      },
+      {
+        label: "Verifications",
+        to: ROUTES.ADMIN_DOCTOR_VERIFICATION_REQUESTS,
+        icon: FileCheck2,
+      },
+      {
+        label: "Appointments",
+        to: ROUTES.ADMIN_APPOINTMENTS,
+        icon: CalendarCheck,
+      },
+      {
+        label: "Coupons",
+        to: ROUTES.ADMIN_COUPONS,
+        icon: BadgePercent,
+      },
+      {
+        label: "Banners",
+        to: ROUTES.ADMIN_BANNERS,
+        icon: ImagePlus,
+      },
+      {
+        label: "Reviews",
+        to: ROUTES.ADMIN_REVIEWS,
+        icon: Star,
+      },
+      {
+        label: "Profile",
+        to: ROUTES.ADMIN_PROFILE,
+        icon: Settings,
+      },
+    ];
+  }
 
-  ];
-}
+ if (role === "doctor") {
+  const isDoctorVerified = isDoctorProfessionallyVerified(user);
 
-  if (role === "doctor") {
+    if (!isDoctorVerified) {
+      return [
+        {
+          label: "Verification",
+          to: ROUTES.DOCTOR_VERIFICATION_STATUS,
+          icon: ShieldPlus,
+        },
+        {
+          label: "Settings",
+          to: ROUTES.DOCTOR_SETTINGS,
+          icon: Settings,
+        },
+      ];
+    }
+
     return [
       {
         label: "Dashboard",
@@ -131,66 +159,65 @@ const getRoleLinks = (role) => {
         icon: Stethoscope,
       },
       {
-  label: "Earnings",
-  to: ROUTES.DOCTOR_EARNINGS,
-  icon: WalletCards,
-},
+        label: "Earnings",
+        to: ROUTES.DOCTOR_EARNINGS,
+        icon: WalletCards,
+      },
+      {
+        label: "Reviews",
+        to: ROUTES.DOCTOR_REVIEWS,
+        icon: Star,
+      },
+      {
+        label: "Chats",
+        to: ROUTES.DOCTOR_CHATS,
+        icon: MessageCircle,
+      },
       {
         label: "Settings",
         to: ROUTES.DOCTOR_SETTINGS,
         icon: Settings,
       },
-      {
-  label: "Reviews",
-  to: ROUTES.DOCTOR_REVIEWS,
-  icon: Star,
-},
-{
-  label: "Chats",
-  to: ROUTES.DOCTOR_CHATS,
-  icon: MessageCircle,
-},
-      
     ];
   }
 
- return [
-  {
-    label: "Dashboard",
-    to: ROUTES.PATIENT_DASHBOARD || ROUTES.USER_SETTINGS,
-    icon: Home,
-  },
-  {
-    label: "My Appointments",
-    to: ROUTES.MY_APPOINTMENTS,
-    icon: CalendarCheck,
-  },
-  {
-    label: "Wallet",
-    to: ROUTES.WALLET,
-    icon: WalletCards,
-  },
-  {
-    label: "Referrals",
-    to: ROUTES.REFERRALS,
-    icon: Gift,
-  },
-  {
-    label: "Settings",
-    to: ROUTES.USER_SETTINGS,
-    icon: Settings,
-  },
-  {
-    label: "Reviews",
-    to: ROUTES.MY_REVIEWS,
-    icon: Star,
-  },
-  {
-  label: "Chats",
-  to: ROUTES.CHATS,
-  icon: MessageCircle,
-},
-];
+  return [
+    {
+      label: "Dashboard",
+      to: ROUTES.PATIENT_DASHBOARD || ROUTES.USER_SETTINGS,
+      icon: Home,
+    },
+    {
+      label: "My Appointments",
+      to: ROUTES.MY_APPOINTMENTS,
+      icon: CalendarCheck,
+    },
+    {
+      label: "Wallet",
+      to: ROUTES.WALLET,
+      icon: WalletCards,
+    },
+    {
+      label: "Referrals",
+      to: ROUTES.REFERRALS,
+      icon: Gift,
+    },
+    {
+      label: "Reviews",
+      to: ROUTES.MY_REVIEWS,
+      icon: Star,
+    },
+    {
+      label: "Chats",
+      to: ROUTES.CHATS,
+      icon: MessageCircle,
+    },
+    {
+      label: "Settings",
+      to: ROUTES.USER_SETTINGS,
+      icon: Settings,
+    },
+  ];
 };
 
 const patientTopLinks = [
@@ -210,7 +237,6 @@ const patientTopLinks = [
       pathname.startsWith("/referrals") ||
       pathname.startsWith("/chats") ||
       pathname.startsWith("/settings"),
-
   },
   {
     label: "Find Doctors",
@@ -292,6 +318,25 @@ function HeaderAvatar({ user, displayName, profileImage }) {
     </span>
   );
 }
+function LogoutScreen() {
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-[#F8FAFC] px-6 dark:bg-slate-950">
+      <div className="w-full max-w-[360px] rounded-3xl border border-[#EEF0F6] bg-white p-8 text-center shadow-[0_24px_70px_rgba(17,24,39,0.08)] dark:border-slate-800 dark:bg-slate-900">
+        <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-red-50 text-red-500 dark:bg-red-500/10 dark:text-red-400">
+          <LogOut size={24} />
+        </div>
+
+        <h1 className="mt-5 text-2xl font-extrabold text-[#111827] dark:text-white">
+          Logging out
+        </h1>
+
+        <p className="mt-2 text-sm font-semibold leading-6 text-[#6B7280] dark:text-slate-400">
+          Please wait while we safely clear your session.
+        </p>
+      </div>
+    </div>
+  );
+}
 function DashboardLayout({
   children,
   title = "Dashboard",
@@ -306,6 +351,8 @@ function DashboardLayout({
     (state) => state.auth
   );
 
+  const { chats } = useAppSelector((state) => state.chats);
+
   const logoutStartedRef = useRef(false);
 
   const [isLoggingOut, setIsLoggingOut] = useState(false);
@@ -313,6 +360,16 @@ function DashboardLayout({
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
 
   const routeRole = getRoleFromPath(location.pathname);
+
+  const storedUser = getAuthUser(routeRole);
+
+  const user =
+    reduxAccountType === routeRole && reduxUser ? reduxUser : storedUser;
+
+const isVerifiedDoctor =
+  routeRole === "doctor" && isDoctorProfessionallyVerified(user);
+
+  const links = getRoleLinks(routeRole, user);
 
   useEffect(() => {
     const currentAccountType = getAccountType();
@@ -322,13 +379,55 @@ function DashboardLayout({
     }
   }, [routeRole]);
 
-  const storedUser = getAuthUser(routeRole);
 
-  const user =
-    reduxAccountType === routeRole && reduxUser ? reduxUser : storedUser;
 
-  const links = getRoleLinks(routeRole);
-  const homeLink = getRoleHome(routeRole);
+
+  useEffect(() => {
+  if (!user) return;
+
+if (!["patient", "doctor"].includes(routeRole)) return;
+
+if (routeRole === "doctor" && !isVerifiedDoctor) return;
+
+    dispatch(
+      fetchMyChats({
+        role: routeRole,
+        params: {
+          page: 1,
+          limit: 30,
+        },
+      })
+    );
+
+    const intervalId = window.setInterval(() => {
+      dispatch(
+        fetchMyChats({
+          role: routeRole,
+          params: {
+            page: 1,
+            limit: 30,
+          },
+        })
+      );
+    }, 30000);
+
+    return () => {
+      window.clearInterval(intervalId);
+    };
+  }, [dispatch, routeRole, isVerifiedDoctor, user?._id]);
+
+  const homeLink = getRoleHome(routeRole, user);
+
+  const chatUnreadCount = useMemo(() => {
+    if (!["patient", "doctor"].includes(routeRole)) return 0;
+
+    if (routeRole === "doctor" && !isVerifiedDoctor) return 0;
+
+    return chats.reduce(
+      (sum, chat) => sum + Number(chat.unreadCount || 0),
+      0
+    );
+  }, [chats, routeRole, isVerifiedDoctor]);
 
   const displayName =
     user?.username ||
@@ -342,40 +441,36 @@ function DashboardLayout({
     user?.professionalInfo?.profileImage ||
     "";
 
-  const handleLogout = async () => {
-    if (logoutStartedRef.current) return;
+  const shouldShowNotificationBell =
+    routeRole !== "doctor" || isVerifiedDoctor;
 
-    logoutStartedRef.current = true;
-    setIsLoggingOut(true);
+ const handleLogout = async () => {
+  if (logoutStartedRef.current) return;
 
-    const currentRole = routeRole;
+  logoutStartedRef.current = true;
+  setIsLoggingOut(true);
+  setMobileSidebarOpen(false);
 
-    try {
-      await logoutApi(currentRole);
+  const currentRole = routeRole;
+  const loginPath =
+    currentRole === "admin"
+      ? ROUTES.ADMIN_LOGIN || "/admin/login"
+      : ROUTES.LOGIN;
 
-      clearAuthStorage(currentRole);
-      dispatch(clearAuth(currentRole));
+  toast.dismiss();
 
-      toast.dismiss();
-      toast.success("Logged out successfully");
+  try {
+    const result = await dispatch(logoutUser(currentRole)).unwrap();
 
-      navigate(ROUTES.LOGIN, {
-        replace: true,
-      });
-    } catch {
-      clearAuthStorage(currentRole);
-      dispatch(clearAuth(currentRole));
+    toast.success(result.message || "Logged out successfully");
+  } catch {
+    toast.success("Session cleared");
+  }
 
-      toast.dismiss();
-      toast.success("Session cleared");
-
-      navigate(ROUTES.LOGIN, {
-        replace: true,
-      });
-    } finally {
-      setIsLoggingOut(false);
-    }
-  };
+  navigate(loginPath, {
+    replace: true,
+  });
+};
 
   const sidebarWidthClass = sidebarCollapsed ? "lg:w-[88px]" : "lg:w-[270px]";
 
@@ -384,7 +479,9 @@ function DashboardLayout({
     : "lg:pl-[270px]";
 
   const pageContent = children || <Outlet />;
-
+ if (isLoggingOut || logoutStartedRef.current) {
+  return <LogoutScreen />;
+}
   return (
     <div className="min-h-screen bg-[#F8FAFC] text-[#111827] dark:bg-slate-950">
       {mobileSidebarOpen && (
@@ -444,6 +541,7 @@ function DashboardLayout({
               key={item.label}
               item={item}
               collapsed={sidebarCollapsed}
+              badgeCount={item.label === "Chats" ? chatUnreadCount : 0}
               onClick={() => setMobileSidebarOpen(false)}
             />
           ))}
@@ -494,28 +592,30 @@ function DashboardLayout({
               <nav className="hidden items-center gap-8 lg:flex">
                 {patientTopLinks.map((item) => (
                   <TopNavLink
-  key={item.label}
-  to={item.to}
-  end={item.end}
-  match={item.match}
->
-  {item.label}
-</TopNavLink>
+                    key={item.label}
+                    to={item.to}
+                    end={item.end}
+                    match={item.match}
+                  >
+                    {item.label}
+                  </TopNavLink>
                 ))}
               </nav>
             )}
 
-       <div className="flex items-center gap-3">
-  <NotificationBell role={routeRole} />
+            <div className="flex items-center gap-3">
+              {shouldShowNotificationBell && (
+                <NotificationBell role={routeRole} />
+              )}
 
-  <div className="hidden items-center gap-3 sm:flex">
-               <div className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-full bg-[#F0F1FF] text-sm font-bold text-[#9381FF] dark:bg-slate-800">
-  <HeaderAvatar
-    user={user}
-    displayName={displayName}
-    profileImage={profileImage}
-  />
-</div>
+              <div className="hidden items-center gap-3 sm:flex">
+                <div className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-full bg-[#F0F1FF] text-sm font-bold text-[#9381FF] dark:bg-slate-800">
+                  <HeaderAvatar
+                    user={user}
+                    displayName={displayName}
+                    profileImage={profileImage}
+                  />
+                </div>
 
                 <div>
                   <p className="text-sm font-extrabold leading-4 text-[#111827] dark:text-white">
@@ -568,8 +668,10 @@ function DashboardLayout({
   );
 }
 
-function SidebarLink({ item, collapsed, onClick }) {
+function SidebarLink({ item, collapsed, badgeCount = 0, onClick }) {
   const Icon = item.icon;
+  const showBadge = Number(badgeCount || 0) > 0;
+  const displayBadge = badgeCount > 99 ? "99+" : badgeCount;
 
   return (
     <NavLink
@@ -577,7 +679,7 @@ function SidebarLink({ item, collapsed, onClick }) {
       onClick={onClick}
       title={item.label}
       className={({ isActive }) =>
-        `flex h-12 items-center gap-3 rounded-2xl px-4 text-sm font-extrabold transition ${
+        `relative flex h-12 items-center gap-3 rounded-2xl px-4 text-sm font-extrabold transition ${
           collapsed ? "justify-center px-0" : ""
         } ${
           isActive
@@ -586,9 +688,27 @@ function SidebarLink({ item, collapsed, onClick }) {
         }`
       }
     >
-      <Icon size={18} />
+      <div className="relative">
+        <Icon size={18} />
 
-      {!collapsed && <span>{item.label}</span>}
+        {collapsed && showBadge && (
+          <span className="absolute -right-2 -top-2 flex min-h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[9px] font-extrabold text-white">
+            {displayBadge}
+          </span>
+        )}
+      </div>
+
+      {!collapsed && (
+        <>
+          <span>{item.label}</span>
+
+          {showBadge && (
+            <span className="ml-auto flex min-h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1.5 text-[10px] font-extrabold text-white">
+              {displayBadge}
+            </span>
+          )}
+        </>
+      )}
     </NavLink>
   );
 }

@@ -14,7 +14,25 @@ import {
   rejectReviewApi,
   updateMyReviewApi,
 } from "./reviewService";
+const normalizeListResponse = (data, key) => {
+  if (Array.isArray(data)) return data;
 
+  if (Array.isArray(data?.[key])) return data[key];
+
+  if (Array.isArray(data?.data)) return data.data;
+
+  if (Array.isArray(data?.data?.[key])) return data.data[key];
+
+  return [];
+};
+
+const normalizePaginatedResponse = (data, key) => {
+  return {
+    items: normalizeListResponse(data, key),
+    pagination: data?.pagination || data?.data?.pagination || null,
+    summary: data?.summary || data?.data?.summary || null,
+  };
+};
 const getErrorMessage = (error, fallback) => {
   return error?.response?.data?.message || error?.message || fallback;
 };
@@ -44,7 +62,7 @@ export const fetchMyReviews = createAsyncThunk(
   async (params = {}, { rejectWithValue }) => {
     try {
       const response = await getMyReviewsApi(params);
-      return response.data;
+     return normalizePaginatedResponse(response.data, "reviews");
     } catch (error) {
       return rejectWithValue(
         getErrorMessage(error, "Failed to fetch my reviews")
@@ -117,7 +135,7 @@ export const fetchPublicDoctorReviews = createAsyncThunk(
         params,
       });
 
-      return response.data;
+      return normalizePaginatedResponse(response.data, "reviews");
     } catch (error) {
       return rejectWithValue(
         getErrorMessage(error, "Failed to fetch doctor reviews")
@@ -145,7 +163,7 @@ export const fetchDoctorOwnReviews = createAsyncThunk(
   async (params = {}, { rejectWithValue }) => {
     try {
       const response = await getDoctorOwnReviewsApi(params);
-      return response.data;
+      return normalizePaginatedResponse(response.data, "reviews");
     } catch (error) {
       return rejectWithValue(
         getErrorMessage(error, "Failed to fetch doctor reviews")
@@ -159,7 +177,7 @@ export const fetchAdminReviews = createAsyncThunk(
   async (params = {}, { rejectWithValue }) => {
     try {
       const response = await getAdminReviewsApi(params);
-      return response.data;
+     return normalizePaginatedResponse(response.data, "reviews");
     } catch (error) {
       return rejectWithValue(
         getErrorMessage(error, "Failed to fetch reviews")
@@ -287,8 +305,8 @@ const reviewSlice = createSlice({
 
       .addCase(fetchMyReviews.fulfilled, (state, action) => {
         state.isLoading = false;
-        state.myReviews = action.payload?.reviews || [];
-        state.myPagination = action.payload?.pagination || null;
+       state.myReviews = action.payload?.items || [];
+state.myPagination = action.payload?.pagination || null;
       })
 
       .addCase(fetchMyReviews.rejected, (state, action) => {
@@ -362,8 +380,8 @@ const reviewSlice = createSlice({
 
       .addCase(fetchPublicDoctorReviews.fulfilled, (state, action) => {
         state.isLoadingPublic = false;
-        state.publicDoctorReviews = action.payload?.reviews || [];
-        state.publicPagination = action.payload?.pagination || null;
+        state.publicDoctorReviews = action.payload?.items || [];
+state.publicPagination = action.payload?.pagination || null;
       })
 
       .addCase(fetchPublicDoctorReviews.rejected, (state, action) => {
@@ -393,9 +411,9 @@ const reviewSlice = createSlice({
 
       .addCase(fetchDoctorOwnReviews.fulfilled, (state, action) => {
         state.isLoading = false;
-        state.doctorReviews = action.payload?.reviews || [];
-        state.doctorOwnSummary = action.payload?.summary || null;
-        state.doctorPagination = action.payload?.pagination || null;
+        state.doctorReviews = action.payload?.items || [];
+state.doctorOwnSummary = action.payload?.summary || null;
+state.doctorPagination = action.payload?.pagination || null;
       })
 
       .addCase(fetchDoctorOwnReviews.rejected, (state, action) => {
@@ -410,8 +428,8 @@ const reviewSlice = createSlice({
 
       .addCase(fetchAdminReviews.fulfilled, (state, action) => {
         state.isLoading = false;
-        state.adminReviews = action.payload?.reviews || [];
-        state.adminPagination = action.payload?.pagination || null;
+        state.adminReviews = action.payload?.items || [];
+state.adminPagination = action.payload?.pagination || null;
       })
 
       .addCase(fetchAdminReviews.rejected, (state, action) => {

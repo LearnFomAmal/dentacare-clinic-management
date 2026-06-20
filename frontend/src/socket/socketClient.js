@@ -11,10 +11,17 @@ const getSocketBaseUrl = () => {
 };
 
 let socketInstance = null;
+let socketRole = null;
 
 export const connectChatSocket = (role) => {
-  if (socketInstance?.connected) {
+  if (socketInstance?.connected && socketRole === role) {
     return socketInstance;
+  }
+
+  if (socketInstance) {
+    socketInstance.disconnect();
+    socketInstance = null;
+    socketRole = null;
   }
 
   socketInstance = io(getSocketBaseUrl(), {
@@ -23,6 +30,14 @@ export const connectChatSocket = (role) => {
     auth: {
       role,
     },
+  });
+
+  socketRole = role;
+
+  socketInstance.on("disconnect", () => {
+    if (!socketInstance?.connected) {
+      socketRole = null;
+    }
   });
 
   return socketInstance;
@@ -36,5 +51,6 @@ export const disconnectChatSocket = () => {
   if (socketInstance) {
     socketInstance.disconnect();
     socketInstance = null;
+    socketRole = null;
   }
 };

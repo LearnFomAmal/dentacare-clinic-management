@@ -22,7 +22,11 @@ import {
   fetchAdminBanners,
   updateBannerStatus,
 } from "../../features/banner/bannerSlice";
-
+const buildCleanParams = (params) => {
+  return Object.fromEntries(
+    Object.entries(params).filter(([, value]) => value !== "")
+  );
+};
 const formatDate = (value) => {
   if (!value) return "N/A";
 
@@ -33,12 +37,71 @@ const formatDate = (value) => {
   });
 };
 
+const getBannerStatus = (banner) => {
+  if (banner.computedStatus && banner.computedStatusLabel) {
+    return {
+      status: banner.computedStatus,
+      label: banner.computedStatusLabel,
+    };
+  }
+
+  const now = new Date();
+
+  if (!banner.isActive) {
+    return {
+      status: "inactive",
+      label: "Inactive",
+    };
+  }
+
+  if (banner.startDate && new Date(banner.startDate) > now) {
+    return {
+      status: "upcoming",
+      label: "Upcoming",
+    };
+  }
+
+  if (banner.endDate && new Date(banner.endDate) < now) {
+    return {
+      status: "expired",
+      label: "Expired",
+    };
+  }
+
+  return {
+    status: "active",
+    label: "Active",
+  };
+};
+
 const getStatusClass = (banner) => {
-  if (banner.isActive) {
+  const { status } = getBannerStatus(banner);
+
+  if (status === "active") {
     return "border-green-200 bg-green-50 text-green-700";
   }
 
-  return "border-red-200 bg-red-50 text-red-700";
+  if (status === "upcoming" || status === "coupon_upcoming") {
+    return "border-blue-200 bg-blue-50 text-blue-700";
+  }
+
+  if (
+    status === "expired" ||
+    status === "coupon_expired" ||
+    status === "coupon_usage_finished"
+  ) {
+    return "border-orange-200 bg-orange-50 text-orange-700";
+  }
+
+  if (
+    status === "offer_unavailable" ||
+    status === "coupon_inactive" ||
+    status === "specialty_inactive"
+  ) {
+    return "border-red-200 bg-red-50 text-red-700";
+  }
+
+  return "border-slate-200 bg-slate-100 text-slate-700";
 };
 
 const getTypeLabel = (type) => {
@@ -65,16 +128,16 @@ function AdminBannersPage() {
   const [status, setStatus] = useState("");
   const [deleteTarget, setDeleteTarget] = useState(null);
 
-  const queryParams = useMemo(() => {
-    return {
-      page: 1,
-      limit: 20,
-      search,
-      type,
-      location,
-      status,
-    };
-  }, [search, type, location, status]);
+ const queryParams = useMemo(() => {
+  return buildCleanParams({
+    page: 1,
+    limit: 20,
+    search: search.trim(),
+    type,
+    location,
+    status,
+  });
+}, [search, type, location, status]);
 
   useEffect(() => {
     dispatch(fetchAdminBanners(queryParams));
@@ -181,8 +244,11 @@ function AdminBannersPage() {
             className="h-12 rounded-2xl border border-[#E5E7EB] bg-white px-4 text-sm font-bold text-[#374151] outline-none dark:border-slate-800 dark:bg-slate-900 dark:text-slate-100"
           >
             <option value="">All Status</option>
-            <option value="active">Active Only</option>
-            <option value="inactive">Inactive Only</option>
+            <option value="active">Active</option>
+             <option value="inactive">Inactive / Unavailable</option>
+            <option value="upcoming">Upcoming</option>
+              <option value="expired">Expired</option>
+            <option value="usage_finished">Usage Finished</option>
           </select>
         </section>
 
@@ -290,14 +356,22 @@ function AdminBannersPage() {
                       </td>
 
                       <td className="px-6 py-5">
-                        <p className="text-xs font-bold text-[#374151] dark:text-slate-300">
-                          {formatDate(banner.startDate)}
-                        </p>
+  {banner.startDate && banner.endDate ? (
+    <>
+      <p className="text-xs font-bold text-[#374151] dark:text-slate-300">
+        {formatDate(banner.startDate)}
+      </p>
 
-                        <p className="mt-1 text-xs font-bold text-[#6B7280]">
-                          to {formatDate(banner.endDate)}
-                        </p>
-                      </td>
+      <p className="mt-1 text-xs font-bold text-[#6B7280]">
+        to {formatDate(banner.endDate)}
+      </p>
+    </>
+  ) : (
+    <span className="rounded-full bg-[#F0F1FF] px-3 py-1 text-xs font-extrabold text-[#9381FF]">
+      Always active
+    </span>
+  )}
+</td>
 
                       <td className="px-6 py-5">
                         <span
@@ -305,7 +379,7 @@ function AdminBannersPage() {
                             banner
                           )}`}
                         >
-                          {banner.isActive ? "Active" : "Inactive"}
+                          {getBannerStatus(banner).label}
                         </span>
                       </td>
 

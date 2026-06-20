@@ -14,7 +14,14 @@ const otpSchema = new mongoose.Schema({
 
   purpose: {
     type: String,
-    enum: ["register", "forgot_password", "doctor_verify", "doctor_forgot_password", "admin_forgot_password"],
+   enum: [
+  "register",
+  "forgot_password",
+  "doctor_register",
+  "doctor_verify",
+  "doctor_forgot_password",
+  "admin_forgot_password",
+],
     required: true,
   },
 
@@ -68,6 +75,25 @@ tempUserData: {
     default: "",
   },
 },
+
+tempDoctorData: {
+  firstName: String,
+  lastName: String,
+  email: String,
+  password: String,
+
+  specializationId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "Specialty",
+    default: null,
+  },
+
+  experience: Number,
+  education: String,
+  consultationFee: Number,
+  contactNumber: String,
+},
+
   doctorId: {
   type: mongoose.Schema.Types.ObjectId,
   ref: "Doctor",

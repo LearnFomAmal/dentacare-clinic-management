@@ -1,6 +1,55 @@
 import { useNavigate } from "react-router-dom";
 
 import BannerCard from "./BannerCard";
+import { ROUTES } from "../../constants/routes";
+
+const normalizeText = (value) => {
+  return String(value || "").trim().toLowerCase();
+};
+
+const getBannerType = (banner) => {
+  return normalizeText(
+    banner?.type ||
+      banner?.bannerType ||
+      banner?.redirectType ||
+      banner?.category
+  );
+};
+
+const getSpecialtyId = (banner) => {
+  return (
+    banner?.specialty?._id ||
+    banner?.specialtyId?._id ||
+    banner?.specialtyId ||
+    banner?.redirectId?._id ||
+    banner?.redirectId ||
+    ""
+  );
+};
+
+const getCouponCode = (banner) => {
+  return (
+    banner?.couponCode ||
+    banner?.coupon?.code ||
+    banner?.couponId?.code ||
+    banner?.couponId ||
+    ""
+  );
+};
+
+const isExternalUrl = (url) => {
+  return /^https?:\/\//i.test(String(url || "").trim());
+};
+
+const isValidInternalUrl = (url) => {
+  const cleanUrl = String(url || "").trim();
+
+  if (!cleanUrl) return false;
+  if (cleanUrl === "/") return false;
+  if (cleanUrl === "#") return false;
+
+  return cleanUrl.startsWith("/");
+};
 
 function BannerCarousel({
   banners = [],
@@ -10,27 +59,69 @@ function BannerCarousel({
 }) {
   const navigate = useNavigate();
 
-  if (!banners.length) {
+  if (!Array.isArray(banners) || banners.length === 0) {
     return null;
   }
 
   const handleBannerClick = (banner) => {
-    if (banner.redirectUrl) {
-      navigate(banner.redirectUrl);
+    const bannerType = getBannerType(banner);
+
+    // ✅ Referral banner
+    if (
+      bannerType === "referral" ||
+      bannerType === "referral_ad" ||
+      bannerType === "referral_banner"
+    ) {
+      navigate(ROUTES.REFERRALS);
       return;
     }
 
-    if (banner.type === "referral") {
-      navigate("/referral");
+    // ✅ Specialty / coupon banner
+    // This must run BEFORE redirectUrl, because some banners may contain redirectUrl: "/"
+    if (
+      bannerType === "specialty" ||
+      bannerType === "specialty_coupon" ||
+      bannerType === "coupon" ||
+      bannerType === "offer"
+    ) {
+      const specialtyId = getSpecialtyId(banner);
+      const couponCode = getCouponCode(banner);
+
+      const params = new URLSearchParams();
+
+      if (specialtyId) {
+        params.set("specialty", specialtyId);
+      }
+
+      if (couponCode) {
+        params.set("coupon", couponCode);
+      }
+
+      navigate({
+        pathname: ROUTES.FIND_DOCTORS,
+        search: params.toString() ? `?${params.toString()}` : "",
+      });
+
       return;
     }
 
-    if (banner.type === "specialty_coupon") {
-      const specialtyId = banner.specialty?._id || banner.specialtyId || "";
-      const couponCode = banner.couponCode || "";
+    // ✅ Custom redirect URL only if it is useful
+    if (banner?.redirectUrl) {
+      const redirectUrl = String(banner.redirectUrl).trim();
 
-      navigate(`/doctors?specialty=${specialtyId}&coupon=${couponCode}`);
+      if (isExternalUrl(redirectUrl)) {
+        window.location.href = redirectUrl;
+        return;
+      }
+
+      if (isValidInternalUrl(redirectUrl)) {
+        navigate(redirectUrl);
+        return;
+      }
     }
+
+    // ✅ Safe fallback
+    navigate(ROUTES.FIND_DOCTORS);
   };
 
   return (
@@ -57,7 +148,7 @@ function BannerCarousel({
         <div className="flex gap-5 overflow-x-auto pb-4 [scrollbar-width:thin]">
           {banners.map((banner) => (
             <BannerCard
-              key={banner._id}
+              key={banner._id || banner.id}
               banner={banner}
               compact={compact}
               onClick={handleBannerClick}

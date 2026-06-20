@@ -3,7 +3,6 @@ import {
   ArrowLeft,
   CalendarDays,
   ImagePlus,
-  Link as LinkIcon,
   Megaphone,
   TicketPercent,
   Type,
@@ -11,7 +10,7 @@ import {
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import toast from "react-hot-toast";
-
+import ImageCropperModal from "../../components/common/ImageCropperModal";
 import DashboardLayout from "../../components/layout/DashboardLayout";
 import SettingsSection from "../../components/common/SettingsSection";
 import Input from "../../components/ui/Input";
@@ -82,7 +81,9 @@ function AdminBannerFormPage() {
 
   const [selectedImageFile, setSelectedImageFile] = useState(null);
   const [previewUrl, setPreviewUrl] = useState("");
-
+    const [rawImageSrc, setRawImageSrc] = useState("");
+  const [rawImageFileName, setRawImageFileName] = useState("banner-image.jpg");
+  const [cropperOpen, setCropperOpen] = useState(false);
   const {
     register,
     handleSubmit,
@@ -98,7 +99,6 @@ function AdminBannerFormPage() {
       locationsHome: true,
       locationsDoctors: false,
       ctaText: "View Offer",
-      redirectUrl: "",
       specialtyId: "",
       couponId: "",
       couponCode: "",
@@ -182,7 +182,6 @@ function AdminBannerFormPage() {
       locationsHome: selectedBanner.locations?.includes("home") || false,
       locationsDoctors: selectedBanner.locations?.includes("doctors") || false,
       ctaText: selectedBanner.ctaText || "View Offer",
-      redirectUrl: selectedBanner.redirectUrl || "",
       specialtyId:
         selectedBanner.specialtyId?._id ||
         selectedBanner.specialty?._id ||
@@ -222,13 +221,12 @@ function AdminBannerFormPage() {
 
   useEffect(() => {
     if (bannerType === "referral") {
-      setValue("locationsHome", true);
-      setValue("locationsDoctors", false);
-      setValue("specialtyId", "");
-      setValue("couponId", "");
-      setValue("couponCode", "");
-      setValue("redirectUrl", "/referral");
-    }
+  setValue("locationsHome", true);
+  setValue("locationsDoctors", false);
+  setValue("specialtyId", "");
+  setValue("couponId", "");
+  setValue("couponCode", "");
+}
 
     if (bannerType === "specialty_coupon") {
       setValue("locationsHome", true);
@@ -244,8 +242,10 @@ function AdminBannerFormPage() {
     };
   }, [previewUrl, selectedImageFile]);
 
-  const handleImageChange = (event) => {
+   const handleImageChange = (event) => {
     const file = event.target.files?.[0];
+
+    event.target.value = "";
 
     if (!file) return;
 
@@ -253,22 +253,44 @@ function AdminBannerFormPage() {
 
     if (!allowedTypes.includes(file.type)) {
       toast.error("Only JPG, JPEG, PNG and WEBP images are allowed");
-      event.target.value = "";
       return;
     }
 
     if (file.size > 3 * 1024 * 1024) {
       toast.error("Banner image must be less than 3MB");
-      event.target.value = "";
       return;
     }
 
+    const imageUrl = URL.createObjectURL(file);
+
+    setRawImageSrc(imageUrl);
+    setRawImageFileName(file.name || "banner-image.jpg");
+    setCropperOpen(true);
+  };
+
+    const handleCropComplete = (croppedFile) => {
     if (previewUrl && selectedImageFile) {
       URL.revokeObjectURL(previewUrl);
     }
 
-    setSelectedImageFile(file);
-    setPreviewUrl(URL.createObjectURL(file));
+    setSelectedImageFile(croppedFile);
+    setPreviewUrl(URL.createObjectURL(croppedFile));
+
+    if (rawImageSrc) {
+      URL.revokeObjectURL(rawImageSrc);
+    }
+
+    setRawImageSrc("");
+    setCropperOpen(false);
+  };
+
+  const handleCropCancel = () => {
+    if (rawImageSrc) {
+      URL.revokeObjectURL(rawImageSrc);
+    }
+
+    setRawImageSrc("");
+    setCropperOpen(false);
   };
 
   const validatePayload = (data) => {
@@ -276,11 +298,15 @@ function AdminBannerFormPage() {
       return "Banner title is required";
     }
 
-    if (!data.startDate || !data.endDate) {
-      return "Banner start and end dates are required";
+       if ((data.startDate && !data.endDate) || (!data.startDate && data.endDate)) {
+      return "Both start and end date are required for scheduled banners";
     }
 
-    if (new Date(data.startDate) >= new Date(data.endDate)) {
+    if (
+      data.startDate &&
+      data.endDate &&
+      new Date(data.startDate) >= new Date(data.endDate)
+    ) {
       return "End date must be after start date";
     }
 
@@ -338,11 +364,17 @@ function AdminBannerFormPage() {
     formData.append("type", data.type);
     formData.append("locations", JSON.stringify(locations));
     formData.append("ctaText", data.ctaText.trim() || "View Offer");
-    formData.append("redirectUrl", data.redirectUrl.trim());
-    formData.append("startDate", toISOStringFromLocal(data.startDate));
-    formData.append("endDate", toISOStringFromLocal(data.endDate));
-    formData.append("priority", Number(data.priority || 1));
-    formData.append("isActive", Boolean(data.isActive));
+     formData.append(
+      "startDate",
+      data.startDate ? toISOStringFromLocal(data.startDate) : ""
+    );
+
+    formData.append(
+      "endDate",
+      data.endDate ? toISOStringFromLocal(data.endDate) : ""
+    );
+    formData.append("priority", String(Number(data.priority || 1)));
+formData.append("isActive", data.isActive ? "true" : "false");
 
     if (data.type === "specialty_coupon") {
       formData.append("specialtyId", data.specialtyId);
@@ -378,7 +410,13 @@ function AdminBannerFormPage() {
       toast.error(err || "Failed to save banner");
     }
   };
-
+useEffect(() => {
+  return () => {
+    if (rawImageSrc) {
+      URL.revokeObjectURL(rawImageSrc);
+    }
+  };
+}, [rawImageSrc]);
   return (
     <DashboardLayout title={isEditMode ? "Edit Banner" : "Add Banner"}>
       <main className="mx-auto max-w-[1080px] px-6 py-8">
@@ -446,15 +484,6 @@ function AdminBannerFormPage() {
                   icon={Megaphone}
                 />
 
-                <Input
-                  label="Redirect URL"
-                  name="redirectUrl"
-                  placeholder="/referral or /doctors?specialty=..."
-                  register={register}
-                  error={errors.redirectUrl}
-                  icon={LinkIcon}
-                />
-
                 {bannerType === "specialty_coupon" && (
                   <>
                     <Select
@@ -500,23 +529,27 @@ function AdminBannerFormPage() {
                   </>
                 )}
 
-                <Input
-                  label="Start Date"
-                  type="datetime-local"
-                  name="startDate"
-                  register={register}
-                  error={errors.startDate}
-                  icon={CalendarDays}
-                />
+               <Input
+  label="Start Date Optional"
+  type="datetime-local"
+  name="startDate"
+  register={register}
+  error={errors.startDate}
+  icon={CalendarDays}
+/>
 
-                <Input
-                  label="End Date"
-                  type="datetime-local"
-                  name="endDate"
-                  register={register}
-                  error={errors.endDate}
-                  icon={CalendarDays}
-                />
+<Input
+  label="End Date Optional"
+  type="datetime-local"
+  name="endDate"
+  register={register}
+  error={errors.endDate}
+  icon={CalendarDays}
+/>
+
+<div className="md:col-span-2 rounded-2xl bg-[#F8FAFC] px-4 py-3 text-xs font-bold leading-5 text-[#6B7280]">
+  Leave start and end date empty if this banner should stay active until you manually deactivate it.
+</div>
 
                 <Input
                   label="Priority"
@@ -645,7 +678,19 @@ function AdminBannerFormPage() {
             </form>
           )}
         </SettingsSection>
+              <ImageCropperModal
+        open={cropperOpen}
+        imageSrc={rawImageSrc}
+        fileName={rawImageFileName}
+        aspect={1200 / 450}
+        cropShape="rect"
+        title="Crop Banner Image"
+        description="Crop the image for banner display. Recommended ratio is 1200 × 450."
+        onCancel={handleCropCancel}
+        onCropComplete={handleCropComplete}
+      />
       </main>
+      
     </DashboardLayout>
   );
 }

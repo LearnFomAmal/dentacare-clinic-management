@@ -1,6 +1,8 @@
 import jwt from "jsonwebtoken";
 
 import { env } from "../config/env.js";
+import { findUserById } from "../modules/users/user.repository.js";
+import { findDoctorById } from "../modules/doctors/doctor.repository.js";
 import {
   markChatAsReadService,
   sendChatMessageService,
@@ -18,7 +20,7 @@ const parseCookies = (cookieHeader = "") => {
   }, {});
 };
 
-const authenticateSocket = (socket) => {
+const authenticateSocket = async (socket) => {
   const cookies = parseCookies(socket.handshake.headers.cookie || "");
   const requestedRole = socket.handshake.auth?.role;
 
@@ -40,9 +42,31 @@ const authenticateSocket = (socket) => {
       throw new Error("Invalid doctor socket token");
     }
 
+    const doctor = await findDoctorById(decoded.doctorId);
+
+    if (!doctor || doctor.accountStatus?.isDeleted) {
+      throw new Error("Doctor account not found");
+    }
+
+    if (doctor.accountStatus?.isBlocked) {
+      throw new Error("Doctor account is blocked");
+    }
+
+    if (!doctor.accountStatus?.isEmailVerified) {
+      throw new Error("Please verify your email first");
+    }
+
+    if (!doctor.accountStatus?.isVerified) {
+      throw new Error("Doctor documents are not approved yet");
+    }
+
+    if (doctor.verification?.status !== "approved") {
+      throw new Error("Doctor verification is not approved");
+    }
+
     return {
       role: "doctor",
-      userId: decoded.doctorId,
+      userId: doctor._id.toString(),
     };
   }
 
@@ -50,17 +74,32 @@ const authenticateSocket = (socket) => {
     throw new Error("Invalid patient socket token");
   }
 
+  const user = await findUserById(decoded.userId);
+
+  if (!user || user.accountStatus?.isDeleted) {
+    throw new Error("Patient account not found");
+  }
+
+  if (user.accountStatus?.isBlocked) {
+    throw new Error("Patient account is blocked");
+  }
+
+  if (!user.accountStatus?.isVerified) {
+    throw new Error("Patient account is not verified");
+  }
+
   return {
     role: "patient",
-    userId: decoded.userId,
+    userId: user._id.toString(),
   };
 };
 
-export const registerChatSocketHandlers = (io, socket) => {
+export const registerChatSocketHandlers = async (io, socket) => {
   let authContext = null;
 
   try {
-    authContext = authenticateSocket(socket);
+    authContext = await authenticateSocket(socket);
+
     socket.data.userId = authContext.userId;
     socket.data.role = authContext.role;
   } catch (error) {
@@ -93,28 +132,49 @@ export const registerChatSocketHandlers = (io, socket) => {
     }
   });
 
-  socket.on("send_message", async ({ appointmentId, text, clientTempId } = {}) => {
-    try {
-      const result = await sendChatMessageService({
-        appointmentId,
-        userId: authContext.userId,
-        role: authContext.role,
-        body: {
-          text,
-        },
-      });
+  socket.on(
+    "send_message",
+    async ({ appointmentId, text, clientTempId } = {}, ack) => {
+      try {
+        const result = await sendChatMessageService({
+          appointmentId,
+          userId: authContext.userId,
+          role: authContext.role,
+          body: {
+            text,
+          },
+        });
 
-      io.to(result.roomName).emit("receive_message", {
-        message: result.message,
-        chat: result.chat,
-        clientTempId: clientTempId || null,
-      });
-    } catch (error) {
-      socket.emit("chat_error", {
-        message: error.message || "Failed to send message",
-      });
+        const payload = {
+          message: result.message,
+          chat: result.chat,
+          clientTempId: clientTempId || null,
+        };
+
+        io.to(result.roomName).emit("receive_message", payload);
+
+        if (typeof ack === "function") {
+          ack({
+            success: true,
+            ...payload,
+          });
+        }
+      } catch (error) {
+        const message = error.message || "Failed to send message";
+
+        socket.emit("chat_error", {
+          message,
+        });
+
+        if (typeof ack === "function") {
+          ack({
+            success: false,
+            message,
+          });
+        }
+      }
     }
-  });
+  );
 
   socket.on("mark_chat_read", async ({ chatId } = {}) => {
     try {
@@ -124,7 +184,23 @@ export const registerChatSocketHandlers = (io, socket) => {
         role: authContext.role,
       });
 
-      socket.emit("messages_read", result);
+      const appointmentId =
+        result.chat?.appointmentId?._id || result.chat?.appointmentId;
+
+      const roomName = appointmentId
+        ? `chat:appointment:${appointmentId}`
+        : null;
+
+      const payload = {
+        ...result,
+        readerRole: authContext.role,
+      };
+
+      if (roomName) {
+        io.to(roomName).emit("messages_read", payload);
+      } else {
+        socket.emit("messages_read", payload);
+      }
     } catch (error) {
       socket.emit("chat_error", {
         message: error.message || "Failed to mark chat as read",
