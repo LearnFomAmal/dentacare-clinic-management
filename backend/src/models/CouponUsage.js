@@ -52,6 +52,17 @@ const couponUsageSchema = new mongoose.Schema(
       type: Date,
       default: Date.now,
     },
+
+    releasedAt: {
+  type: Date,
+  default: null,
+},
+
+releaseReason: {
+  type: String,
+  default: "",
+  trim: true,
+},
   },
   { timestamps: true }
 );
@@ -66,7 +77,17 @@ couponUsageSchema.index(
     unique: true,
   }
 );
+couponUsageSchema.index({
+  appointmentId: 1,
+  couponId: 1,
+  status: 1,
+});
 
+couponUsageSchema.index({
+  userId: 1,
+  couponId: 1,
+  status: 1,
+});
 const CouponUsage = mongoose.model("CouponUsage", couponUsageSchema);
 
 export default CouponUsage;

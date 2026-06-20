@@ -15,25 +15,27 @@ import {
   VenusAndMars,
   X,
   XCircle,
+  MessageCircle,
 } from "lucide-react";
 import { Link, useParams } from "react-router-dom";
 import toast from "react-hot-toast";
-
+import { ROUTES } from "../../constants/routes";
 import DashboardLayout from "../../components/layout/DashboardLayout";
 import RejectAppointmentModal from "../../components/appointments/RejectAppointmentModal";
+import CancelAppointmentModal from "../../components/appointments/CancelAppointmentModal";
 import { useAppDispatch, useAppSelector } from "../../app/hooks";
 
 import {
   approveDoctorAppointment,
+  cancelDoctorAppointment,
   clearAppointmentError,
   completeDoctorAppointment,
   fetchDoctorAppointmentDetails,
   rejectDoctorAppointment,
 } from "../../features/appointment/appointmentSlice";
-
+import ImageCropperModal from "../../components/common/ImageCropperModal";
 import {
   canCompleteAppointment,
-  canDecideAppointment,
   formatAppointmentDate,
   formatAppointmentTime,
   getAppointmentDisplayStatus,
@@ -41,6 +43,7 @@ import {
   getPatientName,
   getStatusBadgeClass,
   isAppointmentEndTimePast,
+isAppointmentStartTimePast,
 } from "../../utils/appointmentUi";
 
 import {
@@ -105,18 +108,44 @@ const formatMoney = (value) => {
 const getFileUrl = (report) => {
   return report?.file?.url || report?.fileUrl || report?.url || "";
 };
+const PRESCRIPTION_IMAGE_TYPES = [
+  "image/jpeg",
+  "image/jpg",
+  "image/png",
+  "image/webp",
+];
 
+const PRESCRIPTION_ALLOWED_TYPES = [
+  ...PRESCRIPTION_IMAGE_TYPES,
+  "application/pdf",
+];
+
+const PRESCRIPTION_MAX_FILE_SIZE = 5 * 1024 * 1024;
+
+const isPrescriptionImageFile = (file) => {
+  return file && PRESCRIPTION_IMAGE_TYPES.includes(file.type);
+};
+
+const buildCroppedPrescriptionFileName = (fileName = "prescription-image") => {
+  const cleanName = String(fileName || "prescription-image").replace(
+    /\.[^/.]+$/,
+    ""
+  );
+
+  return `${cleanName}-cropped.jpg`;
+};
 function DoctorAppointmentDetailsPage() {
   const { appointmentId } = useParams();
   const dispatch = useAppDispatch();
 
   const {
-    selectedAppointment,
-    isLoadingDetails,
-    isDeciding,
-    isCompleting,
-    error,
-  } = useAppSelector((state) => state.appointments);
+  selectedAppointment,
+  isLoadingDetails,
+  isDeciding,
+  isCompleting,
+  isCancelling,
+  error,
+} = useAppSelector((state) => state.appointments);
 
   const {
     appointmentReports = [],
@@ -126,11 +155,18 @@ function DoctorAppointmentDetailsPage() {
   } = useAppSelector((state) => state.reports);
 
   const [rejectModalOpen, setRejectModalOpen] = useState(false);
-
+  const [cancelModalOpen, setCancelModalOpen] = useState(false);
+ 
   const [prescriptionTitle, setPrescriptionTitle] = useState("");
-  const [prescriptionText, setPrescriptionText] = useState("");
-  const [prescriptionDescription, setPrescriptionDescription] = useState("");
-  const [prescriptionFile, setPrescriptionFile] = useState(null);
+const [prescriptionText, setPrescriptionText] = useState("");
+const [prescriptionDescription, setPrescriptionDescription] = useState("");
+const [prescriptionFile, setPrescriptionFile] = useState(null);
+
+const [prescriptionCropperOpen, setPrescriptionCropperOpen] = useState(false);
+const [rawPrescriptionImageSrc, setRawPrescriptionImageSrc] = useState("");
+const [rawPrescriptionFileName, setRawPrescriptionFileName] = useState(
+  "prescription-image.jpg"
+);
 
   useEffect(() => {
     if (!appointmentId) return;
@@ -159,6 +195,14 @@ function DoctorAppointmentDetailsPage() {
     dispatch(clearReportError());
   }, [reportError, dispatch]);
 
+  useEffect(() => {
+  return () => {
+    if (rawPrescriptionImageSrc) {
+      URL.revokeObjectURL(rawPrescriptionImageSrc);
+    }
+  };
+}, [rawPrescriptionImageSrc]);
+
   const appointment = selectedAppointment;
   const patient = appointment?.patientId;
 
@@ -186,15 +230,31 @@ function DoctorAppointmentDetailsPage() {
       (report) => report.reportType !== "prescription"
     ) || [];
 
-  const canApproveOrReject = canDecideAppointment(appointment);
-  const canComplete = canCompleteAppointment(appointment);
+ const hasConsultationStarted = isAppointmentStartTimePast(appointment);
+
+const canApproveOrReject =
+  appointment?.status === "pending" &&
+  appointment?.paymentStatus === "paid" &&
+  !hasConsultationStarted;
+
+const canComplete = canCompleteAppointment(appointment);
+
+const canDoctorCancel =
+  appointment?.status === "approved" &&
+  appointment?.paymentStatus === "paid" &&
+  !hasConsultationStarted;
   const canUploadPrescription = appointment?.status === "completed";
   const isPastAppointment = isAppointmentEndTimePast(appointment);
   const isApprovedButNotReadyToComplete =
     appointment?.status === "approved" && !isPastAppointment;
   const isApprovedAwaitingCompletion =
     appointment?.status === "approved" && isPastAppointment;
-
+const chatPath = appointment?._id
+  ? ROUTES.DOCTOR_CHAT_APPOINTMENT.replace(
+      ":appointmentId",
+      appointment._id
+    )
+  : "";
   const handleApprove = async () => {
     try {
       const result = await dispatch(
@@ -230,6 +290,31 @@ function DoctorAppointmentDetailsPage() {
       toast.error(err || "Failed to reject appointment");
     }
   };
+    
+  const handleCancelAppointment = async ({ reasonType, reason }) => {
+  if (!reason.trim()) {
+    toast.error("Cancellation reason is required");
+    return;
+  }
+
+  try {
+    const result = await dispatch(
+      cancelDoctorAppointment({
+        appointmentId,
+        reasonType,
+        reason,
+      })
+    ).unwrap();
+
+    toast.success(result.message || "Appointment cancelled");
+    setCancelModalOpen(false);
+
+    dispatch(fetchDoctorAppointmentDetails(appointmentId));
+    dispatch(fetchDoctorAppointmentReports(appointmentId));
+  } catch (err) {
+    toast.error(err || "Failed to cancel appointment");
+  }
+};
 
   const handleComplete = async () => {
     try {
@@ -245,6 +330,46 @@ function DoctorAppointmentDetailsPage() {
       toast.error(err || "Failed to complete appointment");
     }
   };
+   const handlePrescriptionFileSelect = (file) => {
+  if (!file) {
+    setPrescriptionFile(null);
+    return;
+  }
+
+  if (!PRESCRIPTION_ALLOWED_TYPES.includes(file.type)) {
+    toast.error("Only JPG, JPEG, PNG, WEBP and PDF files are allowed");
+    return;
+  }
+
+  if (file.size > PRESCRIPTION_MAX_FILE_SIZE) {
+    toast.error("Prescription file must be less than 5MB");
+    return;
+  }
+
+  if (!isPrescriptionImageFile(file)) {
+    setPrescriptionFile(file);
+    return;
+  }
+
+  const imageUrl = URL.createObjectURL(file);
+
+  setRawPrescriptionImageSrc(imageUrl);
+  setRawPrescriptionFileName(buildCroppedPrescriptionFileName(file.name));
+  setPrescriptionCropperOpen(true);
+};
+
+const handlePrescriptionCropComplete = (croppedFile) => {
+  setPrescriptionFile(croppedFile);
+  setRawPrescriptionImageSrc("");
+  setRawPrescriptionFileName("prescription-image.jpg");
+  setPrescriptionCropperOpen(false);
+};
+
+const handlePrescriptionCropCancel = () => {
+  setRawPrescriptionImageSrc("");
+  setRawPrescriptionFileName("prescription-image.jpg");
+  setPrescriptionCropperOpen(false);
+};
 
   const handlePrescriptionUpload = async (event) => {
     event.preventDefault();
@@ -324,20 +449,21 @@ function DoctorAppointmentDetailsPage() {
             <RescheduleHistorySection appointment={appointment} />
 
             {canUploadPrescription && (
-              <PrescriptionSection
-                reports={prescriptions}
-                isLoading={isLoadingAppointmentReports}
-                isUploading={isUploadingPrescription}
-                title={prescriptionTitle}
-                prescriptionText={prescriptionText}
-                description={prescriptionDescription}
-                file={prescriptionFile}
-                onTitleChange={setPrescriptionTitle}
-                onPrescriptionTextChange={setPrescriptionText}
-                onDescriptionChange={setPrescriptionDescription}
-                onFileChange={setPrescriptionFile}
-                onSubmit={handlePrescriptionUpload}
-              />
+             <PrescriptionSection
+  reports={prescriptions}
+  isLoading={isLoadingAppointmentReports}
+  isUploading={isUploadingPrescription}
+  title={prescriptionTitle}
+  prescriptionText={prescriptionText}
+  description={prescriptionDescription}
+  file={prescriptionFile}
+  onTitleChange={setPrescriptionTitle}
+  onPrescriptionTextChange={setPrescriptionText}
+  onDescriptionChange={setPrescriptionDescription}
+  onFileChange={handlePrescriptionFileSelect}
+  onRemoveFile={() => setPrescriptionFile(null)}
+  onSubmit={handlePrescriptionUpload}
+/>
             )}
 
             {!canUploadPrescription && prescriptions.length > 0 && (
@@ -404,7 +530,15 @@ function DoctorAppointmentDetailsPage() {
                 />
               )}
             </div>
-
+              {appointment.status === "approved" && chatPath && (
+  <Link
+    to={chatPath}
+    className="mt-6 inline-flex h-12 w-full items-center justify-center gap-2 rounded-2xl bg-[#9381FF] text-sm font-extrabold text-white shadow-[0_14px_28px_rgba(147,129,255,0.24)] transition hover:bg-[#7E6EF2]"
+  >
+    <MessageCircle size={17} />
+    Chat with Patient
+  </Link>
+)}
             {canApproveOrReject && (
               <div className="mt-6 grid gap-3">
                 <button
@@ -428,6 +562,17 @@ function DoctorAppointmentDetailsPage() {
                 </button>
               </div>
             )}
+            {canDoctorCancel && (
+  <button
+    type="button"
+    disabled={isCancelling}
+    onClick={() => setCancelModalOpen(true)}
+    className="mt-3 inline-flex h-12 w-full items-center justify-center gap-2 rounded-2xl bg-red-50 text-sm font-extrabold text-red-600 transition hover:bg-red-100 disabled:opacity-60"
+  >
+    <X size={16} />
+    {isCancelling ? "Cancelling..." : "Cancel Appointment"}
+  </button>
+)}
                {isPastAppointment && appointment.status === "pending" && (
   <StatusMessage
     type="warning"
@@ -521,6 +666,28 @@ function DoctorAppointmentDetailsPage() {
         onClose={() => setRejectModalOpen(false)}
         onConfirm={handleReject}
       />
+
+      <CancelAppointmentModal
+      open={cancelModalOpen}
+      loading={isCancelling}
+      actor="doctor"
+      appointment={appointment}
+      onClose={() => setCancelModalOpen(false)}
+      onConfirm={handleCancelAppointment}
+     />
+
+     <ImageCropperModal
+  open={prescriptionCropperOpen}
+  imageSrc={rawPrescriptionImageSrc}
+  fileName={rawPrescriptionFileName}
+  aspect={3 / 4}
+  cropShape="rect"
+  title="Crop Prescription Image"
+  description="Crop the prescription or report image before uploading. PDF files are uploaded directly."
+  onCancel={handlePrescriptionCropCancel}
+  onCropComplete={handlePrescriptionCropComplete}
+/>
+
     </DashboardLayout>
   );
 }
@@ -825,6 +992,7 @@ function PrescriptionSection({
   onPrescriptionTextChange,
   onDescriptionChange,
   onFileChange,
+  onRemoveFile,
   onSubmit,
 }) {
   return (
@@ -865,20 +1033,37 @@ function PrescriptionSection({
               Optional File
             </label>
 
-            <input
-              type="file"
-              accept="image/jpeg,image/jpg,image/png,image/webp,application/pdf"
-              onChange={(event) =>
-                onFileChange(event.target.files?.[0] || null)
-              }
-              className="mt-2 block w-full rounded-2xl border border-[#EEF0F6] bg-white px-4 py-3 text-sm font-semibold text-[#6B7280]"
-            />
+       <input
+  type="file"
+  accept="image/jpeg,image/jpg,image/png,image/webp,application/pdf"
+  onChange={(event) => {
+    const selectedFile = event.target.files?.[0] || null;
 
-            {file && (
-              <p className="mt-2 text-xs font-bold text-[#9381FF]">
-                Selected: {file.name}
-              </p>
-            )}
+    event.target.value = "";
+    onFileChange(selectedFile);
+  }}
+  className="mt-2 block w-full rounded-2xl border border-[#EEF0F6] bg-white px-4 py-3 text-sm font-semibold text-[#6B7280]"
+/>
+
+<p className="mt-2 text-xs font-semibold leading-5 text-[#9CA3AF]">
+  JPG, PNG, WEBP images will open in cropper. PDF files upload directly.
+</p>
+
+{file && (
+  <div className="mt-3 flex items-center justify-between gap-3 rounded-2xl bg-white px-4 py-3">
+    <p className="min-w-0 truncate text-xs font-bold text-[#9381FF]">
+      Selected: {file.name}
+    </p>
+
+    <button
+      type="button"
+      onClick={onRemoveFile}
+      className="shrink-0 rounded-xl bg-red-50 px-3 py-1.5 text-xs font-extrabold text-red-600 transition hover:bg-red-100"
+    >
+      Remove
+    </button>
+  </div>
+)}
           </div>
         </div>
 

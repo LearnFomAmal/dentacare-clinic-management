@@ -22,11 +22,24 @@ import {
  getDoctorDetailsController,
  updateDoctorConsultationFeeController,
  updateDoctorProfileImageController,
+ registerDoctorController,
+ verifyDoctorRegisterOtpController,
+  resendDoctorRegisterOtpController,
+  getMyDoctorVerificationController,
+ uploadDoctorVerificationDocumentsController,
+ getDoctorVerificationRequestsController,
+ approveDoctorVerificationController,
+  rejectDoctorVerificationController,
+
 } from "./doctor.controller.js";
 
-import { protectDoctor } from "../../middlewares/doctorAuth.middleware.js";
+import { protectDoctor} from "../../middlewares/doctorAuth.middleware.js";
 import { protectAdmin } from "../../middlewares/adminAuth.middleware.js";
-import { uploadProfileImage } from "../../middlewares/upload.middleware.js";
+import {
+  uploadProfileImage,
+  uploadDoctorVerificationDocuments,
+} from "../../middlewares/upload.middleware.js";
+
 const router = express.Router();
 
 
@@ -70,9 +83,9 @@ router.post(
 // ==============================
 // DOCTOR PROFILE
 // ==============================
-router.get("/me", protectDoctor, getMyDoctorProfileController);
+router.get("/me", protectDoctor,getMyDoctorProfileController);
 
-router.patch("/me", protectDoctor, updateDoctorProfileController);
+router.patch("/me", protectDoctor,updateDoctorProfileController);
 
 router.delete(
   "/me",
@@ -87,6 +100,7 @@ router.delete(
 router.patch(
   "/change-password",
   protectDoctor,
+  
   changeDoctorPasswordController
 );
 
@@ -97,6 +111,7 @@ router.patch(
 router.patch(
   "/theme",
   protectDoctor,
+  
   updateDoctorThemeController
 );
 
@@ -107,6 +122,7 @@ router.patch(
 router.get(
   "/sessions",
   protectDoctor,
+  
   getDoctorSessionsController
 );
 
@@ -126,10 +142,56 @@ router.post(
   resendForgotPasswordOtpController
 );
 
+// ==============================
+// DOCTOR SELF REGISTRATION
+// ==============================
+router.post("/register", registerDoctorController);
+
+router.post(
+  "/register/verify-otp",
+  verifyDoctorRegisterOtpController
+);
+
+router.post(
+  "/register/resend-otp",
+  resendDoctorRegisterOtpController
+);
+
+// ==============================
+// DOCTOR VERIFICATION DOCUMENTS
+// ==============================
 router.get(
-  "/:id",
+  "/me/verification",
+  protectDoctor,
+  getMyDoctorVerificationController
+);
+
+router.patch(
+  "/me/verification-documents",
+  protectDoctor,
+  uploadDoctorVerificationDocuments,
+  uploadDoctorVerificationDocumentsController
+);
+
+// ==============================
+// ADMIN DOCTOR VERIFICATION
+// ==============================
+router.get(
+  "/admin/verification-requests",
   protectAdmin,
-  getDoctorDetailsController
+  getDoctorVerificationRequestsController
+);
+
+router.patch(
+  "/admin/:id/verification/approve",
+  protectAdmin,
+  approveDoctorVerificationController
+);
+
+router.patch(
+  "/admin/:id/verification/reject",
+  protectAdmin,
+  rejectDoctorVerificationController
 );
 
 router.patch(
@@ -138,5 +200,13 @@ router.patch(
   uploadProfileImage,
   updateDoctorProfileImageController
 );
+
+router.get(
+  "/:id",
+  protectAdmin,
+  getDoctorDetailsController
+);
+
+
 
 export default router;

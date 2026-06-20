@@ -47,7 +47,8 @@ export const sendDoctorVerificationMail = async (
         <p>Your OTP verification code:</p>
         <h1>${otp}</h1>
 
-        <p>Please verify your account and change password after login.</p>
+       <p>Please verify your email using this OTP and set your new password.</p>
+<p>After login, upload your certificates for admin verification.</p>
       `,
     });
   } catch (error) {
@@ -150,3 +151,59 @@ export const sendAdminForgotPasswordOtpMail =
       );
     }
   };
+
+  export const sendDoctorRegisterOtpMail = async (email, otp) => {
+  try {
+    await transporter.sendMail({
+      from: env.EMAIL_USER,
+      to: email,
+      subject: "DentaCare Doctor Registration OTP",
+      html: `
+        <h2>Doctor Registration Verification</h2>
+        <p>Your OTP is:</p>
+        <h1>${otp}</h1>
+        <p>This OTP expires in ${OTP_EXPIRY_MINUTES} minutes.</p>
+      `,
+    });
+  } catch (error) {
+    throw new AppError("Failed to send doctor registration OTP", 500);
+  }
+};
+
+export const sendDoctorVerificationApprovedMail = async (email) => {
+  try {
+    await transporter.sendMail({
+      from: env.EMAIL_USER,
+      to: email,
+      subject: "DentaCare Doctor Verification Approved",
+      html: `
+        <h2>Verification Approved</h2>
+        <p>Your doctor documents have been approved by admin.</p>
+        <p>You can now manage slots and receive appointments.</p>
+      `,
+    });
+  } catch (error) {
+    throw new AppError("Failed to send doctor approval email", 500);
+  }
+};
+
+export const sendDoctorVerificationRejectedMail = async (
+  email,
+  reason
+) => {
+  try {
+    await transporter.sendMail({
+      from: env.EMAIL_USER,
+      to: email,
+      subject: "DentaCare Doctor Verification Rejected",
+      html: `
+        <h2>Verification Rejected</h2>
+        <p>Your doctor document verification was rejected.</p>
+        <p><strong>Reason:</strong> ${reason}</p>
+        <p>Please upload valid documents again.</p>
+      `,
+    });
+  } catch (error) {
+    throw new AppError("Failed to send doctor rejection email", 500);
+  }
+};

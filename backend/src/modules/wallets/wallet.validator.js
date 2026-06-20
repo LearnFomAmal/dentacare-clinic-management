@@ -8,9 +8,7 @@ export const validateObjectId = (id, fieldName = "id") => {
   }
 };
 
-export const validateTopupInput = (body) => {
-  const { amount, paymentMethod, transactionId } = body;
-
+export const validateTopupAmount = (amount) => {
   const numericAmount = Number(amount);
 
   if (!amount || Number.isNaN(numericAmount)) {
@@ -25,27 +23,100 @@ export const validateTopupInput = (body) => {
     throw new AppError("Maximum top-up amount is ₹50,000", 400);
   }
 
-  const validMethods = ["google_pay", "phonepe", "upi", "razorpay"];
+  return numericAmount;
+};
 
-  if (!paymentMethod || !validMethods.includes(paymentMethod)) {
-    throw new AppError("Invalid top-up payment method", 400);
+export const validateCreateWalletRazorpayOrderInput = (body) => {
+  const amount = validateTopupAmount(body.amount);
+
+  return {
+    amount,
+  };
+};
+
+export const validateVerifyWalletRazorpayInput = (body) => {
+  const amount = body.amount;
+
+  const razorpayOrderId =
+    body.razorpay_order_id || body.razorpayOrderId || "";
+
+  const razorpayPaymentId =
+    body.razorpay_payment_id || body.razorpayPaymentId || "";
+
+  const razorpaySignature =
+    body.razorpay_signature || body.razorpaySignature || "";
+
+  const numericAmount = validateTopupAmount(amount);
+
+  if (!razorpayOrderId || !String(razorpayOrderId).trim()) {
+    throw new AppError("Razorpay order id is required", 400);
   }
 
-  if (!transactionId || !transactionId.trim()) {
-    throw new AppError("Transaction id is required", 400);
+  if (!razorpayPaymentId || !String(razorpayPaymentId).trim()) {
+    throw new AppError("Razorpay payment id is required", 400);
   }
 
-  if (transactionId.trim().length < 6) {
-    throw new AppError("Transaction id must be at least 6 characters", 400);
+  if (!razorpaySignature || !String(razorpaySignature).trim()) {
+    throw new AppError("Razorpay signature is required", 400);
   }
+
+  return {
+    amount: numericAmount,
+    razorpayOrderId: String(razorpayOrderId).trim(),
+    razorpayPaymentId: String(razorpayPaymentId).trim(),
+    razorpaySignature: String(razorpaySignature).trim(),
+  };
+};
+
+export const validateCancelWalletRazorpayTopupInput = (body) => {
+  const razorpayOrderId =
+    body.razorpay_order_id || body.razorpayOrderId || "";
+
+  if (!razorpayOrderId || !String(razorpayOrderId).trim()) {
+    throw new AppError("Razorpay order id is required", 400);
+  }
+
+  return {
+    razorpayOrderId: String(razorpayOrderId).trim(),
+  };
 };
 
 export const validateTransactionQuery = (query) => {
   const page = Math.max(Number(query.page) || 1, 1);
   const limit = Math.min(Math.max(Number(query.limit) || 10, 1), 50);
 
+  const reason = query.reason ? String(query.reason).trim() : "";
+  const status = query.status ? String(query.status).trim() : "success";
+
+  const allowedReasons = [
+    "",
+    "topup",
+    "booking_payment",
+    "refund",
+    "referral_reward",
+    "admin_adjustment",
+  ];
+
+  const allowedStatuses = [
+    "all",
+    "success",
+    "pending",
+    "failed",
+    "cancelled",
+  ];
+
+  if (!allowedReasons.includes(reason)) {
+    throw new AppError("Invalid wallet transaction reason filter", 400);
+  }
+
+  if (!allowedStatuses.includes(status)) {
+    throw new AppError("Invalid wallet transaction status filter", 400);
+  }
+
   return {
     page,
     limit,
+    reason,
+    status,
   };
 };

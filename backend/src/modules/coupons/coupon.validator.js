@@ -71,6 +71,17 @@ export const validateCreateCouponInput = (body) => {
   if (Number(maxUsagePerUser) < 1) {
     throw new AppError("Max usage per user must be at least 1", 400);
   }
+    
+  if (
+  Number(maxUsage) > 0 &&
+  Number(maxUsagePerUser) > Number(maxUsage)
+) {
+  throw new AppError(
+    "Max usage per user cannot be greater than max total usage. Set max total usage to 0 for unlimited total usage.",
+    400
+  );
+}
+
 
   if (body.applicableSpecialtyId) {
     validateObjectId(body.applicableSpecialtyId, "specialty id");
@@ -78,6 +89,10 @@ export const validateCreateCouponInput = (body) => {
 };
 
 export const validateUpdateCouponInput = (body) => {
+  if (!body || Object.keys(body).length === 0) {
+    throw new AppError("No update data provided", 400);
+  }
+
   if (body.code !== undefined && !body.code.trim()) {
     throw new AppError("Coupon code cannot be empty", 400);
   }
@@ -97,11 +112,51 @@ export const validateUpdateCouponInput = (body) => {
     throw new AppError("Discount value must be greater than 0", 400);
   }
 
+  if (body.maxDiscount !== undefined && Number(body.maxDiscount) < 0) {
+    throw new AppError("Max discount cannot be negative", 400);
+  }
+
+  if (body.minAmount !== undefined && Number(body.minAmount) < 0) {
+    throw new AppError("Minimum amount cannot be negative", 400);
+  }
+
+  if (body.maxUsage !== undefined && Number(body.maxUsage) < 0) {
+    throw new AppError("Max usage cannot be negative", 400);
+  }
+
   if (
-    body.discountType === "percentage" &&
-    Number(body.discountValue) > 100
+    body.maxUsagePerUser !== undefined &&
+    Number(body.maxUsagePerUser) < 1
   ) {
-    throw new AppError("Percentage discount cannot exceed 100", 400);
+    throw new AppError("Max usage per user must be at least 1", 400);
+  }
+     
+  if (
+  body.maxUsage !== undefined &&
+  body.maxUsagePerUser !== undefined &&
+  Number(body.maxUsage) > 0 &&
+  Number(body.maxUsagePerUser) > Number(body.maxUsage)
+) {
+  throw new AppError(
+    "Max usage per user cannot be greater than max total usage. Set max total usage to 0 for unlimited total usage.",
+    400
+  );
+}
+
+  if (body.validFrom !== undefined) {
+    const fromDate = new Date(body.validFrom);
+
+    if (Number.isNaN(fromDate.getTime())) {
+      throw new AppError("Invalid valid from date", 400);
+    }
+  }
+
+  if (body.validTo !== undefined) {
+    const toDate = new Date(body.validTo);
+
+    if (Number.isNaN(toDate.getTime())) {
+      throw new AppError("Invalid valid to date", 400);
+    }
   }
 
   if (body.applicableSpecialtyId) {

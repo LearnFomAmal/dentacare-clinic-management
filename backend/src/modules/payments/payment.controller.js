@@ -82,7 +82,7 @@ export const markPaymentFailedController = asyncHandler(
       res,
       200,
       true,
-      "Payment failure recorded successfully",
+      "Payment failed. Temporary booking was released.",
       result
     );
   }

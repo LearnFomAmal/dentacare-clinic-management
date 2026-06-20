@@ -99,20 +99,26 @@ function CancelAppointmentModal({
             {appointment?.startTime || ""} - {appointment?.endTime || ""}
           </p>
         </div>
-            {actor === "patient" && refundInfo.isPaid && (
+         {refundInfo.isPaid && (
   <div
     className={`mt-4 rounded-2xl border p-4 ${
-      refundInfo.refundEligible
+      actor === "doctor" || actor === "admin" || refundInfo.refundEligible
         ? "border-green-100 bg-green-50 text-green-700"
         : "border-red-100 bg-red-50 text-red-700"
     }`}
   >
     <p className="text-xs font-extrabold uppercase tracking-[0.6px]">
-      {refundInfo.refundEligible ? "Refund Eligible" : "No Refund"}
+      {actor === "doctor" || actor === "admin" || refundInfo.refundEligible
+        ? "Refund Eligible"
+        : "No Refund"}
     </p>
 
     <p className="mt-2 text-sm font-semibold leading-6">
-      {refundInfo.message}
+      {actor === "doctor"
+        ? "Because the doctor is cancelling this appointment, the patient will receive a refund to wallet."
+        : actor === "admin"
+          ? "Because admin is cancelling this appointment, the patient will receive a refund to wallet."
+          : refundInfo.message}
     </p>
   </div>
 )}

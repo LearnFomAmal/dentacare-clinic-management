@@ -1,6 +1,9 @@
 import express from "express";
 
-import { protectDoctor } from "../../middlewares/doctorAuth.middleware.js";
+import {
+  protectDoctor,
+  requireVerifiedDoctor,
+} from "../../middlewares/doctorAuth.middleware.js";
 
 import {
   addDoctorSlotController,
@@ -15,39 +18,44 @@ import {
 
 const router = express.Router();
 
-router.get("/", protectDoctor, getDoctorSlotsController);
+router.get("/", protectDoctor,requireVerifiedDoctor, getDoctorSlotsController);
 
-router.post("/", protectDoctor, addDoctorSlotController);
+router.post("/", protectDoctor,requireVerifiedDoctor, addDoctorSlotController);
 
-router.post("/recurring", protectDoctor, applyRecurringSlotsController);
+router.post("/recurring", protectDoctor,requireVerifiedDoctor, applyRecurringSlotsController);
 
 router.patch(
   "/:slotDayId/holiday",
   protectDoctor,
+  requireVerifiedDoctor,
   markSlotDayHolidayController
 );
 
 router.patch(
   "/:slotDayId/undo-holiday",
   protectDoctor,
+  requireVerifiedDoctor,
   undoSlotDayHolidayController
 );
 
 router.patch(
   "/:slotDayId/slots/:slotId",
   protectDoctor,
+  requireVerifiedDoctor,
   editDoctorSlotController
 );
 
 router.delete(
   "/:slotDayId/slots/:slotId",
   protectDoctor,
+  requireVerifiedDoctor,
   deleteDoctorSlotController
 );
 
 router.patch(
   "/:slotDayId/restore-defaults",
   protectDoctor,
+  requireVerifiedDoctor,
   restoreDefaultSlotsController
 );
 

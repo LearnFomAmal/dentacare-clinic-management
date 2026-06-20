@@ -42,3 +42,19 @@ export const validatePagination = ({ page, limit }) => {
     limit: finalLimit,
   };
 };
+
+export const validateMinRating = (minRating) => {
+  if (minRating === undefined || minRating === null || minRating === "") {
+    return;
+  }
+
+  const numericRating = Number(minRating);
+
+  if (
+    Number.isNaN(numericRating) ||
+    numericRating < 1 ||
+    numericRating > 5
+  ) {
+    throw new AppError("Minimum rating must be between 1 and 5", 400);
+  }
+};

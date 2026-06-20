@@ -19,6 +19,14 @@ const reportMimeTypes = [
   "application/pdf",
 ];
 
+const certificateMimeTypes = [
+  "image/jpeg",
+  "image/jpg",
+  "image/png",
+  "image/webp",
+  "application/pdf",
+];
+
 const createFileFilter = (allowedMimeTypes, errorMessage) => {
   return (req, file, cb) => {
     if (!allowedMimeTypes.includes(file.mimetype)) {
@@ -61,3 +69,38 @@ export const uploadDoctorPrescription = multer({
     fileSize: 5 * 1024 * 1024,
   },
 }).single("file");
+
+export const uploadBannerImage = multer({
+  storage,
+  fileFilter: createFileFilter(
+    profileImageMimeTypes,
+    "Only JPG, JPEG, PNG and WEBP banner images are allowed"
+  ),
+  limits: {
+    fileSize: 3 * 1024 * 1024,
+  },
+}).single("bannerImage");
+
+export const uploadDoctorVerificationDocuments = multer({
+  storage,
+  fileFilter: createFileFilter(
+    certificateMimeTypes,
+    "Only JPG, JPEG, PNG, WEBP and PDF certificate files are allowed"
+  ),
+  limits: {
+    fileSize: 5 * 1024 * 1024,
+  },
+}).fields([
+  {
+    name: "educationCertificate",
+    maxCount: 1,
+  },
+  {
+    name: "qualificationCertificate",
+    maxCount: 1,
+  },
+  {
+    name: "registrationCertificate",
+    maxCount: 1,
+  },
+]);

@@ -40,7 +40,15 @@ const getRoleFromPath = () => {
 };
 
 const getCurrentAccountType = () => {
-  return getAccountType() || getRoleFromPath();
+  const pathRole = getRoleFromPath();
+
+  // Important:
+  // On /doctor/* and /admin/* routes, path role is more reliable than old sessionStorage.
+  if (pathRole === "doctor" || pathRole === "admin") {
+    return pathRole;
+  }
+
+  return getAccountType() || "patient";
 };
 
 const getRefreshEndpoint = (accountType) => {
@@ -59,16 +67,54 @@ const getRefreshEndpoint = (accountType) => {
   return null;
 };
 
+const normalizeRequestPath = (url = "") => {
+  try {
+    if (url.startsWith("http")) {
+      return new URL(url).pathname;
+    }
+
+    return String(url).split("?")[0];
+  } catch {
+    return String(url).split("?")[0];
+  }
+};
+
+const AUTH_FREE_ENDPOINTS = new Set([
+  API_ENDPOINTS.AUTH.LOGIN,
+  API_ENDPOINTS.AUTH.GOOGLE_LOGIN,
+  API_ENDPOINTS.AUTH.REGISTER,
+  API_ENDPOINTS.AUTH.REGISTER_RESEND_OTP,
+  API_ENDPOINTS.AUTH.REGISTER_VERIFY_OTP,
+  API_ENDPOINTS.AUTH.FORGOT_PASSWORD,
+  API_ENDPOINTS.AUTH.FORGOT_PASSWORD_VERIFY_OTP,
+  API_ENDPOINTS.AUTH.FORGOT_PASSWORD_RESEND_OTP,
+  API_ENDPOINTS.AUTH.REFRESH_TOKEN,
+  API_ENDPOINTS.AUTH.LOGOUT,
+
+  API_ENDPOINTS.DOCTOR.LOGIN,
+  API_ENDPOINTS.DOCTOR.REGISTER,
+  API_ENDPOINTS.DOCTOR.REGISTER_VERIFY_OTP,
+  API_ENDPOINTS.DOCTOR.REGISTER_RESEND_OTP,
+  API_ENDPOINTS.DOCTOR.VERIFY_ACCOUNT,
+  API_ENDPOINTS.DOCTOR.RESEND_VERIFICATION_OTP,
+  API_ENDPOINTS.DOCTOR.FORGOT_PASSWORD,
+  API_ENDPOINTS.DOCTOR.RESET_PASSWORD,
+  API_ENDPOINTS.DOCTOR.RESEND_FORGOT_PASSWORD_OTP,
+  API_ENDPOINTS.DOCTOR.REFRESH_TOKEN,
+  API_ENDPOINTS.DOCTOR.LOGOUT,
+
+  API_ENDPOINTS.ADMIN.LOGIN,
+  API_ENDPOINTS.ADMIN.FORGOT_PASSWORD,
+  API_ENDPOINTS.ADMIN.VERIFY_FORGOT_OTP,
+  API_ENDPOINTS.ADMIN.RESET_PASSWORD,
+  API_ENDPOINTS.ADMIN.RESEND_FORGOT_OTP,
+  API_ENDPOINTS.ADMIN.REFRESH_TOKEN,
+  API_ENDPOINTS.ADMIN.LOGOUT,
+]);
+
 const isAuthFreeRequest = (url = "") => {
-  return (
-    url.includes("/refresh-token") ||
-    url.includes("/login") ||
-    url.includes("/logout") ||
-    url.includes("/register") ||
-    url.includes("/forgot-password") ||
-    url.includes("/reset-password") ||
-    url.includes("/verify")
-  );
+  const path = normalizeRequestPath(url);
+  return AUTH_FREE_ENDPOINTS.has(path);
 };
 
 const isBlockedOrDeletedResponse = (error) => {
@@ -105,8 +151,12 @@ const processQueue = (error) => {
 const forceLogout = (accountType) => {
   clearAuthStorage(accountType);
 
-  if (!window.location.pathname.includes("/login")) {
-    navigateTo("/login", { replace: true });
+  const loginPath = accountType === "admin" ? "/admin/login" : "/login";
+
+  if (window.location.pathname !== loginPath) {
+    navigateTo(loginPath, {
+      replace: true,
+    });
   }
 };
 
@@ -124,9 +174,6 @@ axiosInstance.interceptors.response.use(
     const requestUrl = originalRequest?.url || "";
     const accountType = getCurrentAccountType();
 
-    // Important:
-    // If backend says account is blocked/deleted, do not refresh token.
-    // Immediately clear frontend auth and redirect.
     if (isBlockedOrDeletedResponse(error)) {
       forceLogout(accountType);
       return Promise.reject(error);

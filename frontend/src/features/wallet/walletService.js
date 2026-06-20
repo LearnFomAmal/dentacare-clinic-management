@@ -18,9 +18,27 @@ export const getWalletTransactionsApi = async (params = {}) => {
   return response.data;
 };
 
-export const topupWalletApi = async (payload) => {
+export const createWalletRazorpayOrderApi = async (payload) => {
   const response = await axiosInstance.post(
-    API_ENDPOINTS.WALLET.TOPUP,
+    API_ENDPOINTS.WALLET.CREATE_RAZORPAY_ORDER,
+    payload
+  );
+
+  return response.data;
+};
+
+export const verifyWalletRazorpayTopupApi = async (payload) => {
+  const response = await axiosInstance.post(
+    API_ENDPOINTS.WALLET.VERIFY_RAZORPAY_TOPUP,
+    payload
+  );
+
+  return response.data;
+};
+
+export const cancelWalletRazorpayTopupApi = async (payload) => {
+  const response = await axiosInstance.patch(
+    API_ENDPOINTS.WALLET.CANCEL_RAZORPAY_TOPUP,
     payload
   );
 

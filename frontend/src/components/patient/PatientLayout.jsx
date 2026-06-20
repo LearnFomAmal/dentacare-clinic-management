@@ -17,12 +17,14 @@ const patientTopLinks = [
   {
     label: "Dashboard",
     to: ROUTES.PATIENT_DASHBOARD,
-    match: (pathname) =>
-      pathname === ROUTES.PATIENT_DASHBOARD ||
-      pathname.startsWith("/my-appointments") ||
-      pathname.startsWith("/wallet") ||
-      pathname.startsWith("/referrals") ||
-      pathname.startsWith("/settings"),
+    mmatch: (pathname) =>
+  pathname === ROUTES.PATIENT_DASHBOARD ||
+  pathname.startsWith("/my-appointments") ||
+  pathname.startsWith("/my-reviews") ||
+  pathname.startsWith("/wallet") ||
+  pathname.startsWith("/referrals") ||
+  pathname.startsWith("/chats") ||
+  pathname.startsWith("/settings"),
   },
   {
     label: "Find Doctors",

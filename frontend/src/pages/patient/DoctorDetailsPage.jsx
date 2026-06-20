@@ -7,7 +7,13 @@ import {
   Star,
   Stethoscope,
 } from "lucide-react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import {
+  Link,
+  useNavigate,
+  useParams,
+  useSearchParams,
+} from "react-router-dom";
+
 import toast from "react-hot-toast";
 
 import PatientLayout from "../../components/patient/PatientLayout";
@@ -28,7 +34,7 @@ import { saveBookingDraft } from "../../utils/bookingDraftStorage";
 
 import {
   getLocalDateString,
-  getNextSevenLocalDays,
+ getNextFiveLocalDays,
   isDateBeforeToday,
 } from "../../utils/dateUtils";
 
@@ -54,6 +60,7 @@ function DoctorDetailsPage() {
   const { doctorId } = useParams();
   const navigate = useNavigate();
   const dispatch = useAppDispatch();
+  const [searchParams] = useSearchParams();
 
   const {
     selectedDoctor,
@@ -67,7 +74,7 @@ function DoctorDetailsPage() {
 
   const selectedSlot = selectedSlotsByDoctor[doctorId];
 
-  const days = useMemo(() => getNextSevenLocalDays(), []);
+  const days = useMemo(() => getNextFiveLocalDays(), []);
 
   const safeSelectedDate = isDateBeforeToday(selectedDate)
     ? getLocalDateString()
@@ -134,7 +141,7 @@ function DoctorDetailsPage() {
     );
   };
 
-  const handleContinueBooking = () => {
+const handleContinueBooking = () => {
   if (!selectedSlot) {
     toast.error("Please select a slot first");
     return;
@@ -178,7 +185,13 @@ function DoctorDetailsPage() {
   saveBookingDraft(bookingDraft);
   dispatch(setBookingDraft(bookingDraft));
 
-  navigate(`/book-appointment/${doctorId}`);
+  const couponFromBanner = searchParams.get("coupon") || "";
+
+  const couponQuery = couponFromBanner
+    ? `?coupon=${encodeURIComponent(couponFromBanner)}`
+    : "";
+
+  navigate(`/book-appointment/${doctorId}${couponQuery}`);
 };
 
   return (
@@ -199,6 +212,7 @@ function DoctorDetailsPage() {
         ) : selectedDoctor ? (
           <div className="mt-6 space-y-8">
             <DoctorProfileCard doctor={selectedDoctor} />
+            <DoctorReviewsSection doctor={selectedDoctor} />
 
             <section>
               <h2 className="text-2xl font-extrabold tracking-[-0.5px] text-[#111827]">
@@ -297,7 +311,7 @@ function DoctorDetailsPage() {
                   type="button"
                   onClick={handleContinueBooking}
                   disabled={!selectedSlot || !selectedSlot?.isBookable}
-                  className="h-13 min-w-[220px] rounded-2xl bg-[#9381FF] px-8 py-4 text-sm font-extrabold text-white shadow-[0_14px_30px_rgba(147,129,255,0.26)] transition hover:bg-[#7E6EF2] disabled:cursor-not-allowed disabled:bg-[#C4BFFF] disabled:shadow-none"
+                  className="h-[52px] min-w-[220px] rounded-2xl bg-[#9381FF] px-8 py-4 text-sm font-extrabold text-white shadow-[0_14px_30px_rgba(147,129,255,0.26)] transition hover:bg-[#7E6EF2] disabled:cursor-not-allowed disabled:bg-[#C4BFFF] disabled:shadow-none"
                 >
                   Continue Booking
                 </button>
@@ -432,6 +446,154 @@ function DateCard({ item, active, onClick }) {
         </>
       )}
     </button>
+  );
+}
+
+function DoctorReviewsSection({ doctor }) {
+  const summary = doctor?.reviewSummary || {
+    averageRating: doctor?.stats?.averageRating || 0,
+    totalReviews: doctor?.stats?.totalReviews || 0,
+    ratingDistribution: {
+      5: 0,
+      4: 0,
+      3: 0,
+      2: 0,
+      1: 0,
+    },
+  };
+
+  const reviews = doctor?.latestReviews || [];
+  const totalReviews = Number(summary.totalReviews || 0);
+
+  return (
+    <section className="rounded-3xl border border-[#EEF0F6] bg-white p-7 shadow-[0_18px_48px_rgba(17,24,39,0.05)]">
+      <div className="flex flex-col gap-5 md:flex-row md:items-start md:justify-between">
+        <div>
+          <p className="text-sm font-bold uppercase tracking-[1px] text-[#9381FF]">
+            Patient Reviews
+          </p>
+
+          <h2 className="mt-2 text-2xl font-extrabold text-[#111827]">
+            What patients say about this doctor
+          </h2>
+
+          <p className="mt-2 text-sm leading-6 text-[#6B7280]">
+            Reviews are shown only after admin approval.
+          </p>
+        </div>
+
+        <div className="rounded-2xl bg-[#F8FAFC] px-5 py-4 text-center">
+          <p className="flex items-center justify-center gap-2 text-3xl font-extrabold text-[#111827]">
+            <Star size={24} fill="currentColor" className="text-[#F59E0B]" />
+            {summary.averageRating || 0}
+          </p>
+
+          <p className="mt-1 text-xs font-bold text-[#6B7280]">
+            {totalReviews} approved reviews
+          </p>
+        </div>
+      </div>
+
+      <div className="mt-6 grid gap-3 md:grid-cols-5">
+        {[5, 4, 3, 2, 1].map((rating) => {
+          const count = summary.ratingDistribution?.[rating] || 0;
+          const percentage = totalReviews
+            ? Math.round((count / totalReviews) * 100)
+            : 0;
+
+          return (
+            <div key={rating} className="rounded-2xl bg-[#F8FAFC] p-4">
+              <p className="flex items-center gap-1 text-sm font-extrabold text-[#111827]">
+                {rating}
+                <Star size={14} fill="currentColor" className="text-[#F59E0B]" />
+              </p>
+
+              <div className="mt-2 h-2 overflow-hidden rounded-full bg-[#E5E7EB]">
+                <div
+                  className="h-full rounded-full bg-[#9381FF]"
+                  style={{
+                    width: `${percentage}%`,
+                  }}
+                />
+              </div>
+
+              <p className="mt-2 text-xs font-bold text-[#6B7280]">
+                {count} reviews
+              </p>
+            </div>
+          );
+        })}
+      </div>
+
+      {reviews.length === 0 ? (
+        <div className="mt-6 rounded-2xl border border-dashed border-[#D1D5DB] bg-[#F8FAFC] p-8 text-center">
+          <h3 className="font-extrabold text-[#111827]">
+            No approved reviews yet
+          </h3>
+
+          <p className="mt-2 text-sm text-[#6B7280]">
+            Be the first patient to review after completing an appointment.
+          </p>
+        </div>
+      ) : (
+        <div className="mt-6 grid gap-4 md:grid-cols-2">
+          {reviews.map((review) => (
+            <PublicReviewCard key={review._id} review={review} />
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function PublicReviewCard({ review }) {
+  const patientName =
+    review.patientId?.username || review.patientId?.email || "Patient";
+
+  const profileImage = review.patientId?.personalInfo?.profileImage || "";
+
+  return (
+    <article className="rounded-2xl border border-[#EEF0F6] bg-[#F8FAFC] p-5">
+      <div className="flex items-start gap-3">
+        <div className="h-11 w-11 overflow-hidden rounded-full bg-[#F0F1FF]">
+          {profileImage ? (
+            <img
+              src={profileImage}
+              alt={patientName}
+              className="h-full w-full object-cover"
+            />
+          ) : (
+            <div className="flex h-full w-full items-center justify-center text-sm font-extrabold text-[#9381FF]">
+              {patientName.charAt(0).toUpperCase()}
+            </div>
+          )}
+        </div>
+
+        <div className="min-w-0 flex-1">
+          <h3 className="truncate text-sm font-extrabold text-[#111827]">
+            {patientName}
+          </h3>
+
+          <div className="mt-1 flex items-center gap-1 text-[#F59E0B]">
+            {Array.from({ length: 5 }).map((_, index) => (
+              <Star
+                key={index}
+                size={14}
+                fill={
+                  index < Number(review.rating)
+                    ? "currentColor"
+                    : "none"
+                }
+              />
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <p className="mt-4 text-sm leading-6 text-[#374151]">
+        {review.description}
+      </p>
+    </article>
   );
 }
 

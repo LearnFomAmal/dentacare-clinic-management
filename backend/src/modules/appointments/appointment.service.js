@@ -6,7 +6,12 @@ import {
   creditReferralRewardToWallet,
   refundAppointmentPaymentToWallet,
 } from "../wallets/wallet.service.js";
+import {
+  safeCreateAdminNotification,
+  safeCreateNotification,
+} from "../notifications/notification.service.js";
 import { validateCouponForAppointment } from "../coupons/coupon.service.js";
+import { ensureChatExistsForApprovedAppointmentService } from "../chats/chat.service.js";
 import {
   claimReferralRewardForCompletion,
   createAppointment,
@@ -35,8 +40,15 @@ import {
   findAutoExpirablePendingAppointments,
   findPendingPaymentAppointmentForReservedSlot,
   findPatientOverlappingAppointments,
+  releaseCompletedCouponUsageForAppointment,
+  countPatientAppointments,
+getPatientAppointmentStats,
+countDoctorAppointments,
+getDoctorAppointmentStats,
+countAdminAppointments,
+getAdminAppointmentStats,
 } from "./appointment.repository.js";
-
+import { findSpecialtyById } from "../specialties/specialty.repository.js";
 import { getReferralDiscountForAppointment } from "../referrals/referral.service.js";
 import {
   validateAppointmentStatusFilter,
@@ -48,8 +60,108 @@ import {
 } from "./appointment.validator.js";
 
 const RESERVATION_MINUTES = 10;
-const MIN_BOOKING_LEAD_MINUTES = 120;
+const MIN_BOOKING_LEAD_MINUTES = 15;
+const MAX_BOOKING_DAYS_AHEAD = 5;
 const CANCELLATION_REFUND_CUTOFF_HOURS = 4;
+const DEFAULT_APPOINTMENT_PAGE_LIMIT = 6;
+const MAX_APPOINTMENT_PAGE_LIMIT = 30;
+
+const getPagination = (query = {}) => {
+  const page = Math.max(Number(query.page || 1), 1);
+
+  const limit = Math.min(
+    Math.max(Number(query.limit || DEFAULT_APPOINTMENT_PAGE_LIMIT), 1),
+    MAX_APPOINTMENT_PAGE_LIMIT
+  );
+
+  const skip = (page - 1) * limit;
+
+  return {
+    page,
+    limit,
+    skip,
+  };
+};
+
+const getDoctorDisplayName = (doctor) => {
+  if (!doctor) return "your doctor";
+
+  const firstName = doctor.firstName || "";
+  const lastName = doctor.lastName || "";
+
+  return `Dr. ${[firstName, lastName].filter(Boolean).join(" ")}`.trim();
+};
+
+const getPatientDisplayName = (patient) => {
+  return patient?.username || patient?.email || "Patient";
+};
+
+const notifyPatientForAppointment = async ({
+  appointment,
+  type,
+  title,
+  message,
+  actorRole = "system",
+  actorId = null,
+  actorName = "",
+}) => {
+  await safeCreateNotification({
+    recipientRole: "patient",
+    recipientId: appointment.patientId,
+    actorRole,
+    actorId,
+    actorName,
+    type,
+    title,
+    message,
+    referenceType: "appointment",
+    referenceId: appointment._id,
+  });
+};
+
+const notifyDoctorForAppointment = async ({
+  appointment,
+  type,
+  title,
+  message,
+  actorRole = "system",
+  actorId = null,
+  actorName = "",
+}) => {
+  await safeCreateNotification({
+    recipientRole: "doctor",
+    recipientId: appointment.doctorId,
+    actorRole,
+    actorId,
+    actorName,
+    type,
+    title,
+    message,
+    referenceType: "appointment",
+    referenceId: appointment._id,
+  });
+};
+
+const notifyAdminForAppointment = async ({
+  appointment,
+  type,
+  title,
+  message,
+  actorRole = "system",
+  actorId = null,
+  actorName = "",
+}) => {
+  await safeCreateAdminNotification({
+    actorRole,
+    actorId,
+    actorName,
+    type,
+    title,
+    message,
+    referenceType: "appointment",
+    referenceId: appointment._id,
+  });
+};
 
 const isPatientProfileComplete = (user) => {
   return Boolean(
@@ -160,7 +272,7 @@ const ensurePendingAppointmentForDecision = (appointment) => {
     );
   }
 
-  ensureAppointmentTimeNotOver(appointment);
+ensureAppointmentStartTimeNotReached(appointment);
 };
 
 const ensureAppointmentCanBeCompleted = (appointment) => {
@@ -211,12 +323,6 @@ const ensureAppointmentCanBeCancelled = ({ appointment, cancelledBy }) => {
     throw new AppError("Appointment not found", 404);
   }
 
-   if (appointment.status === "expired") {
-  throw new AppError("Expired appointment cannot be cancelled", 400);
-}
-
-ensureAppointmentTimeNotOver(appointment);
-
   if (appointment.status === "cancelled") {
     throw new AppError("Appointment is already cancelled", 400);
   }
@@ -229,12 +335,18 @@ ensureAppointmentTimeNotOver(appointment);
     throw new AppError("Rejected appointment cannot be cancelled", 400);
   }
 
+  if (appointment.status === "expired") {
+    throw new AppError("Expired appointment cannot be cancelled", 400);
+  }
+
   if (appointment.status === "pending_payment") {
     throw new AppError(
       "Payment pending appointment cannot be cancelled from here",
       400
     );
   }
+
+  ensureAppointmentStartTimeNotReached(appointment);
 
   if (
     cancelledBy === "patient" &&
@@ -246,18 +358,25 @@ ensureAppointmentTimeNotOver(appointment);
     );
   }
 
-  if (
-    cancelledBy === "admin" &&
-    !["pending", "approved"].includes(appointment.status)
-  ) {
+  if (cancelledBy === "admin" && appointment.status !== "approved") {
     throw new AppError(
-      "Admin can cancel only pending or approved appointments",
+      "Admin can cancel only approved appointments",
       400
     );
   }
 
-  if (cancelledBy === "doctor") {
-    throw new AppError("Doctor cancellation is not allowed", 403);
+  if (cancelledBy === "doctor" && appointment.status !== "approved") {
+    throw new AppError(
+      "Doctor can cancel only approved appointments",
+      400
+    );
+  }
+
+  if (appointment.paymentStatus !== "paid") {
+    throw new AppError(
+      "Only paid appointments can be cancelled from here",
+      400
+    );
   }
 };
 
@@ -274,17 +393,17 @@ const releaseAppointmentSlot = async ({ appointment, session }) => {
 
   if (!slot || slot.isDeleted) return;
 
-  if (["reserved", "booked", "blocked"].includes(slot.status)) {
-    slot.status = "available";
-    slot.reservedBy = null;
-    slot.reservedAppointmentId = null;
-    slot.reservedUntil = null;
+ if (["reserved", "booked"].includes(slot.status)) {
+  slot.status = "available";
+  slot.reservedBy = null;
+  slot.reservedAppointmentId = null;
+  slot.reservedUntil = null;
 
-    await saveSlotDay({
-      slotDay,
-      session,
-    });
-  }
+  await saveSlotDay({
+    slotDay,
+    session,
+  });
+}
 };
 
 const getReservationExpiry = () => {
@@ -316,6 +435,8 @@ const clearExpiredReservationsInSlotDay = async ({ slotDay, session }) => {
     });
   }
 };
+
+
 
 const cancelAppointmentCore = async ({
   appointment,
@@ -358,16 +479,23 @@ const cancelAppointmentCore = async ({
     session,
   });
 
-  if (appointment.paymentStatus === "paid" && refundDecision.refundEligible) {
-    appointment.paymentStatus = "refunded";
-    appointment.cancellation.refundStatus = "refunded";
+ if (appointment.paymentStatus === "paid" && refundDecision.refundEligible) {
+  appointment.paymentStatus = "refunded";
+  appointment.cancellation.refundStatus = "refunded";
 
-    await refundAppointmentPaymentToWallet({
-      appointment,
-      reason: `Appointment cancelled by ${cancelledBy}. Refund credited to wallet.`,
-      session,
-    });
-  }
+  await refundAppointmentPaymentToWallet({
+    appointment,
+    reason: `Appointment cancelled by ${cancelledBy}. Refund credited to wallet.`,
+    session,
+  });
+
+  await releaseCompletedCouponUsageForAppointment({
+    appointmentId: appointment._id,
+    reason: `Coupon usage released because appointment was cancelled by ${cancelledBy} with refund.`,
+    session,
+  });
+}
+
 
   if (appointment.paymentStatus === "paid" && !refundDecision.refundEligible) {
     appointment.cancellation.refundStatus = "not_refunded";
@@ -377,6 +505,70 @@ const cancelAppointmentCore = async ({
     appointment,
     session,
   });
+ if (cancelledBy === "patient") {
+  await notifyDoctorForAppointment({
+    appointment,
+    type: "appointment_cancelled_by_patient",
+    title: "Appointment Cancelled",
+    message: "A patient cancelled an appointment.",
+    actorRole: "patient",
+    actorId: appointment.patientId,
+    actorName: "Patient",
+  });
+
+  await notifyAdminForAppointment({
+    appointment,
+    type: "appointment_cancelled_by_patient",
+    title: "Appointment Cancelled by Patient",
+    message: "A patient cancelled an appointment.",
+    actorRole: "patient",
+    actorId: appointment.patientId,
+    actorName: "Patient",
+  });
+}
+
+if (cancelledBy === "admin") {
+  await notifyPatientForAppointment({
+    appointment,
+    type: "appointment_cancelled_by_admin",
+    title: "Appointment Cancelled",
+    message: "Your appointment was cancelled by admin.",
+    actorRole: "admin",
+    actorName: "Admin",
+  });
+
+  await notifyDoctorForAppointment({
+    appointment,
+    type: "appointment_cancelled_by_admin",
+    title: "Appointment Cancelled by Admin",
+    message: "An appointment assigned to you was cancelled by admin.",
+    actorRole: "admin",
+    actorName: "Admin",
+  });
+}
+
+if (cancelledBy === "doctor") {
+  await notifyPatientForAppointment({
+    appointment,
+    type: "appointment_cancelled_by_doctor",
+    title: "Appointment Cancelled",
+    message:
+      "Your appointment was cancelled by the doctor. Refund has been credited to your wallet.",
+    actorRole: "doctor",
+    actorId: appointment.doctorId,
+    actorName: "Doctor",
+  });
+
+  await notifyAdminForAppointment({
+    appointment,
+    type: "appointment_cancelled_by_doctor",
+    title: "Appointment Cancelled by Doctor",
+    message: "A doctor cancelled an approved appointment.",
+    actorRole: "doctor",
+    actorId: appointment.doctorId,
+    actorName: "Doctor",
+  });
+}
 
   return appointment;
 };
@@ -403,6 +595,38 @@ const getLocalDateAndTime = () => {
     localDate,
     localTime,
   };
+};
+const getTodayDateString = () => {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Kolkata",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date());
+};
+
+const getDateObjectFromString = (dateString) => {
+  return new Date(`${dateString}T00:00:00.000Z`);
+};
+
+const ensureAppointmentDateWithinBookingWindow = (appointmentDate) => {
+  const today = getTodayDateString();
+
+  if (appointmentDate < today) {
+    throw new AppError("Cannot book appointment for a past date", 400);
+  }
+
+  const maxDateObject = getDateObjectFromString(today);
+  maxDateObject.setUTCDate(maxDateObject.getUTCDate() + MAX_BOOKING_DAYS_AHEAD);
+
+  const maxDate = maxDateObject.toISOString().split("T")[0];
+
+  if (appointmentDate > maxDate) {
+    throw new AppError(
+      `You can book appointments only up to ${MAX_BOOKING_DAYS_AHEAD} days ahead`,
+      400
+    );
+  }
 };
 
 const buildAppointmentDateTime = ({ appointmentDate, time }) => {
@@ -436,14 +660,15 @@ const getCancellationRefundDecision = ({ appointment, cancelledBy }) => {
   }
 
   // Admin-side cancellation should refund the patient.
-  if (cancelledBy === "admin") {
-    return {
-      refundEligible: true,
-      refundStatus: "eligible",
-      refundPolicy:
-        "Refund eligible because the appointment was cancelled by admin.",
-    };
-  }
+  // Admin-side or doctor-side cancellation should refund the patient.
+if (["admin", "doctor"].includes(cancelledBy)) {
+  return {
+    refundEligible: true,
+    refundStatus: "eligible",
+    refundPolicy:
+      `Refund eligible because the appointment was cancelled by ${cancelledBy}.`,
+  };
+}
 
   const appointmentStart = buildAppointmentStartDateTime(appointment);
 
@@ -490,10 +715,27 @@ const isAppointmentEndTimePast = (appointment) => {
   return appointmentEnd <= new Date();
 };
 
-const ensureAppointmentTimeNotOver = (appointment) => {
-  if (isAppointmentEndTimePast(appointment)) {
+const isAppointmentStartTimeReached = (appointment) => {
+  if (!appointment?.appointmentDate || !appointment?.startTime) {
+    return false;
+  }
+
+  const appointmentStart = buildAppointmentDateTime({
+    appointmentDate: appointment.appointmentDate,
+    time: appointment.startTime,
+  });
+
+  if (Number.isNaN(appointmentStart.getTime())) {
+    return false;
+  }
+
+  return appointmentStart <= new Date();
+};
+
+const ensureAppointmentStartTimeNotReached = (appointment) => {
+  if (isAppointmentStartTimeReached(appointment)) {
     throw new AppError(
-      "Appointment time is already over. This appointment cannot be approved, rejected, cancelled, or rescheduled.",
+      "Consultation time has already started. This appointment cannot be approved, rejected, cancelled, or rescheduled.",
       400
     );
   }
@@ -520,13 +762,12 @@ const ensureSlotHasEnoughLeadTime = ({ appointmentDate, startTime }) => {
 
   if (slotStart < minAllowedStart) {
     throw new AppError(
-      `Please choose a slot at least ${
-        MIN_BOOKING_LEAD_MINUTES / 60
-      } hours from now.`,
+      `Please choose a slot at least ${MIN_BOOKING_LEAD_MINUTES} minutes from now.`,
       400
     );
   }
 };
+
 
 const expirePendingAppointmentCore = async ({ appointment, session }) => {
   if (!appointment) return null;
@@ -566,6 +807,12 @@ const expirePendingAppointmentCore = async ({ appointment, session }) => {
       "Appointment expired because the scheduled time passed without approval. Refund credited to wallet.",
     session,
   });
+
+ await releaseCompletedCouponUsageForAppointment({
+  appointmentId: appointment._id,
+  reason: "Coupon usage released because appointment expired and was refunded.",
+  session,
+});
 
   await saveAppointment({
     appointment,
@@ -632,21 +879,41 @@ const completeAppointmentCore = async ({ appointment, session }) => {
       });
 
       if (claimedReferral) {
-        await creditReferralRewardToWallet({
-          userId: claimedReferral.referrerId,
-          referralId: claimedReferral._id,
-          amount: claimedReferral.referrerReward,
-          session,
-        });
+       const rewardCreditResult = await creditReferralRewardToWallet({
+  userId: claimedReferral.referrerId,
+  referralId: claimedReferral._id,
+  amount: claimedReferral.referrerReward,
+  session,
+});
 
-        await markReferralRewardCredited({
-          referralId: claimedReferral._id,
-          session,
-        });
+if (rewardCreditResult) {
+  await markReferralRewardCredited({
+    referralId: claimedReferral._id,
+    session,
+  });
+}
       }
     }
   }
+ await notifyPatientForAppointment({
+  appointment,
+  type: "appointment_completed",
+  title: "Appointment Completed",
+  message: "Your appointment has been marked as completed. You can now submit a review.",
+  actorRole: "doctor",
+  actorId: appointment.doctorId,
+  actorName: "Doctor",
+});
 
+await notifyAdminForAppointment({
+  appointment,
+  type: "appointment_completed",
+  title: "Appointment Completed",
+  message: "A doctor completed an appointment.",
+  actorRole: "doctor",
+  actorId: appointment.doctorId,
+  actorName: "Doctor",
+});
   return appointment;
 };
 
@@ -729,24 +996,39 @@ const {
   couponCode = "",
   allowTimeConflict = false,
 } = body;
-
+ensureAppointmentDateWithinBookingWindow(appointmentDate);
   const doctor = await findDoctorForBooking(doctorId);
 
   if (!doctor) {
     throw new AppError("Doctor not found", 404);
   }
 
-  if (doctor.accountStatus?.isDeleted) {
-    throw new AppError("Doctor account is deleted", 400);
-  }
+if (doctor.accountStatus?.isDeleted) {
+  throw new AppError("Doctor account is deleted", 400);
+}
 
-  if (doctor.accountStatus?.isBlocked) {
-    throw new AppError("Doctor is currently unavailable", 400);
-  }
+if (doctor.accountStatus?.isBlocked) {
+  throw new AppError("Doctor is currently unavailable", 400);
+}
 
-  if (!doctor.accountStatus?.isVerified) {
-    throw new AppError("Doctor is not verified", 400);
-  }
+if (!doctor.accountStatus?.isEmailVerified) {
+  throw new AppError("Doctor email is not verified", 400);
+}
+
+if (
+  !doctor.accountStatus?.isVerified ||
+  doctor.verification?.status !== "approved"
+) {
+  throw new AppError("Doctor is not approved for appointments", 400);
+}
+
+const activeSpecialty = await findSpecialtyById(
+  doctor.specialization?.specialtyId
+);
+
+if (!activeSpecialty || activeSpecialty.status !== "active") {
+  throw new AppError("Doctor specialty is inactive", 400);
+}
 
   let appointmentReports = [];
 
@@ -1008,19 +1290,58 @@ export const getPatientAppointmentDetailsService = async ({
 };
 
 
-export const getMyAppointmentsService = async ({ patientId, query }) => {
+export const getMyAppointmentsService = async ({ patientId, query = {} }) => {
   validateObjectId(patientId, "patient id");
 
   const { status } = query;
 
   validateAppointmentStatusFilter(status);
 
+  const { page, limit, skip } = getPagination(query);
+
   await syncPastAppointmentStates();
 
-  return findPatientAppointments({
+  const stats = await getPatientAppointmentStats({
     patientId,
-    status,
   });
+
+  if (status === "pending_payment") {
+    return {
+      appointments: [],
+      stats,
+      pagination: {
+        page,
+        limit,
+        totalAppointments: 0,
+        totalPages: 1,
+      },
+    };
+  }
+
+  const [appointments, totalAppointments] = await Promise.all([
+    findPatientAppointments({
+      patientId,
+      status,
+      skip,
+      limit,
+    }),
+
+    countPatientAppointments({
+      patientId,
+      status,
+    }),
+  ]);
+
+  return {
+    appointments,
+    stats,
+    pagination: {
+      page,
+      limit,
+      totalAppointments,
+      totalPages: Math.max(Math.ceil(totalAppointments / limit), 1),
+    },
+  };
 };
 
 export const cancelAppointmentByPatientService = async ({
@@ -1057,19 +1378,65 @@ export const cancelAppointmentByPatientService = async ({
   }
 };
 
-export const getDoctorAppointmentsService = async ({ doctorId, query }) => {
+export const getDoctorAppointmentsService = async ({
+  doctorId,
+  query = {},
+}) => {
   validateObjectId(doctorId, "doctor id");
 
   const { status } = query;
 
   validateAppointmentStatusFilter(status);
 
+  const { page, limit, skip } = getPagination(query);
+
   await syncPastAppointmentStates();
 
-  return findDoctorAppointments({
+  const { localDate, localTime } = getLocalDateAndTime();
+
+  const stats = await getDoctorAppointmentStats({
     doctorId,
-    status,
+    nowDate: localDate,
+    nowTime: localTime,
   });
+
+  if (status === "pending_payment") {
+    return {
+      appointments: [],
+      stats,
+      pagination: {
+        page,
+        limit,
+        totalAppointments: 0,
+        totalPages: 1,
+      },
+    };
+  }
+
+  const [appointments, totalAppointments] = await Promise.all([
+    findDoctorAppointments({
+      doctorId,
+      status,
+      skip,
+      limit,
+    }),
+
+    countDoctorAppointments({
+      doctorId,
+      status,
+    }),
+  ]);
+
+  return {
+    appointments,
+    stats,
+    pagination: {
+      page,
+      limit,
+      totalAppointments,
+      totalPages: Math.max(Math.ceil(totalAppointments / limit), 1),
+    },
+  };
 };
 
 export const getDoctorAppointmentDetailsService = async ({
@@ -1120,10 +1487,21 @@ export const approveAppointmentByDoctorService = async ({
     rejectedAt: null,
   };
 
-  await saveAppointment({
-    appointment,
-  });
-
+await saveAppointment({
+  appointment,
+});
+await ensureChatExistsForApprovedAppointmentService({
+  appointmentId: appointment._id,
+});
+await notifyPatientForAppointment({
+  appointment,
+  type: "appointment_approved",
+  title: "Appointment Approved",
+  message: "Your appointment has been approved by the doctor.",
+  actorRole: "doctor",
+  actorId: doctorId,
+  actorName: "Doctor",
+});
   return appointment;
 };
 
@@ -1175,13 +1553,63 @@ export const rejectAppointmentByDoctorService = async ({
         reason: "Appointment rejected by doctor. Refund credited to wallet.",
         session,
       });
-
+     await releaseCompletedCouponUsageForAppointment({
+  appointmentId: appointment._id,
+  reason: "Coupon usage released because appointment was rejected by doctor.",
+  session,
+});
       await saveAppointment({
         appointment,
         session,
       });
 
+      await notifyPatientForAppointment({
+  appointment,
+  type: "appointment_rejected",
+  title: "Appointment Rejected",
+  message: "Your appointment was rejected by the doctor. Refund has been credited to your wallet.",
+  actorRole: "doctor",
+  actorId: doctorId,
+  actorName: "Doctor",
+});
+
       updatedAppointment = appointment;
+    });
+
+    return updatedAppointment;
+  } finally {
+    await session.endSession();
+  }
+};
+
+export const cancelAppointmentByDoctorService = async ({
+  doctorId,
+  appointmentId,
+  body,
+}) => {
+  validateObjectId(doctorId, "doctor id");
+  validateObjectId(appointmentId, "appointment id");
+
+  await syncPastAppointmentStates();
+
+  const session = await mongoose.startSession();
+
+  try {
+    let updatedAppointment = null;
+
+    await session.withTransaction(async () => {
+      const appointment = await findAppointmentForDoctorAction({
+        doctorId,
+        appointmentId,
+        session,
+      });
+
+      updatedAppointment = await cancelAppointmentCore({
+        appointment,
+        cancelledBy: "doctor",
+        body,
+        session,
+      });
     });
 
     return updatedAppointment;
@@ -1224,17 +1652,62 @@ export const completeAppointmentByDoctorService = async ({
 };
 
 
-export const getAdminAppointmentsService = async ({ query }) => {
-  const { status } = query;
+export const getAdminAppointmentsService = async ({ query = {} }) => {
+  const { status = "", doctorId = "" } = query;
 
   validateAppointmentStatusFilter(status);
 
+  if (doctorId) {
+    validateObjectId(doctorId, "doctor id");
+  }
+
+  const { page, limit, skip } = getPagination(query);
+
   await syncPastAppointmentStates();
 
-  return findAdminAppointments({
-    status,
+  const stats = await getAdminAppointmentStats({
+    doctorId,
   });
+
+  if (status === "pending_payment") {
+    return {
+      appointments: [],
+      stats,
+      pagination: {
+        page,
+        limit,
+        totalAppointments: 0,
+        totalPages: 1,
+      },
+    };
+  }
+
+  const [appointments, totalAppointments] = await Promise.all([
+    findAdminAppointments({
+      status,
+      doctorId,
+      skip,
+      limit,
+    }),
+
+    countAdminAppointments({
+      status,
+      doctorId,
+    }),
+  ]);
+
+  return {
+    appointments,
+    stats,
+    pagination: {
+      page,
+      limit,
+      totalAppointments,
+      totalPages: Math.max(Math.ceil(totalAppointments / limit), 1),
+    },
+  };
 };
+
 
 export const getAdminAppointmentDetailsService = async ({ appointmentId }) => {
   validateObjectId(appointmentId, "appointment id");
@@ -1275,7 +1748,26 @@ export const approveAppointmentByAdminService = async ({ appointmentId }) => {
   await saveAppointment({
     appointment,
   });
+  await ensureChatExistsForApprovedAppointmentService({
+  appointmentId: appointment._id,
+});
+  await notifyPatientForAppointment({
+  appointment,
+  type: "appointment_approved_by_admin",
+  title: "Appointment Approved",
+  message: "Your appointment has been approved by admin.",
+  actorRole: "admin",
+  actorName: "Admin",
+});
 
+await notifyDoctorForAppointment({
+  appointment,
+  type: "appointment_approved_by_admin",
+  title: "Appointment Approved by Admin",
+  message: "An appointment assigned to you was approved by admin.",
+  actorRole: "admin",
+  actorName: "Admin",
+});
   return appointment;
 };
 
@@ -1324,11 +1816,33 @@ export const rejectAppointmentByAdminService = async ({
         reason: "Appointment rejected by admin. Refund credited to wallet.",
         session,
       });
-
+       await releaseCompletedCouponUsageForAppointment({
+  appointmentId: appointment._id,
+  reason: "Coupon usage released because appointment was rejected by admin.",
+  session,
+});
       await saveAppointment({
         appointment,
         session,
       });
+       
+      await notifyPatientForAppointment({
+  appointment,
+  type: "appointment_rejected_by_admin",
+  title: "Appointment Rejected",
+  message: "Your appointment was rejected by admin. Refund has been credited to your wallet.",
+  actorRole: "admin",
+  actorName: "Admin",
+});
+
+await notifyDoctorForAppointment({
+  appointment,
+  type: "appointment_rejected_by_admin",
+  title: "Appointment Rejected by Admin",
+  message: "An appointment assigned to you was rejected by admin.",
+  actorRole: "admin",
+  actorName: "Admin",
+});
 
       updatedAppointment = appointment;
     });
@@ -1379,7 +1893,7 @@ const ensureAppointmentCanBeRescheduled = (appointment) => {
   throw new AppError("Expired appointment cannot be rescheduled", 400);
 }
 
-ensureAppointmentTimeNotOver(appointment);
+ensureAppointmentStartTimeNotReached(appointment);
 
   if (!["pending", "approved"].includes(appointment.status)) {
     throw new AppError(
@@ -1421,7 +1935,7 @@ export const rescheduleAppointmentByPatientService = async ({
     reasonType,
     reason,
   } = body;
-
+ ensureAppointmentDateWithinBookingWindow(newAppointmentDate);
   const session = await mongoose.startSession();
 
   try {
@@ -1545,6 +2059,25 @@ export const rescheduleAppointmentByPatientService = async ({
         appointment,
         session,
       });
+         await notifyDoctorForAppointment({
+  appointment,
+  type: "appointment_rescheduled",
+  title: "Appointment Rescheduled",
+  message: "A patient rescheduled an appointment. Please review the new slot.",
+  actorRole: "patient",
+  actorId: patientId,
+  actorName: "Patient",
+});
+
+await notifyAdminForAppointment({
+  appointment,
+  type: "appointment_rescheduled",
+  title: "Appointment Rescheduled",
+  message: "A patient rescheduled an appointment.",
+  actorRole: "patient",
+  actorId: patientId,
+  actorName: "Patient",
+});
 
       updatedAppointment = appointment;
     });
@@ -1554,3 +2087,4 @@ export const rescheduleAppointmentByPatientService = async ({
     await session.endSession();
   }
 };
+

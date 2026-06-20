@@ -119,26 +119,27 @@ function RegisterPage() {
                 icon={Mail}
               />
 
-              <Input
-                label="Password"
-                type="password"
-                name="password"
-                placeholder="••••••••"
-                register={register}
-                error={errors.password}
-                icon={Lock}
-              />
+  <Input
+  label="Password"
+  type="password"
+  name="password"
+  placeholder="••••••••"
+  register={register}
+  error={errors.password}
+  icon={Lock}
+  showPasswordToggle
+/>
 
-              <Input
-                label="Confirm Password"
-                type="password"
-                name="confirmPassword"
-                placeholder="••••••••"
-                register={register}
-                error={errors.confirmPassword}
-                icon={Lock}
-              />
-
+<Input
+  label="Confirm Password"
+  type="password"
+  name="confirmPassword"
+  placeholder="••••••••"
+  register={register}
+  error={errors.confirmPassword}
+  icon={Lock}
+  showPasswordToggle
+/>
               <Input
                 label="Date of Birth"
                 type="date"

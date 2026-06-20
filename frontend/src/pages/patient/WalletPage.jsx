@@ -14,33 +14,68 @@ import DashboardLayout from "../../components/layout/DashboardLayout";
 import { useAppDispatch, useAppSelector } from "../../app/hooks";
 import {
   clearWalletError,
+  createWalletRazorpayOrder,
   fetchMyWallet,
   fetchWalletTransactions,
-  topupWallet,
+  verifyWalletRazorpayTopup,
+  cancelWalletRazorpayTopup,
 } from "../../features/wallet/walletSlice";
-import { generateTransactionId } from "../../utils/appointmentUi";
 
 const TOPUP_METHODS = [
   {
-    id: "google_pay",
-    label: "Google Pay",
-  },
-  {
-    id: "phonepe",
-    label: "PhonePe",
-  },
-  {
-    id: "upi",
-    label: "UPI",
-  },
-  {
     id: "razorpay",
-    label: "Razorpay",
+    label: "Razorpay Test Mode",
   },
 ];
 
 const QUICK_AMOUNTS = [100, 250, 500, 1000];
+const TRANSACTION_REASON_FILTERS = [
+  {
+    label: "All Types",
+    value: "",
+  },
+  {
+    label: "Top Up",
+    value: "topup",
+  },
+  {
+    label: "Appointment Payment",
+    value: "booking_payment",
+  },
+  {
+    label: "Refunds",
+    value: "refund",
+  },
+  {
+    label: "Referral Rewards",
+    value: "referral_reward",
+  },
+];
 
+const TRANSACTION_STATUS_FILTERS = [
+  {
+    label: "Successful Only",
+    value: "success",
+  },
+  {
+    label: "All Status",
+    value: "all",
+  },
+  {
+    label: "Pending",
+    value: "pending",
+  },
+  {
+    label: "Cancelled",
+    value: "cancelled",
+  },
+  {
+    label: "Failed",
+    value: "failed",
+  },
+];
+
+const TRANSACTION_PAGE_LIMIT = 5;
 const formatAmount = (amount) => {
   return Number(amount || 0).toLocaleString("en-IN");
 };
@@ -63,6 +98,32 @@ const formatTransactionDate = (date) => {
   });
 };
 
+const loadRazorpayScript = () => {
+  return new Promise((resolve) => {
+    if (window.Razorpay) {
+      resolve(true);
+      return;
+    }
+
+    const existingScript = document.querySelector(
+      'script[src="https://checkout.razorpay.com/v1/checkout.js"]'
+    );
+
+    if (existingScript) {
+      existingScript.onload = () => resolve(true);
+      existingScript.onerror = () => resolve(false);
+      return;
+    }
+
+    const script = document.createElement("script");
+    script.src = "https://checkout.razorpay.com/v1/checkout.js";
+    script.onload = () => resolve(true);
+    script.onerror = () => resolve(false);
+
+    document.body.appendChild(script);
+  });
+};
+
 function WalletPage() {
   const dispatch = useAppDispatch();
 
@@ -73,25 +134,32 @@ function WalletPage() {
     isLoadingWallet,
     isLoadingTransactions,
     isToppingUp,
+    isCreatingWalletOrder,
     error,
   } = useAppSelector((state) => state.wallet);
 
   const [amount, setAmount] = useState("");
-  const [paymentMethod, setPaymentMethod] = useState("google_pay");
+  const [paymentMethod, setPaymentMethod] = useState("razorpay");
   const [page, setPage] = useState(1);
-
+ const [transactionReason, setTransactionReason] = useState("");
+const [transactionStatus, setTransactionStatus] = useState("success");
   useEffect(() => {
     dispatch(fetchMyWallet());
   }, [dispatch]);
 
-  useEffect(() => {
-    dispatch(
-      fetchWalletTransactions({
-        page,
-        limit: 10,
-      })
-    );
-  }, [dispatch, page]);
+useEffect(() => {
+  dispatch(
+    fetchWalletTransactions({
+      page,
+      limit: TRANSACTION_PAGE_LIMIT,
+      reason: transactionReason,
+      status: transactionStatus,
+    })
+  );
+}, [dispatch, page, transactionReason, transactionStatus]);
+useEffect(() => {
+  setPage(1);
+}, [transactionReason, transactionStatus]);
 
   useEffect(() => {
     if (!error) return;
@@ -108,62 +176,151 @@ function WalletPage() {
     };
   }, [wallet]);
 
-  const handleRefresh = () => {
-    dispatch(fetchMyWallet());
+ const handleRefresh = () => {
+  dispatch(fetchMyWallet());
+  dispatch(
+    fetchWalletTransactions({
+      page,
+      limit: TRANSACTION_PAGE_LIMIT,
+      reason: transactionReason,
+      status: transactionStatus,
+    })
+  );
+};
+
+ const handleTopup = async (event) => {
+  event.preventDefault();
+
+  const numericAmount = Number(amount);
+
+  if (!amount || Number.isNaN(numericAmount)) {
+    toast.error("Enter a valid amount");
+    return;
+  }
+
+  if (numericAmount < 10) {
+    toast.error("Minimum top-up amount is ₹10");
+    return;
+  }
+
+  if (numericAmount > 50000) {
+    toast.error("Maximum top-up amount is ₹50,000");
+    return;
+  }
+
+  const loaded = await loadRazorpayScript();
+
+  if (!loaded) {
+    toast.error("Failed to load Razorpay checkout");
+    return;
+  }
+
+  try {
+    const orderResult = await dispatch(
+      createWalletRazorpayOrder({
+        amount: numericAmount,
+      })
+    ).unwrap();
+
+    const order = orderResult.order;
+   let isTopupHandled = false;
+
+const cancelPendingTopup = async () => {
+  if (!order?.orderId || isTopupHandled) return;
+
+  isTopupHandled = true;
+
+  try {
+    await dispatch(
+      cancelWalletRazorpayTopup({
+        razorpay_order_id: order.orderId,
+      })
+    ).unwrap();
+
     dispatch(
       fetchWalletTransactions({
-        page,
-        limit: 10,
+        page: 1,
+        limit: TRANSACTION_PAGE_LIMIT,
+        reason: transactionReason,
+        status: transactionStatus,
       })
     );
-  };
+  } catch {
+    // Do not block the user for cleanup failure.
+  }
+};
+    const options = {
+      key: order.keyId || import.meta.env.VITE_RAZORPAY_KEY_ID,
+      amount: order.amount,
+      currency: order.currency,
+      name: order.name || "DentaCare",
+      description: order.description || "DentaCare wallet top-up",
+      order_id: order.orderId,
 
-  const handleTopup = async (event) => {
-    event.preventDefault();
+      handler: async (response) => {
+        isTopupHandled = true;
+        try {
+          const verifyResult = await dispatch(
+verifyWalletRazorpayTopup({
+  amount: numericAmount,
+  razorpay_order_id: response.razorpay_order_id,
+  razorpay_payment_id: response.razorpay_payment_id,
+  razorpay_signature: response.razorpay_signature,
+})
+          ).unwrap();
 
-    const numericAmount = Number(amount);
+          toast.success(
+            verifyResult.message || "Wallet topped up successfully"
+          );
 
-    if (!amount || Number.isNaN(numericAmount)) {
-      toast.error("Enter a valid amount");
-      return;
-    }
+          setAmount("");
+          setPage(1);
 
-    if (numericAmount < 10) {
-      toast.error("Minimum top-up amount is ₹10");
-      return;
-    }
+          dispatch(fetchMyWallet());
+          dispatch(fetchWalletTransactions({ page: 1, limit: 10 }));
+        } catch (err) {
+          toast.error(err || "Wallet top-up verification failed");
+        }
+      },
 
-    if (numericAmount > 50000) {
-      toast.error("Maximum top-up amount is ₹50,000");
-      return;
-    }
+      prefill: {
+        name: wallet?.userId?.username || "",
+      },
 
-    try {
-      const result = await dispatch(
-        topupWallet({
-          amount: numericAmount,
-          paymentMethod,
-          transactionId: generateTransactionId(),
-        })
-      ).unwrap();
+      theme: {
+        color: "#9381FF",
+      },
 
-      toast.success(result.message || "Wallet topped up successfully");
+      modal: {
+  ondismiss: async () => {
+    await cancelPendingTopup();
+    toast.error("Wallet top-up cancelled");
+  },
+},
+    };
 
-      setAmount("");
-      setPage(1);
+    const razorpay = new window.Razorpay(options);
 
-      dispatch(fetchWalletTransactions({ page: 1, limit: 10 }));
-    } catch (err) {
-      toast.error(err || "Failed to top up wallet");
-    }
-  };
+    razorpay.on("payment.failed", async (response) => {
+  await cancelPendingTopup();
+
+  toast.error(
+    response?.error?.description || "Razorpay payment failed"
+  );
+});
+
+    razorpay.open();
+  } catch (err) {
+    toast.error(err || "Failed to start wallet top-up");
+  }
+};
 
   return (
     <DashboardLayout
       title="Wallet"
       description="Manage your DentaCare wallet balance and transactions."
     >
-      <div className="grid gap-6 xl:grid-cols-[1fr_390px]">
+      <div className="mx-auto max-w-[1080px] space-y-6">
         <section className="space-y-6">
           <div className="rounded-3xl border border-[#EEF0F6] bg-white p-7 shadow-[0_18px_48px_rgba(17,24,39,0.05)] dark:border-slate-800 dark:bg-slate-900">
             <div className="flex flex-col gap-5 md:flex-row md:items-start md:justify-between">
@@ -220,80 +377,7 @@ function WalletPage() {
               negative
             />
           </section>
-
-          <section className="rounded-3xl border border-[#EEF0F6] bg-white p-7 shadow-[0_18px_48px_rgba(17,24,39,0.05)] dark:border-slate-800 dark:bg-slate-900">
-            <div className="mb-6 flex items-center justify-between gap-4">
-              <div>
-                <p className="text-sm font-bold uppercase tracking-[0.8px] text-[#9381FF]">
-                  History
-                </p>
-
-                <h2 className="mt-1 text-2xl font-extrabold text-[#111827] dark:text-slate-100">
-                  Wallet Transactions
-                </h2>
-              </div>
-
-              <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[#F0F1FF] text-[#9381FF]">
-                <History size={21} />
-              </div>
-            </div>
-
-            {isLoadingTransactions ? (
-              <div className="rounded-2xl bg-[#F8FAFC] p-6 text-sm font-bold text-[#6B7280] dark:bg-slate-800 dark:text-slate-400">
-                Loading transactions...
-              </div>
-            ) : transactions.length === 0 ? (
-              <div className="rounded-2xl border border-dashed border-[#D1D5DB] bg-[#F8FAFC] p-8 text-center dark:border-slate-700 dark:bg-slate-800">
-                <p className="text-sm font-bold text-[#6B7280] dark:text-slate-400">
-                  No wallet transactions yet.
-                </p>
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {transactions.map((transaction) => (
-                  <TransactionCard
-                    key={transaction._id}
-                    transaction={transaction}
-                  />
-                ))}
-              </div>
-            )}
-
-            {pagination && pagination.totalPages > 1 && (
-              <div className="mt-6 flex items-center justify-between gap-4">
-                <button
-                  type="button"
-                  disabled={page <= 1 || isLoadingTransactions}
-                  onClick={() => setPage((prev) => Math.max(prev - 1, 1))}
-                  className="h-10 rounded-xl border border-[#EEF0F6] px-4 text-sm font-extrabold text-[#6B7280] transition hover:border-[#9381FF] hover:text-[#9381FF] disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-800"
-                >
-                  Previous
-                </button>
-
-                <p className="text-sm font-bold text-[#6B7280] dark:text-slate-400">
-                  Page {pagination.page} of {pagination.totalPages}
-                </p>
-
-                <button
-                  type="button"
-                  disabled={
-                    page >= pagination.totalPages || isLoadingTransactions
-                  }
-                  onClick={() =>
-                    setPage((prev) =>
-                      Math.min(prev + 1, pagination.totalPages)
-                    )
-                  }
-                  className="h-10 rounded-xl border border-[#EEF0F6] px-4 text-sm font-extrabold text-[#6B7280] transition hover:border-[#9381FF] hover:text-[#9381FF] disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-800"
-                >
-                  Next
-                </button>
-              </div>
-            )}
-          </section>
-        </section>
-
-        <aside className="h-fit rounded-3xl border border-[#EEF0F6] bg-white p-7 shadow-[0_18px_48px_rgba(17,24,39,0.05)] dark:border-slate-800 dark:bg-slate-900">
+         <aside className="h-fit rounded-3xl border border-[#EEF0F6] bg-white p-7 shadow-[0_18px_48px_rgba(17,24,39,0.05)] dark:border-slate-800 dark:bg-slate-900">
           <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#F0F1FF] text-[#9381FF]">
             <CreditCard size={24} />
           </div>
@@ -301,11 +385,9 @@ function WalletPage() {
           <h2 className="mt-4 text-2xl font-extrabold text-[#111827] dark:text-slate-100">
             Top Up Wallet
           </h2>
-
-          <p className="mt-2 text-sm leading-6 text-[#6B7280] dark:text-slate-400">
-            This is a simulated payment top-up flow for your Week 2/Day 19
-            wallet module.
-          </p>
+<p className="mt-2 text-sm leading-6 text-[#6B7280] dark:text-slate-400">
+  Add money to your DentaCare wallet using Razorpay test mode.
+</p>
 
           <form onSubmit={handleTopup} className="mt-6 space-y-5">
             <div>
@@ -383,15 +465,116 @@ function WalletPage() {
               </div>
             </div>
 
-            <button
-              type="submit"
-              disabled={isToppingUp}
-              className="h-12 w-full rounded-2xl bg-[#9381FF] text-sm font-extrabold text-white shadow-[0_14px_30px_rgba(147,129,255,0.26)] transition hover:bg-[#7E6EF2] disabled:cursor-not-allowed disabled:opacity-60"
+           <button
+            type="submit"
+            disabled={isToppingUp || isCreatingWalletOrder}
+            className="h-12 w-full rounded-2xl bg-[#9381FF] text-sm font-extrabold text-white shadow-[0_14px_30px_rgba(147,129,255,0.26)] transition hover:bg-[#7E6EF2] disabled:cursor-not-allowed disabled:opacity-60"
             >
-              {isToppingUp ? "Processing..." : "Top Up Wallet"}
+              {isToppingUp || isCreatingWalletOrder
+  ? "Processing..."
+  : "Top Up Wallet"}
             </button>
           </form>
         </aside>
+          <section className="rounded-3xl border border-[#EEF0F6] bg-white p-7 shadow-[0_18px_48px_rgba(17,24,39,0.05)] dark:border-slate-800 dark:bg-slate-900">
+            <div className="mb-6 flex items-center justify-between gap-4">
+              <div className="mb-5 grid gap-3 md:grid-cols-2">
+  <select
+    value={transactionReason}
+    onChange={(event) => setTransactionReason(event.target.value)}
+    className="h-11 rounded-2xl border border-[#EEF0F6] bg-white px-4 text-sm font-bold text-[#374151] outline-none transition focus:border-[#9381FF] dark:border-slate-800 dark:bg-slate-950 dark:text-slate-100"
+  >
+    {TRANSACTION_REASON_FILTERS.map((item) => (
+      <option key={item.value || "all"} value={item.value}>
+        {item.label}
+      </option>
+    ))}
+  </select>
+
+  <select
+    value={transactionStatus}
+    onChange={(event) => setTransactionStatus(event.target.value)}
+    className="h-11 rounded-2xl border border-[#EEF0F6] bg-white px-4 text-sm font-bold text-[#374151] outline-none transition focus:border-[#9381FF] dark:border-slate-800 dark:bg-slate-950 dark:text-slate-100"
+  >
+    {TRANSACTION_STATUS_FILTERS.map((item) => (
+      <option key={item.value} value={item.value}>
+        {item.label}
+      </option>
+    ))}
+  </select>
+</div>
+             
+              <div>
+                <p className="text-sm font-bold uppercase tracking-[0.8px] text-[#9381FF]">
+                  History
+                </p>
+
+                <h2 className="mt-1 text-2xl font-extrabold text-[#111827] dark:text-slate-100">
+                  Wallet Transactions
+                </h2>
+              </div>
+
+              <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[#F0F1FF] text-[#9381FF]">
+                <History size={21} />
+              </div>
+            </div>
+
+            {isLoadingTransactions ? (
+              <div className="rounded-2xl bg-[#F8FAFC] p-6 text-sm font-bold text-[#6B7280] dark:bg-slate-800 dark:text-slate-400">
+                Loading transactions...
+              </div>
+            ) : transactions.length === 0 ? (
+              <div className="rounded-2xl border border-dashed border-[#D1D5DB] bg-[#F8FAFC] p-8 text-center dark:border-slate-700 dark:bg-slate-800">
+                <p className="text-sm font-bold text-[#6B7280] dark:text-slate-400">
+                  No wallet transactions yet.
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {transactions.map((transaction) => (
+                  <TransactionCard
+                    key={transaction._id}
+                    transaction={transaction}
+                  />
+                ))}
+              </div>
+            )}
+
+            {pagination && pagination.totalPages > 1 && (
+              <div className="mt-6 flex items-center justify-between gap-4">
+                <button
+                  type="button"
+                  disabled={page <= 1 || isLoadingTransactions}
+                  onClick={() => setPage((prev) => Math.max(prev - 1, 1))}
+                  className="h-10 rounded-xl border border-[#EEF0F6] px-4 text-sm font-extrabold text-[#6B7280] transition hover:border-[#9381FF] hover:text-[#9381FF] disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-800"
+                >
+                  Previous
+                </button>
+
+                <p className="text-sm font-bold text-[#6B7280] dark:text-slate-400">
+                  Page {pagination.page} of {pagination.totalPages}
+                </p>
+
+                <button
+                  type="button"
+                  disabled={
+                    page >= pagination.totalPages || isLoadingTransactions
+                  }
+                  onClick={() =>
+                    setPage((prev) =>
+                      Math.min(prev + 1, pagination.totalPages)
+                    )
+                  }
+                  className="h-10 rounded-xl border border-[#EEF0F6] px-4 text-sm font-extrabold text-[#6B7280] transition hover:border-[#9381FF] hover:text-[#9381FF] disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-800"
+                >
+                  Next
+                </button>
+              </div>
+            )}
+          </section>
+        </section>
+
+       
       </div>
     </DashboardLayout>
   );
@@ -423,7 +606,21 @@ function WalletStatCard({ label, value, icon: Icon, positive, negative }) {
     </div>
   );
 }
+const getTransactionStatusClass = (status) => {
+  if (status === "success") {
+    return "bg-green-50 text-green-700";
+  }
 
+  if (status === "pending") {
+    return "bg-orange-50 text-orange-700";
+  }
+
+  if (status === "cancelled") {
+    return "bg-slate-100 text-slate-700";
+  }
+
+  return "bg-red-50 text-red-700";
+};
 function TransactionCard({ transaction }) {
   const isCredit = transaction.type === "credit";
 
@@ -457,6 +654,15 @@ function TransactionCard({ transaction }) {
             <p className="mt-2 text-xs font-bold text-[#9CA3AF]">
               {formatTransactionDate(transaction.createdAt)}
             </p>
+            {transaction.status !== "success" && (
+  <span
+    className={`mt-2 inline-flex rounded-full px-3 py-1 text-[11px] font-extrabold capitalize ${getTransactionStatusClass(
+      transaction.status
+    )}`}
+  >
+    {transaction.status}
+  </span>
+)}
           </div>
         </div>
 

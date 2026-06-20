@@ -42,6 +42,18 @@ export const API_ENDPOINTS = {
   },
 
   DOCTOR: {
+    REGISTER: "/doctors/register",
+REGISTER_VERIFY_OTP: "/doctors/register/verify-otp",
+REGISTER_RESEND_OTP: "/doctors/register/resend-otp",
+
+MY_VERIFICATION: "/doctors/me/verification",
+UPLOAD_VERIFICATION_DOCUMENTS: "/doctors/me/verification-documents",
+
+ADMIN_VERIFICATION_REQUESTS: "/doctors/admin/verification-requests",
+ADMIN_APPROVE_VERIFICATION: (id) =>
+  `/doctors/admin/${id}/verification/approve`,
+ADMIN_REJECT_VERIFICATION: (id) =>
+  `/doctors/admin/${id}/verification/reject`,
     LOGIN: "/doctors/login",
     LOGOUT: "/doctors/logout",
 
@@ -135,6 +147,8 @@ RESTORE_DEFAULTS: (slotDayId) =>
     `/appointments/doctor/${appointmentId}/approve`,
   DOCTOR_REJECT: (appointmentId) =>
     `/appointments/doctor/${appointmentId}/reject`,
+  DOCTOR_CANCEL: (appointmentId) =>
+  `/appointments/doctor/${appointmentId}/cancel`,
   DOCTOR_COMPLETE: (appointmentId) =>
     `/appointments/doctor/${appointmentId}/complete`,
 
@@ -178,9 +192,83 @@ REFERRAL: {
   ADMIN_GET_ALL: "/referrals/admin",
   ADMIN_CONFIG: "/referrals/admin/config",
 },
-  WALLET: {
-    ME: "/wallets/me",
-    TRANSACTIONS: "/wallets/transactions",
-    TOPUP: "/wallets/topup",
-  },
+
+ WALLET: {
+  ME: "/wallets/me",
+  TRANSACTIONS: "/wallets/transactions",
+  CREATE_RAZORPAY_ORDER: "/wallets/razorpay/create-order",
+  VERIFY_RAZORPAY_TOPUP: "/wallets/razorpay/verify",
+  CANCEL_RAZORPAY_TOPUP: "/wallets/razorpay/cancel",
+},
+
+  BANNER: {
+  HOME: "/banners/home",
+  DOCTORS: "/banners/doctors",
+
+  ADMIN_CREATE: "/banners/admin",
+  ADMIN_GET_ALL: "/banners/admin",
+  ADMIN_GET_DETAILS: (bannerId) => `/banners/admin/${bannerId}`,
+  ADMIN_UPDATE: (bannerId) => `/banners/admin/${bannerId}`,
+  ADMIN_UPDATE_STATUS: (bannerId) => `/banners/admin/${bannerId}/status`,
+  ADMIN_DELETE: (bannerId) => `/banners/admin/${bannerId}`,
+},
+
+REVIEW: {
+  CREATE: "/reviews",
+
+  MY: "/reviews/my",
+  MY_DETAILS: (reviewId) => `/reviews/my/${reviewId}`,
+  UPDATE_MY: (reviewId) => `/reviews/${reviewId}`,
+  DELETE_MY: (reviewId) => `/reviews/${reviewId}`,
+
+  PUBLIC_DOCTOR_REVIEWS: (doctorId) => `/reviews/doctor/${doctorId}`,
+  PUBLIC_DOCTOR_SUMMARY: (doctorId) => `/reviews/doctor/${doctorId}/summary`,
+
+  DOCTOR_ME: "/reviews/doctor/me",
+
+  ADMIN_GET_ALL: "/reviews/admin",
+  ADMIN_GET_DETAILS: (reviewId) => `/reviews/admin/${reviewId}`,
+  ADMIN_APPROVE: (reviewId) => `/reviews/admin/${reviewId}/approve`,
+  ADMIN_REJECT: (reviewId) => `/reviews/admin/${reviewId}/reject`,
+},
+NOTIFICATION: {
+  PATIENT_LIST: "/notifications/patient",
+  PATIENT_UNREAD_COUNT: "/notifications/patient/unread-count",
+  PATIENT_MARK_READ: (notificationId) =>
+    `/notifications/patient/${notificationId}/read`,
+  PATIENT_MARK_ALL_READ: "/notifications/patient/read-all",
+  PATIENT_DELETE: (notificationId) =>
+    `/notifications/patient/${notificationId}`,
+
+  DOCTOR_LIST: "/notifications/doctor",
+  DOCTOR_UNREAD_COUNT: "/notifications/doctor/unread-count",
+  DOCTOR_MARK_READ: (notificationId) =>
+    `/notifications/doctor/${notificationId}/read`,
+  DOCTOR_MARK_ALL_READ: "/notifications/doctor/read-all",
+  DOCTOR_DELETE: (notificationId) =>
+    `/notifications/doctor/${notificationId}`,
+
+  ADMIN_LIST: "/notifications/admin",
+  ADMIN_UNREAD_COUNT: "/notifications/admin/unread-count",
+  ADMIN_MARK_READ: (notificationId) =>
+    `/notifications/admin/${notificationId}/read`,
+  ADMIN_MARK_ALL_READ: "/notifications/admin/read-all",
+  ADMIN_DELETE: (notificationId) =>
+    `/notifications/admin/${notificationId}`,
+},
+CHAT: {
+  PATIENT_MY: "/chats/patient/my",
+  PATIENT_MESSAGES: (appointmentId) =>
+    `/chats/patient/appointments/${appointmentId}/messages`,
+  PATIENT_SEND_MESSAGE: (appointmentId) =>
+    `/chats/patient/appointments/${appointmentId}/messages`,
+  PATIENT_MARK_READ: (chatId) => `/chats/patient/${chatId}/read`,
+
+  DOCTOR_MY: "/chats/doctor/my",
+  DOCTOR_MESSAGES: (appointmentId) =>
+    `/chats/doctor/appointments/${appointmentId}/messages`,
+  DOCTOR_SEND_MESSAGE: (appointmentId) =>
+    `/chats/doctor/appointments/${appointmentId}/messages`,
+  DOCTOR_MARK_READ: (chatId) => `/chats/doctor/${chatId}/read`,
+},
 };

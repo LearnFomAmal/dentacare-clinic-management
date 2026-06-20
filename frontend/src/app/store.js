@@ -8,6 +8,10 @@ import appointmentReducer from "../features/appointment/appointmentSlice";
 import couponReducer from "../features/coupon/couponSlice";
 import referralReducer from "../features/referral/referralSlice";
 import walletReducer from "../features/wallet/walletSlice";
+import bannerReducer from "../features/banner/bannerSlice";
+import reviewReducer from "../features/review/reviewSlice";
+import notificationReducer from "../features/notification/notificationSlice";
+import chatReducer from "../features/chat/chatSlice";
 
 export const store = configureStore({
   reducer: {
@@ -19,5 +23,9 @@ export const store = configureStore({
     coupons: couponReducer,
     referrals: referralReducer,
     wallet: walletReducer,
+    banners: bannerReducer,
+    reviews: reviewReducer,
+    notifications: notificationReducer,
+    chats: chatReducer,
   },
 });

@@ -1,7 +1,7 @@
 import express from "express";
 
 import { protect } from "../../middlewares/auth.middleware.js";
-import { protectDoctor } from "../../middlewares/doctorAuth.middleware.js";
+import { protectDoctor,requireVerifiedDoctor } from "../../middlewares/doctorAuth.middleware.js";
 import {
   uploadBookingReport,
   uploadDoctorPrescription,
@@ -46,6 +46,7 @@ router.delete(
 router.post(
   "/doctor/prescription/:appointmentId",
   protectDoctor,
+  requireVerifiedDoctor,
   uploadDoctorPrescription,
   uploadDoctorPrescriptionController
 );
@@ -62,6 +63,7 @@ router.get(
 router.get(
   "/doctor/appointment/:appointmentId",
   protectDoctor,
+  requireVerifiedDoctor,
   getDoctorAppointmentReportsController
 );
 

@@ -245,3 +245,30 @@ export const getCurrentUserApi = async (accountType) => {
 
   return response.data;
 };
+
+export const registerDoctorApi = async (payload) => {
+  const response = await axiosInstance.post(
+    API_ENDPOINTS.DOCTOR.REGISTER,
+    payload
+  );
+
+  return response.data;
+};
+
+export const verifyDoctorRegisterOtpApi = async (payload) => {
+  const response = await axiosInstance.post(
+    API_ENDPOINTS.DOCTOR.REGISTER_VERIFY_OTP,
+    payload
+  );
+
+  return response.data;
+};
+
+export const resendDoctorRegisterOtpApi = async (payload) => {
+  const response = await axiosInstance.post(
+    API_ENDPOINTS.DOCTOR.REGISTER_RESEND_OTP,
+    payload
+  );
+
+  return response.data;
+};

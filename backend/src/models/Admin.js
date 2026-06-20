@@ -28,12 +28,17 @@ const adminSchema = new mongoose.Schema(
       default: "admin",
     },
 
-    accountStatus: {
-      isBlocked: {
-        type: Boolean,
-        default: false,
-      },
-    },
+   accountStatus: {
+  isBlocked: {
+    type: Boolean,
+    default: false,
+  },
+
+  isDeleted: {
+    type: Boolean,
+    default: false,
+  },
+},
   },
   { timestamps: true }
 );

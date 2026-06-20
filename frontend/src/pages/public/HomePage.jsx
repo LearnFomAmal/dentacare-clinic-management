@@ -1,4 +1,5 @@
-import { Link, useNavigate } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { Link, Navigate, useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
 import { useAppDispatch, useAppSelector } from "../../app/hooks";
 import { logoutUser } from "../../features/auth/authSlice";
@@ -6,7 +7,10 @@ import {
   CalendarDays,
   ChevronLeft,
   ChevronRight,
+  Clock,
   FileText,
+  IndianRupee,
+  MapPin,
   ShieldCheck,
   ShieldPlus,
   SmilePlus,
@@ -14,43 +18,15 @@ import {
   Star,
   UsersRound,
 } from "lucide-react";
-
+import axiosInstance from "../../api/axios";
 import { ROUTES } from "../../constants/routes";
 
-const doctors = [
-  {
-    name: "Dr. Sarah Jenkins",
-    specialty: "Orthodontist",
-    rating: "5.0",
-    experience: "12 Years Exp.",
-    image:
-      "https://images.unsplash.com/photo-1559839734-2b71ea197ec2?q=80&w=400&auto=format&fit=crop",
-  },
-  {
-    name: "Dr. Michael Brown",
-    specialty: "Periodontist",
-    rating: "4.8",
-    experience: "9 Years Exp.",
-    image:
-      "https://images.unsplash.com/photo-1622253692010-333f2da6031d?q=80&w=400&auto=format&fit=crop",
-  },
-  {
-    name: "Dr. Aisha Khan",
-    specialty: "Endodontist",
-    rating: "4.9",
-    experience: "15 Years Exp.",
-    image:
-      "https://images.unsplash.com/photo-1594824476967-48c8b964273f?q=80&w=400&auto=format&fit=crop",
-  },
-  {
-    name: "Dr. David Chen",
-    specialty: "Oral Surgeon",
-    rating: "4.7",
-    experience: "7 Years Exp.",
-    image:
-      "https://images.unsplash.com/photo-1612349317150-e413f6a5b16d?q=80&w=400&auto=format&fit=crop",
-  },
-];
+import BannerCarousel from "../../components/banners/BannerCarousel";
+import {
+  clearBannerError,
+  fetchHomeBanners,
+} from "../../features/banner/bannerSlice";
+
 
 const services = [
   {
@@ -115,20 +91,140 @@ const reviews = [
   },
 ];
 
+
+
 const transformationImages = [
   "https://i.pinimg.com/736x/d8/6e/48/d86e48ca22e502cee1dacb6b2a9dcc15.jpg",
   "https://images.unsplash.com/photo-1609840114035-3c981b782dfe?q=80&w=500&auto=format&fit=crop",
   "https://images.unsplash.com/photo-1588776814546-daab30f310ce?q=80&w=500&auto=format&fit=crop",
 ];
+const PUBLIC_DOCTORS_ENDPOINT = "/doctors/public";
 
+const CLINIC_INFO = {
+  name: "DentaCare Dental Clinic",
+  address: "Malappuram, Kerala",
+  hours: "Monday - Saturday, 9:00 AM - 5:00 PM",
+};
+
+const normalizeDoctorsResponse = (responseData) => {
+  const payload = responseData?.data || responseData;
+
+  if (Array.isArray(payload)) {
+    return payload;
+  }
+
+  if (Array.isArray(payload?.doctors)) {
+    return payload.doctors;
+  }
+
+  if (Array.isArray(payload?.data)) {
+    return payload.data;
+  }
+
+  return [];
+};
+
+const getDoctorFullName = (doctor) => {
+  const name = [doctor?.firstName, doctor?.lastName]
+    .filter(Boolean)
+    .join(" ")
+    .trim();
+
+  return name ? `Dr. ${name}` : "Doctor";
+};
+
+const getDoctorSpecialty = (doctor) => {
+  return (
+    doctor?.specialization?.displayName ||
+    doctor?.specialization?.name ||
+    "Dental Specialist"
+  );
+};
+
+const getDoctorImage = (doctor) => {
+  return doctor?.professionalInfo?.profileImage || "";
+};
+
+const getDoctorInitials = (doctor) => {
+  const first = doctor?.firstName?.charAt(0) || "";
+  const last = doctor?.lastName?.charAt(0) || "";
+
+  return `${first}${last}`.toUpperCase() || "DR";
+};
+
+const getDoctorRating = (doctor) => {
+  const rating = Number(doctor?.stats?.averageRating || 0);
+
+  if (rating <= 0) {
+    return "New";
+  }
+
+  return rating.toFixed(1);
+};
+
+const getDoctorExperience = (doctor) => {
+  const experience = Number(doctor?.professionalInfo?.experience || 0);
+
+  return `${experience} Years Exp.`;
+};
 function HomePage() {
+  const dispatch = useAppDispatch();
+
+  const { isAuthenticated, role,user} = useAppSelector((state) => state.auth);
+  const { homeBanners, error } = useAppSelector((state) => state.banners);
+
+  const isPatient = isAuthenticated && role === "patient";
+
+  useEffect(() => {
+    if (isPatient) {
+      dispatch(fetchHomeBanners());
+    }
+  }, [dispatch, isPatient]);
+
+  useEffect(() => {
+    if (!error) return;
+
+    dispatch(clearBannerError());
+  }, [error, dispatch]);
+  const isDoctorVerified = Boolean(
+  user?.accountStatus?.isVerified ||
+    user?.verification?.status === "approved"
+);
+
+if (isAuthenticated && role === "doctor") {
+  return (
+    <Navigate
+      to={
+        isDoctorVerified
+          ? ROUTES.DOCTOR_DASHBOARD
+          : ROUTES.DOCTOR_VERIFICATION_STATUS
+      }
+      replace
+    />
+  );
+}
+
+if (isAuthenticated && role === "admin") {
+  return <Navigate to={ROUTES.ADMIN_DASHBOARD} replace />;
+}
   return (
     <div className="min-h-screen bg-white text-[#111827]">
       <HomeNavbar />
 
       <main>
-        <HeroSection />
-        <DoctorsSection />
+     <HeroSection />
+
+<ClinicLocationSection />
+
+{isPatient && (
+  <BannerCarousel
+    banners={homeBanners}
+    title="Exclusive Offers"
+    description="Referral rewards and specialty coupon offers made for you."
+  />
+)}
+
+<DoctorsSection isPatient={isPatient} />
         <ServicesSection />
         <TransformationSection />
         <ReviewsSection />
@@ -329,70 +425,230 @@ function HeroSection() {
   );
 }
 
-function DoctorsSection() {
+function ClinicLocationSection() {
   return (
-    <section id="doctors" className="bg-white px-6 py-16">
+    <section className="bg-white px-6 py-10">
       <div className="mx-auto max-w-[1180px]">
-        <div className="mb-6 flex items-center justify-between">
-          <h2 className="text-xl font-bold text-black">Our Doctors</h2>
+        <div className="grid gap-5 rounded-[32px] border border-[#EEF0F6] bg-[#F8FAFC] p-6 shadow-[0_18px_48px_rgba(17,24,39,0.04)] md:grid-cols-[1.2fr_1fr] md:p-8">
+          <div>
+            <p className="text-sm font-extrabold uppercase tracking-[0.8px] text-[#9381FF]">
+              Clinic Location
+            </p>
 
-          <Link
-            to={ROUTES.LOGIN}
-            className="text-[15px] font-semibold text-[#9381FF]"
-          >
-            See All
-          </Link>
-        </div>
+            <h2 className="mt-2 text-3xl font-extrabold tracking-[-0.8px] text-[#111827]">
+              Visit {CLINIC_INFO.name}
+            </h2>
 
-        <div className="flex items-center gap-5">
-          <button className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-black/10 bg-[#F1F5F9] text-[#9381FF]">
-            <ChevronLeft size={24} />
-          </button>
-
-          <div className="grid flex-1 grid-cols-1 gap-5 md:grid-cols-2 lg:grid-cols-4">
-            {doctors.map((doctor) => (
-              <DoctorCard key={doctor.name} doctor={doctor} />
-            ))}
+            <p className="mt-3 max-w-[680px] text-base leading-7 text-[#6B7280]">
+              Book online and visit our clinic for trusted dental care in a
+              clean, patient-friendly environment.
+            </p>
           </div>
 
-          <button className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-black/10 bg-[#F1F5F9] text-[#9381FF]">
-            <ChevronRight size={24} />
-          </button>
+          <div className="grid gap-3">
+            <div className="flex items-start gap-3 rounded-2xl bg-white p-4">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#F0F1FF] text-[#9381FF]">
+                <MapPin size={18} />
+              </div>
+
+              <div>
+                <p className="text-xs font-bold uppercase tracking-[0.6px] text-[#9CA3AF]">
+                  Address
+                </p>
+
+                <p className="mt-1 text-sm font-extrabold text-[#111827]">
+                  {CLINIC_INFO.address}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-start gap-3 rounded-2xl bg-white p-4">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#F0F1FF] text-[#9381FF]">
+                <Clock size={18} />
+              </div>
+
+              <div>
+                <p className="text-xs font-bold uppercase tracking-[0.6px] text-[#9CA3AF]">
+                  Working Hours
+                </p>
+
+                <p className="mt-1 text-sm font-extrabold text-[#111827]">
+                  {CLINIC_INFO.hours}
+                </p>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </section>
   );
 }
 
-function DoctorCard({ doctor }) {
+function DoctorsSection({ isPatient = false }) {
+  const [publicDoctors, setPublicDoctors] = useState([]);
+  const [isLoadingDoctors, setIsLoadingDoctors] = useState(false);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const fetchPublicDoctors = async () => {
+      try {
+        setIsLoadingDoctors(true);
+
+        const response = await axiosInstance.get(PUBLIC_DOCTORS_ENDPOINT, {
+          params: {
+            page: 1,
+            limit: 4,
+            sort: "rating_desc",
+          },
+        });
+
+        const doctorsList = normalizeDoctorsResponse(response.data);
+
+        if (!isMounted) return;
+
+        setPublicDoctors(doctorsList);
+      } catch {
+        if (!isMounted) return;
+
+        setPublicDoctors([]);
+      } finally {
+        if (isMounted) {
+          setIsLoadingDoctors(false);
+        }
+      }
+    };
+
+    fetchPublicDoctors();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
   return (
-    <div className="flex h-[300px] flex-col items-center rounded-lg border border-black/10 bg-white px-5 py-6 shadow-[0_4px_12px_rgba(0,0,0,0.02)]">
-      <img
-        src={doctor.image}
-        alt={doctor.name}
-        className="mb-4 h-24 w-24 rounded-full border-[3px] border-[#F8FAFC] object-cover"
-      />
+    <section id="doctors" className="bg-white px-6 py-16">
+      <div className="mx-auto max-w-[1180px]">
+        <div className="mb-6 flex items-center justify-between">
+          <div>
+            <p className="text-sm font-extrabold uppercase tracking-[0.8px] text-[#9381FF]">
+              Verified Dentists
+            </p>
+
+            <h2 className="mt-1 text-2xl font-extrabold text-black">
+              Our Doctors
+            </h2>
+          </div>
+
+          <Link
+            to={isPatient ? ROUTES.FIND_DOCTORS : ROUTES.LOGIN}
+            className="text-[15px] font-semibold text-[#9381FF]"
+          >
+            See All
+          </Link>
+        </div>
+
+        {isLoadingDoctors ? (
+          <div className="rounded-3xl border border-[#EEF0F6] bg-[#F8FAFC] p-10 text-center text-sm font-bold text-[#6B7280]">
+            Loading verified doctors...
+          </div>
+        ) : publicDoctors.length === 0 ? (
+          <div className="rounded-3xl border border-dashed border-[#D1D5DB] bg-[#F8FAFC] p-10 text-center">
+            <h3 className="text-lg font-extrabold text-[#111827]">
+              No verified doctors available yet
+            </h3>
+
+            <p className="mt-2 text-sm leading-6 text-[#6B7280]">
+              Doctors will appear here after registration, document submission,
+              and admin verification.
+            </p>
+          </div>
+        ) : (
+          <div className="flex items-center gap-5">
+            <button
+              type="button"
+              className="hidden h-11 w-11 shrink-0 items-center justify-center rounded-full border border-black/10 bg-[#F1F5F9] text-[#9381FF] md:flex"
+            >
+              <ChevronLeft size={24} />
+            </button>
+
+            <div className="grid flex-1 grid-cols-1 gap-5 md:grid-cols-2 lg:grid-cols-4">
+              {publicDoctors.map((doctor) => (
+                <DoctorCard
+                  key={doctor._id}
+                  doctor={doctor}
+                  isPatient={isPatient}
+                />
+              ))}
+            </div>
+
+            <button
+              type="button"
+              className="hidden h-11 w-11 shrink-0 items-center justify-center rounded-full border border-black/10 bg-[#F1F5F9] text-[#9381FF] md:flex"
+            >
+              <ChevronRight size={24} />
+            </button>
+          </div>
+        )}
+      </div>
+    </section>
+  );
+}
+
+function DoctorCard({ doctor, isPatient = false }) {
+  const image = getDoctorImage(doctor);
+  const name = getDoctorFullName(doctor);
+  const specialty = getDoctorSpecialty(doctor);
+  const rating = getDoctorRating(doctor);
+  const experience = getDoctorExperience(doctor);
+  const fee = Number(doctor?.professionalInfo?.consultationFee || 0);
+
+ const doctorDetailsPath = isPatient
+  ? ROUTES.DOCTOR_DETAILS?.replace(":doctorId", doctor._id) ||
+    `/doctors/${doctor._id}`
+  : ROUTES.LOGIN;
+
+  return (
+    <div className="flex min-h-[320px] flex-col items-center rounded-lg border border-black/10 bg-white px-5 py-6 shadow-[0_4px_12px_rgba(0,0,0,0.02)] transition hover:-translate-y-1 hover:shadow-[0_18px_40px_rgba(147,129,255,0.12)]">
+      {image ? (
+        <img
+          src={image}
+          alt={name}
+          className="mb-4 h-24 w-24 rounded-full border-[3px] border-[#F8FAFC] object-cover"
+        />
+      ) : (
+        <div className="mb-4 flex h-24 w-24 items-center justify-center rounded-full border-[3px] border-[#F8FAFC] bg-[#F0F1FF] text-xl font-extrabold text-[#9381FF]">
+          {getDoctorInitials(doctor)}
+        </div>
+      )}
 
       <h3 className="mb-1 text-center text-base font-bold text-black">
-        {doctor.name}
+        {name}
       </h3>
 
-      <p className="mb-4 text-center text-sm font-medium text-[#7A7A85]">
-        {doctor.specialty}
+      <p className="mb-3 text-center text-sm font-medium text-[#7A7A85]">
+        {specialty}
       </p>
 
-      <div className="mb-6 flex items-center gap-1.5 text-sm">
-        <Star size={16} className="text-[#FFC107]" />
-        <span className="font-medium text-black">{doctor.rating}</span>
-        <span className="text-[#7A7A85]">• {doctor.experience}</span>
+      <div className="mb-3 flex items-center gap-1.5 text-sm">
+        <Star size={16} className="text-[#FFC107]" fill="currentColor" />
+
+        <span className="font-medium text-black">{rating}</span>
+
+        <span className="text-[#7A7A85]">• {experience}</span>
+      </div>
+
+      <div className="mb-5 flex items-center gap-1 rounded-full bg-[#F8FAFC] px-3 py-1.5 text-sm font-extrabold text-[#111827]">
+        <IndianRupee size={14} />
+        {fee}
       </div>
 
       <Link
-        to={ROUTES.LOGIN}
-        className="mt-auto flex h-10 w-full items-center justify-center rounded-md bg-[#9381FF] text-sm font-semibold text-white transition hover:bg-[#7E87E1]"
-      >
-        Book Appointment
-      </Link>
+  to={doctorDetailsPath}
+  className="mt-auto flex h-10 w-full items-center justify-center rounded-md bg-[#9381FF] text-sm font-semibold text-white transition hover:bg-[#7E87E1]"
+>
+  View Details
+</Link>
     </div>
   );
 }

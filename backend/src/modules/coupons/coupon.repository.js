@@ -75,7 +75,7 @@ export const softDeleteCouponById = (couponId) => {
 
 export const findDoctorCouponContext = (doctorId) => {
   return Doctor.findById(doctorId)
-    .select("_id specialization professionalInfo accountStatus")
+    .select("_id specialization professionalInfo accountStatus verification")
     .lean();
 };
 

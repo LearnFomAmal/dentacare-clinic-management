@@ -46,6 +46,19 @@ import AdminCouponsPage from "../pages/admin/AdminCouponsPage";
 import AdminCouponFormPage from "../pages/admin/AdminCouponFormPage";
 import WalletPage from "../pages/patient/WalletPage";
 import DoctorEarningsPage from "../pages/doctor/DoctorEarningsPage";
+import AdminBannersPage from "../pages/admin/AdminBannersPage";
+import AdminBannerFormPage from "../pages/admin/AdminBannerFormPage";
+import MyReviewsPage from "../pages/patient/MyReviewsPage";
+import DoctorReviewsPage from "../pages/doctor/DoctorReviewsPage";
+import AdminReviewsPage from "../pages/admin/AdminReviewsPage";
+import MyChatsPage from "../pages/chat/MyChatsPage";
+import AppointmentChatPage from "../pages/chat/AppointmentChatPage";
+
+import DoctorRegisterPage from "../pages/public/DoctorRegisterPage";
+import DoctorRegisterOtpPage from "../pages/public/DoctorRegisterOtpPage";
+import DoctorVerificationStatusPage from "../pages/doctor/DoctorVerificationStatusPage";
+import DoctorUploadDocumentsPage from "../pages/doctor/DoctorUploadDocumentsPage";
+import AdminDoctorVerificationsPage from "../pages/admin/AdminDoctorVerificationsPage";
 
 function AppRoutes() {
   return (
@@ -76,7 +89,23 @@ function AppRoutes() {
           </PublicRoute>
         }
       />
+<Route
+  path={ROUTES.DOCTOR_REGISTER}
+  element={
+    <PublicRoute>
+      <DoctorRegisterPage />
+    </PublicRoute>
+  }
+/>
 
+<Route
+  path={ROUTES.DOCTOR_REGISTER_VERIFY_OTP}
+  element={
+    <PublicRoute>
+      <DoctorRegisterOtpPage />
+    </PublicRoute>
+  }
+/>
       <Route
         path={ROUTES.VERIFY_OTP}
         element={
@@ -222,7 +251,23 @@ function AppRoutes() {
           </ProtectedRoute>
         }
       />
+<Route
+  path={ROUTES.DOCTOR_VERIFICATION_STATUS}
+  element={
+    <ProtectedRoute allowedRoles={["doctor"]}>
+      <DoctorVerificationStatusPage />
+    </ProtectedRoute>
+  }
+/>
 
+<Route
+  path={ROUTES.DOCTOR_UPLOAD_DOCUMENTS}
+  element={
+    <ProtectedRoute allowedRoles={["doctor"]}>
+      <DoctorUploadDocumentsPage />
+    </ProtectedRoute>
+  }
+/>
       <Route
         path={ROUTES.DOCTOR_SLOTS}
         element={
@@ -286,7 +331,14 @@ function AppRoutes() {
           </ProtectedRoute>
         }
       />
-
+<Route
+  path={ROUTES.ADMIN_DOCTOR_VERIFICATION_REQUESTS}
+  element={
+    <ProtectedRoute allowedRoles={["admin"]}>
+      <AdminDoctorVerificationsPage />
+    </ProtectedRoute>
+  }
+/>
       <Route
         path={ROUTES.ADMIN_ADD_DOCTOR}
         element={
@@ -394,6 +446,114 @@ function AppRoutes() {
     </ProtectedRoute>
   }
 />
+
+ <Route
+  path={ROUTES.ADMIN_BANNERS}
+  element={
+    <ProtectedRoute allowedRoles={["admin"]}>
+      <AdminBannersPage />
+    </ProtectedRoute>
+  }
+/>
+
+<Route
+  path={ROUTES.ADMIN_ADD_BANNER}
+  element={
+    <ProtectedRoute allowedRoles={["admin"]}>
+      <AdminBannerFormPage />
+    </ProtectedRoute>
+  }
+/>
+
+<Route
+  path={ROUTES.ADMIN_EDIT_BANNER}
+  element={
+    <ProtectedRoute allowedRoles={["admin"]}>
+      <AdminBannerFormPage />
+    </ProtectedRoute>
+  }
+/>
+
+<Route
+  path={ROUTES.MY_REVIEWS}
+  element={
+    <ProtectedRoute allowedRoles={["patient"]}>
+      <MyReviewsPage />
+    </ProtectedRoute>
+  }
+/>
+
+<Route
+  path={ROUTES.DOCTOR_REVIEWS}
+  element={
+    <ProtectedRoute allowedRoles={["doctor"]}>
+      <DoctorReviewsPage />
+    </ProtectedRoute>
+  }
+/>
+
+<Route
+  path={ROUTES.ADMIN_REVIEWS}
+  element={
+    <ProtectedRoute allowedRoles={["admin"]}>
+      <AdminReviewsPage />
+    </ProtectedRoute>
+  }
+/>
+
+<Route
+  path={ROUTES.CHATS}
+  element={
+    <ProtectedRoute allowedRoles={["patient"]}>
+      <MyChatsPage />
+    </ProtectedRoute>
+  }
+/>
+
+<Route
+  path={ROUTES.CHAT_APPOINTMENT}
+  element={
+    <ProtectedRoute allowedRoles={["patient"]}>
+      <AppointmentChatPage />
+    </ProtectedRoute>
+  }
+/>
+<Route
+  path={ROUTES.DOCTOR_CHATS}
+  element={
+    <ProtectedRoute allowedRoles={["doctor"]}>
+      <MyChatsPage />
+    </ProtectedRoute>
+  }
+/>
+
+<Route
+  path={ROUTES.DOCTOR_CHAT_APPOINTMENT}
+  element={
+    <ProtectedRoute allowedRoles={["doctor"]}>
+      <AppointmentChatPage />
+    </ProtectedRoute>
+  }
+/>
+
+<Route
+  path="/doctor"
+  element={
+    <ProtectedRoute allowedRoles={["doctor"]}>
+      <Navigate to={ROUTES.DOCTOR_DASHBOARD} replace />
+    </ProtectedRoute>
+  }
+/>
+
+<Route
+  path="/admin"
+  element={
+    <ProtectedRoute allowedRoles={["admin"]}>
+      <Navigate to={ROUTES.ADMIN_DASHBOARD} replace />
+    </ProtectedRoute>
+  }
+/>
+
       <Route path="*" element={<Navigate to={ROUTES.HOME} replace />} />
     </Routes>
   );

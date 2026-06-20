@@ -1,5 +1,5 @@
 import DoctorEarning from "../../models/DoctorEarning.js";
-
+import Doctor from "../../models/Doctor.js";
 export const getDoctorEarningSummary = async ({
   doctorId,
   todayStart,
@@ -99,4 +99,13 @@ export const countDoctorEarningTransactions = ({ doctorId }) => {
   return DoctorEarning.countDocuments({
     doctorId,
   });
+};
+
+export const findDoctorForEarning = (doctorId) => {
+  return Doctor.findOne({
+    _id: doctorId,
+    "accountStatus.isDeleted": false,
+  })
+    .select("_id accountStatus")
+    .lean();
 };

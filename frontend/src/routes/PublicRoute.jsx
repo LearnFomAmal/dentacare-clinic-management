@@ -4,9 +4,17 @@ import { useAppSelector } from "../app/hooks";
 import { ROUTES } from "../constants/routes";
 import { getAccountType, getAuthUser } from "../utils/authStorage";
 
-const getRoleHome = (role) => {
+const getRoleHome = (role, user = null) => {
   if (role === "admin") return ROUTES.ADMIN_DASHBOARD;
-  if (role === "doctor") return ROUTES.DOCTOR_DASHBOARD;
+
+  if (role === "doctor") {
+    if (!user?.accountStatus?.isVerified) {
+      return ROUTES.DOCTOR_VERIFICATION_STATUS;
+    }
+
+    return ROUTES.DOCTOR_DASHBOARD;
+  }
+
   return ROUTES.PATIENT_DASHBOARD;
 };
 
@@ -16,9 +24,11 @@ function PublicRoute({ children }) {
   );
 
   if (isAuthenticated && user) {
+    const finalRole = role || accountType || user.role || user.accountType;
+
     return (
       <Navigate
-        to={getRoleHome(role || accountType)}
+        to={getRoleHome(finalRole, user)}
         replace
       />
     );
@@ -32,7 +42,7 @@ function PublicRoute({ children }) {
   if (storedAccountType && storedUser) {
     return (
       <Navigate
-        to={getRoleHome(storedAccountType)}
+        to={getRoleHome(storedAccountType, storedUser)}
         replace
       />
     );

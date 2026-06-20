@@ -1,13 +1,14 @@
 import express from "express";
 
 import { protect } from "../../middlewares/auth.middleware.js";
-import { protectDoctor } from "../../middlewares/doctorAuth.middleware.js";
+import { protectDoctor,requireVerifiedDoctor } from "../../middlewares/doctorAuth.middleware.js";
 import { protectAdmin } from "../../middlewares/adminAuth.middleware.js";
 
 import {
   approveAppointmentByAdminController,
   approveAppointmentByDoctorController,
   cancelAppointmentByAdminController,
+  cancelAppointmentByDoctorController,
   cancelAppointmentByPatientController,
   completeAppointmentByDoctorController,
   getAdminAppointmentDetailsController,
@@ -52,34 +53,42 @@ router.patch(
 // ==============================
 // DOCTOR ROUTES
 // ==============================
-router.get("/doctor", protectDoctor, getDoctorAppointmentsController);
+router.get("/doctor", protectDoctor, requireVerifiedDoctor,getDoctorAppointmentsController);
 
 router.get(
   "/doctor/:appointmentId",
   protectDoctor,
+  requireVerifiedDoctor,
   getDoctorAppointmentDetailsController
 );
 
 router.patch(
   "/doctor/:appointmentId/approve",
   protectDoctor,
+  requireVerifiedDoctor,
   approveAppointmentByDoctorController
 );
 
 router.patch(
   "/doctor/:appointmentId/reject",
   protectDoctor,
+  requireVerifiedDoctor,
   rejectAppointmentByDoctorController
 );
 
 router.patch(
   "/doctor/:appointmentId/complete",
   protectDoctor,
+  requireVerifiedDoctor,
   completeAppointmentByDoctorController
 );
 
-// Doctor cancel intentionally removed.
-// Emergency cancellation is patient/admin only.
+router.patch(
+  "/doctor/:appointmentId/cancel",
+  protectDoctor,
+  requireVerifiedDoctor,
+  cancelAppointmentByDoctorController
+);
 
 // ==============================
 // ADMIN ROUTES

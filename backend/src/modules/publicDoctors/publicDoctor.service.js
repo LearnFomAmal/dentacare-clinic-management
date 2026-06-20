@@ -12,12 +12,19 @@ import {
 
 import {
   validateDateString,
+  validateMinRating,
   validateObjectId,
   validatePagination,
 } from "./publicDoctor.validator.js";
 
-const MIN_BOOKING_LEAD_MINUTES = 120;
+import {
+  findPublicApprovedReviewsByDoctor,
+  getApprovedReviewStatsByDoctor,
+  getRatingDistributionByDoctor,
+} from "../reviews/review.repository.js";
 
+const MIN_BOOKING_LEAD_MINUTES = 15;
+const MAX_BOOKING_DAYS_AHEAD = 5;
 const DEFAULT_SLOTS = [
   {
     startTime: "09:00",
@@ -93,7 +100,21 @@ const validateNotPastDate = (date) => {
     throw new AppError("Cannot fetch slots for a past date", 400);
   }
 };
+const validateWithinBookingWindow = (date) => {
+  const today = getTodayDateString();
 
+  const maxDateObject = getDateObject(today);
+  maxDateObject.setUTCDate(maxDateObject.getUTCDate() + MAX_BOOKING_DAYS_AHEAD);
+
+  const maxDate = maxDateObject.toISOString().split("T")[0];
+
+  if (date > maxDate) {
+    throw new AppError(
+      `You can book appointments only up to ${MAX_BOOKING_DAYS_AHEAD} days ahead`,
+      400
+    );
+  }
+};
 const buildSlotDateTime = ({ date, time }) => {
   return new Date(`${date}T${time}:00+05:30`);
 };
@@ -102,10 +123,12 @@ const getSlotAvailabilityMeta = ({ date, slot, patientId = null }) => {
   const status = slot.status;
 
   const isReservedByMe =
-    status === "reserved" &&
-    patientId &&
-    slot.reservedBy &&
-    slot.reservedBy.toString() === patientId.toString();
+  status === "reserved" &&
+  patientId &&
+  slot.reservedBy &&
+  slot.reservedBy.toString() === patientId.toString() &&
+  slot.reservedUntil &&
+  slot.reservedUntil > new Date();
 
   if (isReservedByMe) {
     return {
@@ -181,16 +204,16 @@ const getSlotAvailabilityMeta = ({ date, slot, patientId = null }) => {
   }
 
   if (slotStart < minimumAllowedStart) {
-    return {
-      isBookable: false,
-      isReservedByMe: false,
-      existingAppointmentId: "",
-      reservedUntil: null,
-      unavailableReason: "too_soon",
-      unavailableMessage: "Too soon",
-      displayMessage: "Too soon",
-    };
-  }
+  return {
+    isBookable: false,
+    isReservedByMe: false,
+    existingAppointmentId: "",
+    reservedUntil: null,
+    unavailableReason: "too_soon",
+    unavailableMessage: `Book at least ${MIN_BOOKING_LEAD_MINUTES} minutes before`,
+    displayMessage: `Book at least ${MIN_BOOKING_LEAD_MINUTES} minutes before`,
+  };
+}
 
   return {
     isBookable: true,
@@ -389,15 +412,16 @@ const getSortOption = (sort) => {
 // SERVICES
 // ==============================
 export const getPublicDoctorsService = async (query) => {
-  const {
-    search = "",
-    specialtyId = "",
-    minExperience = "",
-    sort = "latest",
-  } = query;
+ const {
+  search = "",
+  specialtyId = "",
+  minExperience = "",
+  minRating = "",
+  sort = "latest",
+} = query;
 
   const { page, limit } = validatePagination(query);
-
+   validateMinRating(minRating);
   const activeSpecialties = await findActiveSpecialties();
   const activeSpecialtyIds = activeSpecialties.map((item) => item._id);
 
@@ -411,16 +435,18 @@ export const getPublicDoctorsService = async (query) => {
     }
   }
 
-  const filter = {
-    "accountStatus.isVerified": true,
-    "accountStatus.isBlocked": false,
-    "accountStatus.isDeleted": false,
-    "specialization.specialtyId": specialtyId
-      ? specialtyId
-      : {
-          $in: activeSpecialtyIds,
-        },
-  };
+const filter = {
+  "accountStatus.isEmailVerified": true,
+  "accountStatus.isVerified": true,
+  "accountStatus.isBlocked": false,
+  "accountStatus.isDeleted": false,
+  "verification.status": "approved",
+  "specialization.specialtyId": specialtyId
+    ? specialtyId
+    : {
+        $in: activeSpecialtyIds,
+      },
+};
 
   if (search.trim()) {
     const regex = new RegExp(search.trim(), "i");
@@ -438,7 +464,17 @@ export const getPublicDoctorsService = async (query) => {
     filter["professionalInfo.experience"] = {
       $gte: Number(minExperience),
     };
-  }
+  };
+
+  if (minRating !== "") {
+  filter["stats.averageRating"] = {
+    $gte: Number(minRating),
+  };
+
+  filter["stats.totalReviews"] = {
+    $gt: 0,
+  };
+};
 
   const skip = (page - 1) * limit;
 
@@ -475,6 +511,7 @@ export const getPublicDoctorsService = async (query) => {
       search,
       specialtyId,
       minExperience,
+      minRating,
       sort,
     },
   };
@@ -492,7 +529,29 @@ export const getPublicDoctorDetailsService = async (doctorId) => {
     throw new AppError("Doctor not found", 404);
   }
 
-  return formatDoctor(doctor);
+  const [reviewStats, ratingDistribution, latestReviews] =
+    await Promise.all([
+      getApprovedReviewStatsByDoctor(doctorId),
+      getRatingDistributionByDoctor(doctorId),
+      findPublicApprovedReviewsByDoctor({
+        doctorId,
+        skip: 0,
+        limit: 5,
+      }),
+    ]);
+
+  return {
+    ...formatDoctor(doctor),
+
+    reviewSummary: {
+      averageRating:
+        Math.round(Number(reviewStats.averageRating || 0) * 10) / 10,
+      totalReviews: Number(reviewStats.totalReviews || 0),
+      ratingDistribution,
+    },
+
+    latestReviews,
+  };
 };
 
 export const getPublicDoctorAvailableSlotsService = async ({
@@ -506,6 +565,7 @@ export const getPublicDoctorAvailableSlotsService = async ({
 
   validateDateString(date);
   validateNotPastDate(date);
+  validateWithinBookingWindow(date);
 
   const activeSpecialties = await findActiveSpecialties();
   const activeSpecialtyIds = activeSpecialties.map((item) => item._id);

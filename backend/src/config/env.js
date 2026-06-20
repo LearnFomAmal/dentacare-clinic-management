@@ -11,6 +11,12 @@ const requiredEnvVariables = [
   "EMAIL_USER",
   "EMAIL_PASS",
   "GOOGLE_CLIENT_ID",
+  "CLOUDINARY_CLOUD_NAME",
+  "CLOUDINARY_API_KEY",
+  "CLOUDINARY_API_SECRET",
+  "RAZORPAY_KEY_ID",
+  "RAZORPAY_KEY_SECRET",
+  "RAZORPAY_CURRENCY",
 ];
 
 requiredEnvVariables.forEach((key) => {

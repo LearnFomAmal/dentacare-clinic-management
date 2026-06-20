@@ -27,11 +27,15 @@ const getCookieNames = (userType) => {
   return names;
 };
 
-const cookieOptions = {
-  httpOnly: true,
-  secure: env.NODE_ENV === "production",
-  sameSite: "lax",
-  path: "/",
+const getCookieOptions = () => {
+  const isProduction = env.NODE_ENV === "production";
+
+  return {
+    httpOnly: true,
+    secure: isProduction,
+    sameSite: isProduction ? "none" : "lax",
+    path: "/",
+  };
 };
 
 const setAuthCookies = (
@@ -41,6 +45,7 @@ const setAuthCookies = (
   userType
 ) => {
   const names = getCookieNames(userType);
+  const cookieOptions = getCookieOptions();
 
   res.cookie(names.accessToken, accessToken, {
     ...cookieOptions,

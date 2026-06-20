@@ -28,8 +28,6 @@ import {
 } from "../../features/appointment/appointmentSlice";
 
 import {
-  canCancelAppointment,
-  canDecideAppointment,
   formatAppointmentDate,
   formatAppointmentTime,
   getAppointmentDisplayStatus,
@@ -37,7 +35,8 @@ import {
   getPatientName,
   getSpecialtyName,
   getStatusBadgeClass,
-  isAppointmentEndTimePast,
+  isAppointmentStartTimePast,
+isAppointmentEndTimePast,
 } from "../../utils/appointmentUi";
 
 const getPatient = (appointment) => {
@@ -202,9 +201,18 @@ function AdminAppointmentDetailsPage() {
     }
   };
 
-  const canCancel = canCancelAppointment(appointment);
-const canApproveOrReject = canDecideAppointment(appointment);
+const isConsultationStarted = isAppointmentStartTimePast(appointment);
 const isPastAppointment = isAppointmentEndTimePast(appointment);
+
+const canApproveOrReject =
+  appointment?.status === "pending" &&
+  appointment?.paymentStatus === "paid" &&
+  !isConsultationStarted;
+
+const canCancel =
+  appointment?.status === "approved" &&
+  appointment?.paymentStatus === "paid" &&
+  !isConsultationStarted;
 
   return (
     <DashboardLayout title="Appointment Details">
@@ -371,16 +379,28 @@ const isPastAppointment = isAppointmentEndTimePast(appointment);
               </button>
             )}
              
-{isPastAppointment && appointment.status === "pending" && (
+{isConsultationStarted && appointment.status === "pending" && (
   <div className="mt-6 rounded-2xl bg-orange-50 p-4">
     <p className="text-xs font-bold uppercase text-orange-600">
-      Appointment time over
+      Consultation time started
     </p>
 
     <p className="mt-2 text-sm leading-6 text-orange-700">
       This pending appointment can no longer be approved, rejected, cancelled,
-      or rescheduled. It will be marked as expired and refunded automatically
-      when appointment data is refreshed.
+      or rescheduled because the consultation start time has already reached.
+    </p>
+  </div>
+)}
+
+{isConsultationStarted && appointment.status === "approved" && (
+  <div className="mt-6 rounded-2xl bg-orange-50 p-4">
+    <p className="text-xs font-bold uppercase text-orange-600">
+      Consultation in progress
+    </p>
+
+    <p className="mt-2 text-sm leading-6 text-orange-700">
+      This appointment has already reached its consultation time. It should
+      remain approved until the doctor marks it as completed after the end time.
     </p>
   </div>
 )}

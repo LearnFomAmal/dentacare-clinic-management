@@ -7,7 +7,13 @@ import {
   getReferralConfigApi,
   updateReferralConfigApi,
 } from "./referralService";
-
+const normalizeReferralHistory = (data) => {
+  if (Array.isArray(data)) return data;
+  if (Array.isArray(data?.referrals)) return data.referrals;
+  if (Array.isArray(data?.history)) return data.history;
+  if (Array.isArray(data?.data)) return data.data;
+  return [];
+};
 const getErrorMessage = (error, fallback) => {
   return error?.response?.data?.message || error?.message || fallback;
 };
@@ -31,7 +37,7 @@ export const fetchMyReferralHistory = createAsyncThunk(
   async (_, { rejectWithValue }) => {
     try {
       const response = await getMyReferralHistoryApi();
-      return response.data || [];
+      return normalizeReferralHistory(response.data);
     } catch (error) {
       return rejectWithValue(
         getErrorMessage(error, "Failed to fetch referral history")

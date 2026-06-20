@@ -5,6 +5,7 @@ import {
   approveAppointmentByAdminService,
   approveAppointmentByDoctorService,
   cancelAppointmentByAdminService,
+  cancelAppointmentByDoctorService,
   cancelAppointmentByPatientService,
   completeAppointmentByDoctorService,
   getAdminAppointmentDetailsService,
@@ -182,6 +183,26 @@ export const rejectAppointmentByDoctorController = asyncHandler(
     });
 
     sendResponse(res, 200, true, "Appointment rejected successfully", appointment);
+  }
+);
+
+export const cancelAppointmentByDoctorController = asyncHandler(
+  async (req, res) => {
+    const doctorId = getDoctorId(req);
+
+    const appointment = await cancelAppointmentByDoctorService({
+      doctorId,
+      appointmentId: req.params.appointmentId,
+      body: req.body,
+    });
+
+    sendResponse(
+      res,
+      200,
+      true,
+      "Appointment cancelled by doctor successfully",
+      appointment
+    );
   }
 );
 

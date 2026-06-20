@@ -1,9 +1,11 @@
 import { createAsyncThunk, createSlice } from "@reduxjs/toolkit";
 
 import {
+  createWalletRazorpayOrderApi,
   getMyWalletApi,
   getWalletTransactionsApi,
-  topupWalletApi,
+  verifyWalletRazorpayTopupApi,
+  cancelWalletRazorpayTopupApi,
 } from "./walletService";
 
 const getErrorMessage = (error, fallback) => {
@@ -40,11 +42,30 @@ export const fetchWalletTransactions = createAsyncThunk(
   }
 );
 
-export const topupWallet = createAsyncThunk(
-  "wallet/topupWallet",
+
+export const createWalletRazorpayOrder = createAsyncThunk(
+  "wallet/createWalletRazorpayOrder",
   async (payload, { rejectWithValue }) => {
     try {
-      const response = await topupWalletApi(payload);
+      const response = await createWalletRazorpayOrderApi(payload);
+
+      return {
+        order: response.data,
+        message: response.message || "Wallet Razorpay order created",
+      };
+    } catch (error) {
+      return rejectWithValue(
+        getErrorMessage(error, "Failed to create wallet Razorpay order")
+      );
+    }
+  }
+);
+
+export const verifyWalletRazorpayTopup = createAsyncThunk(
+  "wallet/verifyWalletRazorpayTopup",
+  async (payload, { rejectWithValue }) => {
+    try {
+      const response = await verifyWalletRazorpayTopupApi(payload);
 
       return {
         wallet: response.data?.wallet,
@@ -53,11 +74,31 @@ export const topupWallet = createAsyncThunk(
       };
     } catch (error) {
       return rejectWithValue(
-        getErrorMessage(error, "Failed to top up wallet")
+        getErrorMessage(error, "Failed to verify wallet top-up")
       );
     }
   }
 );
+
+export const cancelWalletRazorpayTopup = createAsyncThunk(
+  "wallet/cancelWalletRazorpayTopup",
+  async (payload, { rejectWithValue }) => {
+    try {
+      const response = await cancelWalletRazorpayTopupApi(payload);
+
+      return {
+        cancelled: response.data?.cancelled,
+        transaction: response.data?.transaction,
+        message: response.message || "Wallet top-up cancelled",
+      };
+    } catch (error) {
+      return rejectWithValue(
+        getErrorMessage(error, "Failed to cancel wallet top-up")
+      );
+    }
+  }
+);
+
 
 const walletSlice = createSlice({
   name: "wallet",
@@ -70,7 +111,9 @@ const walletSlice = createSlice({
     isLoadingWallet: false,
     isLoadingTransactions: false,
     isToppingUp: false,
-
+    latestWalletRazorpayOrder: null,
+    isCreatingWalletOrder: false,
+    isCancellingWalletTopup: false,
     error: null,
   },
 
@@ -126,29 +169,68 @@ const walletSlice = createSlice({
           action.payload || "Failed to fetch wallet transactions";
       })
 
-      .addCase(topupWallet.pending, (state) => {
-        state.isToppingUp = true;
-        state.error = null;
-      })
+       .addCase(createWalletRazorpayOrder.pending, (state) => {
+  state.isCreatingWalletOrder = true;
+  state.error = null;
+})
 
-      .addCase(topupWallet.fulfilled, (state, action) => {
-        state.isToppingUp = false;
-        state.wallet = action.payload.wallet || state.wallet;
+.addCase(createWalletRazorpayOrder.fulfilled, (state, action) => {
+  state.isCreatingWalletOrder = false;
+  state.latestWalletRazorpayOrder = action.payload.order;
+  state.error = null;
+})
 
-        if (action.payload.transaction) {
-          state.transactions = [
-            action.payload.transaction,
-            ...state.transactions,
-          ];
-        }
+.addCase(createWalletRazorpayOrder.rejected, (state, action) => {
+  state.isCreatingWalletOrder = false;
+  state.error =
+    action.payload || "Failed to create wallet Razorpay order";
+})
 
-        state.error = null;
-      })
+.addCase(verifyWalletRazorpayTopup.pending, (state) => {
+  state.isToppingUp = true;
+  state.error = null;
+})
 
-      .addCase(topupWallet.rejected, (state, action) => {
-        state.isToppingUp = false;
-        state.error = action.payload || "Failed to top up wallet";
-      });
+.addCase(verifyWalletRazorpayTopup.fulfilled, (state, action) => {
+  state.isToppingUp = false;
+  state.wallet = action.payload.wallet || state.wallet;
+
+  if (action.payload.transaction) {
+    state.transactions = [
+      action.payload.transaction,
+      ...state.transactions,
+    ];
+  }
+
+  state.error = null;
+})
+
+.addCase(verifyWalletRazorpayTopup.rejected, (state, action) => {
+  state.isToppingUp = false;
+  state.error =
+    action.payload || "Failed to verify wallet top-up";
+})
+
+.addCase(cancelWalletRazorpayTopup.pending, (state) => {
+  state.isCancellingWalletTopup = true;
+})
+
+.addCase(cancelWalletRazorpayTopup.fulfilled, (state, action) => {
+  state.isCancellingWalletTopup = false;
+
+  const transaction = action.payload.transaction;
+
+  if (transaction?._id) {
+    state.transactions = state.transactions.map((item) =>
+      item._id === transaction._id ? transaction : item
+    );
+  }
+})
+
+.addCase(cancelWalletRazorpayTopup.rejected, (state) => {
+  state.isCancellingWalletTopup = false;
+});
+
   },
 });
 

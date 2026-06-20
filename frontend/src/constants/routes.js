@@ -25,6 +25,9 @@ export const ROUTES = {
   MY_APPOINTMENT_DETAILS: "/my-appointments/:appointmentId",
   REFERRALS: "/referrals",
   WALLET: "/wallet",
+  MY_REVIEWS: "/my-reviews",
+  CHATS: "/chats",
+  CHAT_APPOINTMENT: "/chats/appointments/:appointmentId", 
   // DOCTOR
   DOCTOR_DASHBOARD: "/doctor/dashboard",
   DOCTOR_SETTINGS: "/doctor/settings",
@@ -32,6 +35,13 @@ export const ROUTES = {
   DOCTOR_APPOINTMENTS: "/doctor/appointments",
   DOCTOR_APPOINTMENT_DETAILS: "/doctor/appointments/:appointmentId",
   DOCTOR_EARNINGS: "/doctor/earnings",
+  DOCTOR_REVIEWS: "/doctor/reviews",
+  DOCTOR_CHATS: "/doctor/chats",
+  DOCTOR_CHAT_APPOINTMENT: "/doctor/chats/appointments/:appointmentId",
+  DOCTOR_REGISTER: "/doctor/register",
+DOCTOR_REGISTER_VERIFY_OTP: "/doctor/register/verify-otp",
+DOCTOR_VERIFICATION_STATUS: "/doctor/verification-status",
+DOCTOR_UPLOAD_DOCUMENTS: "/doctor/upload-documents",
   // ADMIN
   ADMIN_DASHBOARD: "/admin/dashboard",
   ADMIN_PROFILE: "/admin/profile",
@@ -42,12 +52,18 @@ export const ROUTES = {
   ADMIN_ADD_DOCTOR: "/admin/doctors/add",
   ADMIN_DOCTOR_DETAILS: "/admin/doctors/:id",
   ADMIN_EDIT_DOCTOR_FEE: "/admin/doctors/:id/edit-fee",
-
+  
   ADMIN_SPECIALTIES: "/admin/specialties",
   ADMIN_APPOINTMENTS: "/admin/appointments",
   ADMIN_APPOINTMENT_DETAILS: "/admin/appointments/:appointmentId",
   ADMIN_COUPONS: "/admin/coupons",
   ADMIN_ADD_COUPON: "/admin/coupons/add",
   ADMIN_EDIT_COUPON: "/admin/coupons/:couponId/edit",
-  
+  ADMIN_BANNERS: "/admin/banners",
+  ADMIN_ADD_BANNER: "/admin/banners/add",
+  ADMIN_EDIT_BANNER: "/admin/banners/:bannerId/edit",
+  ADMIN_REVIEWS: "/admin/reviews",
+  ADMIN_REVIEW_DETAILS: "/admin/reviews/:reviewId",
+  ADMIN_DOCTOR_VERIFICATION_REQUESTS: "/admin/doctor-verifications",
+
 };

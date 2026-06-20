@@ -151,6 +151,22 @@ export const rejectDoctorAppointmentApi = async ({
   return response.data;
 };
 
+export const cancelDoctorAppointmentApi = async ({
+  appointmentId,
+  reasonType,
+  reason,
+}) => {
+  const response = await axiosInstance.patch(
+    API_ENDPOINTS.APPOINTMENT.DOCTOR_CANCEL(appointmentId),
+    {
+      reasonType,
+      reason,
+    }
+  );
+
+  return response.data;
+};
+
 export const completeDoctorAppointmentApi = async (appointmentId) => {
   const response = await axiosInstance.patch(
     API_ENDPOINTS.APPOINTMENT.DOCTOR_COMPLETE(appointmentId)

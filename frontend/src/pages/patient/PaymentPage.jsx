@@ -227,12 +227,12 @@ function PaymentPage() {
         handler: async (response) => {
           try {
             const verifyResult = await dispatch(
-              verifyRazorpayPayment({
-                appointmentId: appointment._id,
-                razorpay_order_id: response.razorpay_order_id,
-                razorpay_payment_id: response.razorpay_payment_id,
-                razorpay_signature: response.razorpay_signature,
-              })
+  verifyRazorpayPayment({
+  appointmentId: appointment._id,
+  razorpay_order_id: response.razorpay_order_id,
+  razorpay_payment_id: response.razorpay_payment_id,
+  razorpay_signature: response.razorpay_signature,
+})
             ).unwrap();
 
             toast.success(

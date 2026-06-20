@@ -63,11 +63,12 @@ const doctorSchema = new mongoose.Schema(
       },
 
       consultationFee: {
-        type: Number,
-        required: true,
-        min: 0,
-        max: 10000,
-      },
+  type: Number,
+  required: true,
+  default: 500,
+  min: 0,
+  max: 10000,
+},
 
       contactNumber: {
         type: String,
@@ -113,31 +114,124 @@ const doctorSchema = new mongoose.Schema(
       },
     },
 
-    accountStatus: {
-      isVerified: {
-        type: Boolean,
-        default: false,
-      },
+   accountStatus: {
+  isEmailVerified: {
+    type: Boolean,
+    default: false,
+  },
 
-      isBlocked: {
-        type: Boolean,
-        default: false,
-      },
+  isVerified: {
+    type: Boolean,
+    default: false,
+  },
 
-      isDeleted: {
-        type: Boolean,
-        default: false,
-      },
+  isBlocked: {
+    type: Boolean,
+    default: false,
+  },
 
-      mustChangePassword: {
-        type: Boolean,
-        default: true,
-      },
+  isDeleted: {
+    type: Boolean,
+    default: false,
+  },
+
+  mustChangePassword: {
+    type: Boolean,
+    default: true,
+  },
+},
+
+verification: {
+  status: {
+    type: String,
+    enum: ["not_submitted", "pending", "approved", "rejected"],
+    default: "not_submitted",
+    index: true,
+  },
+
+  submittedAt: {
+    type: Date,
+    default: null,
+  },
+
+  reviewedAt: {
+    type: Date,
+    default: null,
+  },
+
+  reviewedBy: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "Admin",
+    default: null,
+  },
+
+  rejectionReason: {
+    type: String,
+    default: "",
+    trim: true,
+    maxlength: 500,
+  },
+},
+
+documents: {
+  educationCertificate: {
+    url: {
+      type: String,
+      default: "",
     },
+    publicId: {
+      type: String,
+      default: "",
+    },
+    uploadedAt: {
+      type: Date,
+      default: null,
+    },
+  },
+
+  qualificationCertificate: {
+    url: {
+      type: String,
+      default: "",
+    },
+    publicId: {
+      type: String,
+      default: "",
+    },
+    uploadedAt: {
+      type: Date,
+      default: null,
+    },
+  },
+
+  registrationCertificate: {
+    url: {
+      type: String,
+      default: "",
+    },
+    publicId: {
+      type: String,
+      default: "",
+    },
+    uploadedAt: {
+      type: Date,
+      default: null,
+    },
+  },
+},
   },
   { timestamps: true }
 );
+doctorSchema.index({
+  "accountStatus.isEmailVerified": 1,
+  "accountStatus.isVerified": 1,
+  "verification.status": 1,
+});
 
+doctorSchema.index({
+  email: 1,
+  "accountStatus.isDeleted": 1,
+});
 const Doctor = mongoose.model("Doctor", doctorSchema);
 
 export default Doctor;

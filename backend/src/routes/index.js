@@ -16,11 +16,18 @@ import couponRoutes from "../modules/coupons/coupon.routes.js";
 import referralRoutes from "../modules/referrals/referral.routes.js";
 import walletRoutes from "../modules/wallets/wallet.routes.js";
 import earningRoutes from "../modules/earnings/earning.routes.js";
+import bannerRoutes from "../modules/banners/banner.routes.js";
+import reviewRoutes from "../modules/reviews/review.routes.js";
+import notificationRoutes from "../modules/notifications/notification.routes.js";
+import chatRoutes from "../modules/chats/chat.routes.js";
 
 const router = Router();
 
 router.use("/auth", authRoutes);
 router.use("/users", userRoutes);
+router.use("/banners", bannerRoutes);
+router.use("/reviews", reviewRoutes);
+router.use("/notifications", notificationRoutes);
 
 router.use("/doctors/public", publicDoctorRoutes);
 router.use("/doctors/slots", doctorSlotRoutes);
@@ -35,6 +42,7 @@ router.use("/coupons", couponRoutes);
 router.use("/referrals", referralRoutes);
 router.use("/wallets", walletRoutes);
 router.use("/earnings", earningRoutes);
+router.use("/chats", chatRoutes);
 
 router.get("/health", (req, res) => {
   res.status(200).json({

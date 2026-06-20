@@ -1,5 +1,14 @@
 import { createAsyncThunk, createSlice } from "@reduxjs/toolkit";
-import { loginApi, logoutApi, googleLoginApi, getCurrentUserApi } from "./authService";
+import {
+  loginApi,
+  logoutApi,
+  googleLoginApi,
+  getCurrentUserApi,
+  registerDoctorApi,
+  verifyDoctorRegisterOtpApi,
+  resendDoctorRegisterOtpApi,
+} from "./authService";
+
 import {
   clearAuthStorage,
   getAccountType,
@@ -13,13 +22,26 @@ import { ROUTES } from "../../constants/routes";
 // CONSTANTS
 // ==============================
 const VALID_ACCOUNT_TYPES = ["patient", "doctor", "admin"];
-
+const isDoctorProfessionallyVerified = (user) => {
+  return Boolean(
+    user?.accountStatus?.isVerified === true &&
+      user?.verification?.status === "approved"
+  );
+};
 // ==============================
 // HELPERS
 // ==============================
-const getRoleHome = (role) => {
+const getRoleHome = (role, user = null) => {
   if (role === "admin") return ROUTES.ADMIN_DASHBOARD;
-  if (role === "doctor") return ROUTES.DOCTOR_DASHBOARD;
+
+  if (role === "doctor") {
+    if (!isDoctorProfessionallyVerified(user)) {
+      return ROUTES.DOCTOR_VERIFICATION_STATUS;
+    }
+
+    return ROUTES.DOCTOR_DASHBOARD;
+  }
+
   return ROUTES.PATIENT_DASHBOARD;
 };
 
@@ -109,7 +131,7 @@ export const loginUser = createAsyncThunk(
         accountType,
         role: accountType,
         message: response.message || "Login successful",
-        redirectTo: getRoleHome(accountType),
+        redirectTo: getRoleHome(accountType, normalizedUser),
       };
     } catch (error) {
       const message =
@@ -149,7 +171,7 @@ export const googleLoginUser = createAsyncThunk(
         accountType: "patient",
         role: "patient",
         message: response.message || "Google login successful",
-        redirectTo: getRoleHome("patient"),
+        redirectTo: getRoleHome("patient", normalizedUser),
       };
     } catch (error) {
       const message =
@@ -239,6 +261,71 @@ export const verifyCurrentUser = createAsyncThunk(
       return rejectWithValue({
         message,
         accountType,
+      });
+    }
+  }
+);
+
+export const registerDoctor = createAsyncThunk(
+  "auth/registerDoctor",
+  async (payload, { rejectWithValue }) => {
+    try {
+      const response = await registerDoctorApi(payload);
+
+      return {
+        data: response.data,
+        message:
+          response.message || "Doctor registration OTP sent successfully",
+      };
+    } catch (error) {
+      return rejectWithValue({
+        message:
+          error?.response?.data?.message ||
+          error?.message ||
+          "Doctor registration failed",
+      });
+    }
+  }
+);
+
+export const verifyDoctorRegisterOtp = createAsyncThunk(
+  "auth/verifyDoctorRegisterOtp",
+  async (payload, { rejectWithValue }) => {
+    try {
+      const response = await verifyDoctorRegisterOtpApi(payload);
+
+      return {
+        doctor: response.data,
+        message:
+          response.message ||
+          "Doctor email verified successfully",
+      };
+    } catch (error) {
+      return rejectWithValue({
+        message:
+          error?.response?.data?.message ||
+          error?.message ||
+          "Doctor OTP verification failed",
+      });
+    }
+  }
+);
+
+export const resendDoctorRegisterOtp = createAsyncThunk(
+  "auth/resendDoctorRegisterOtp",
+  async (payload, { rejectWithValue }) => {
+    try {
+      const response = await resendDoctorRegisterOtpApi(payload);
+
+      return {
+        message: response.message || "OTP resent successfully",
+      };
+    } catch (error) {
+      return rejectWithValue({
+        message:
+          error?.response?.data?.message ||
+          error?.message ||
+          "Failed to resend OTP",
       });
     }
   }
@@ -384,9 +471,10 @@ const authSlice = createSlice({
 
             // VERIFY CURRENT USER
       .addCase(verifyCurrentUser.pending, (state) => {
-        state.isLoading = true;
-        state.error = null;
-      })
+  // Do not set global isLoading here.
+  // ProtectedRoute already has its own local verification loading state.
+  state.error = null;
+})
 
       .addCase(verifyCurrentUser.fulfilled, (state, action) => {
         state.isLoading = false;
@@ -404,7 +492,53 @@ const authSlice = createSlice({
         state.isAuthenticated = false;
         state.isLoading = false;
         state.error = action.payload?.message || "Session expired";
-      });
+      })
+
+      .addCase(registerDoctor.pending, (state) => {
+  state.isLoading = true;
+  state.error = null;
+})
+
+.addCase(registerDoctor.fulfilled, (state) => {
+  state.isLoading = false;
+  state.error = null;
+})
+
+.addCase(registerDoctor.rejected, (state, action) => {
+  state.isLoading = false;
+  state.error = action.payload?.message || "Doctor registration failed";
+})
+
+.addCase(verifyDoctorRegisterOtp.pending, (state) => {
+  state.isLoading = true;
+  state.error = null;
+})
+
+.addCase(verifyDoctorRegisterOtp.fulfilled, (state) => {
+  state.isLoading = false;
+  state.error = null;
+})
+
+.addCase(verifyDoctorRegisterOtp.rejected, (state, action) => {
+  state.isLoading = false;
+  state.error =
+    action.payload?.message || "Doctor OTP verification failed";
+})
+
+.addCase(resendDoctorRegisterOtp.pending, (state) => {
+  state.isLoading = true;
+  state.error = null;
+})
+
+.addCase(resendDoctorRegisterOtp.fulfilled, (state) => {
+  state.isLoading = false;
+  state.error = null;
+})
+
+.addCase(resendDoctorRegisterOtp.rejected, (state, action) => {
+  state.isLoading = false;
+  state.error = action.payload?.message || "Failed to resend OTP";
+});
   },
 });
 
