@@ -4,12 +4,19 @@ import { useAppSelector } from "../app/hooks";
 import { ROUTES } from "../constants/routes";
 import { getAccountType, getAuthUser } from "../utils/authStorage";
 
+const isDoctorProfessionallyVerified = (user) => {
+  return Boolean(
+    user?.accountStatus?.isVerified === true &&
+      user?.verification?.status === "approved"
+  );
+};
+
 const getRoleHome = (role, user = null) => {
   if (role === "admin") return ROUTES.ADMIN_DASHBOARD;
 
   if (role === "doctor") {
-    if (!user?.accountStatus?.isVerified) {
-      return ROUTES.DOCTOR_VERIFICATION_STATUS;
+    if (!isDoctorProfessionallyVerified(user)) {
+      return ROUTES.DOCTOR_SETTINGS;
     }
 
     return ROUTES.DOCTOR_DASHBOARD;
