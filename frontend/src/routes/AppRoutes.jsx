@@ -60,6 +60,8 @@ import DoctorVerificationStatusPage from "../pages/doctor/DoctorVerificationStat
 import DoctorUploadDocumentsPage from "../pages/doctor/DoctorUploadDocumentsPage";
 import AdminDoctorVerificationsPage from "../pages/admin/AdminDoctorVerificationsPage";
 
+import NotFoundPage from "../pages/public/NotFoundPage";
+
 function AppRoutes() {
   return (
     <Routes>
@@ -554,7 +556,7 @@ function AppRoutes() {
   }
 />
 
-      <Route path="*" element={<Navigate to={ROUTES.HOME} replace />} />
+      <Route path="*" element={<NotFoundPage />} />
     </Routes>
   );
 }
