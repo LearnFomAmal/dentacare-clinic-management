@@ -14,7 +14,7 @@ import { getStoredTheme, applyTheme } from "./utils/themeStorage";
 applyTheme(getStoredTheme());
 
 createRoot(document.getElementById("root")).render(
-  <StrictMode>
+ 
     <Provider store={store}>
       <BrowserRouter>
         <ErrorBoundary>
@@ -25,5 +25,5 @@ createRoot(document.getElementById("root")).render(
         </ErrorBoundary>
       </BrowserRouter>
     </Provider>
-  </StrictMode>
+
 );
