@@ -6,6 +6,7 @@ import {
   useLocation,
   useNavigate,
 } from "react-router-dom";
+import { isDoctorProfessionallyVerified } from "../../utils/doctorVerification";
 import {
   BadgePercent,
   CalendarCheck,
@@ -51,12 +52,7 @@ const getRoleFromPath = (pathname) => {
 
   return "patient";
 };
-const isDoctorProfessionallyVerified = (user) => {
-  return Boolean(
-    user?.accountStatus?.isVerified === true &&
-      user?.verification?.status === "approved"
-  );
-};
+
 const getRoleHome = (role, user = null) => {
   if (role === "admin") {
     return ROUTES.ADMIN_DASHBOARD || ROUTES.ADMIN_PROFILE;

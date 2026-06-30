@@ -1,6 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { Navigate, useLocation } from "react-router-dom";
-
+import {
+  DOCTOR_VERIFICATION_ALLOWED_ROUTES,
+  DOCTOR_VERIFICATION_PAGES,
+  isDoctorProfessionallyVerified,
+} from "../utils/doctorVerification";
 import { useAppDispatch, useAppSelector } from "../app/hooks";
 import { ROUTES } from "../constants/routes";
 import {
@@ -23,12 +27,7 @@ const getRouteRoleFromPath = (pathname) => {
   return "patient";
 };
 
-const isDoctorProfessionallyVerified = (user) => {
-  return Boolean(
-    user?.accountStatus?.isVerified === true &&
-      user?.verification?.status === "approved"
-  );
-};
+
 
 const getRoleHome = (role, user = null) => {
   if (role === "admin") {
@@ -46,18 +45,30 @@ const getRoleHome = (role, user = null) => {
   return ROUTES.PATIENT_DASHBOARD;
 };
 
-const doctorVerificationAllowedRoutes = [
-  ROUTES.DOCTOR_VERIFICATION_STATUS,
-  ROUTES.DOCTOR_UPLOAD_DOCUMENTS,
-  ROUTES.DOCTOR_SETTINGS,
-];
+
 
 const isBlockedOrDeleted = (user) => {
   return Boolean(
     user?.accountStatus?.isBlocked || user?.accountStatus?.isDeleted
   );
 };
+const mergeCachedAndServerUser = (cachedUser, serverUser) => {
+  if (!cachedUser) return serverUser;
+  if (!serverUser) return cachedUser;
 
+  return {
+    ...cachedUser,
+    ...serverUser,
+    accountStatus: {
+      ...(cachedUser.accountStatus || {}),
+      ...(serverUser.accountStatus || {}),
+    },
+    verification:
+      serverUser.verification !== undefined
+        ? serverUser.verification
+        : cachedUser.verification,
+  };
+};
 function ProtectedRoute({ children, allowedRoles = [] }) {
   const dispatch = useAppDispatch();
   const location = useLocation();
@@ -138,9 +149,11 @@ const routeRole = useMemo(() => {
 
         if (!isMounted) return;
 
-        setServerUser(result.user);
-        setVerificationDone(true);
-        setVerificationFailed(false);
+       const mergedUser = mergeCachedAndServerUser(activeCachedUser, result.user);
+
+setServerUser(mergedUser);
+setVerificationDone(true);
+setVerificationFailed(false);
       } catch {
         clearAuthStorage(routeRole);
 
@@ -201,17 +214,14 @@ const routeRole = useMemo(() => {
   const isDoctorRestrictedRoute =
     normalizedRole === "doctor" &&
     !isDoctorProfessionallyVerified(user) &&
-    !doctorVerificationAllowedRoutes.includes(location.pathname);
+    !DOCTOR_VERIFICATION_ALLOWED_ROUTES.includes(location.pathname);
      const isVerifiedDoctorOpeningVerificationRoute =
   normalizedRole === "doctor" &&
   isDoctorProfessionallyVerified(user) &&
-  [
-    ROUTES.DOCTOR_VERIFICATION_STATUS,
-    ROUTES.DOCTOR_UPLOAD_DOCUMENTS,
-  ].includes(location.pathname);
+  DOCTOR_VERIFICATION_PAGES.includes(location.pathname);
 
 if (isVerifiedDoctorOpeningVerificationRoute) {
-  return <Navigate to={ROUTES.DOCTOR_SETTINGS} replace />;
+  return <Navigate to={ROUTES.DOCTOR_DASHBOARD} replace />;
 }
   if (isDoctorRestrictedRoute) {
     return <Navigate to={ROUTES.DOCTOR_VERIFICATION_STATUS} replace />;

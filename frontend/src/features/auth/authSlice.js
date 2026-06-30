@@ -8,7 +8,7 @@ import {
   verifyDoctorRegisterOtpApi,
   resendDoctorRegisterOtpApi,
 } from "./authService";
-
+import { isDoctorProfessionallyVerified } from "../../utils/doctorVerification";
 import {
   clearAuthStorage,
   getAccountType,
@@ -22,12 +22,7 @@ import { ROUTES } from "../../constants/routes";
 // CONSTANTS
 // ==============================
 const VALID_ACCOUNT_TYPES = ["patient", "doctor", "admin"];
-const isDoctorProfessionallyVerified = (user) => {
-  return Boolean(
-    user?.accountStatus?.isVerified === true &&
-      user?.verification?.status === "approved"
-  );
-};
+
 // ==============================
 // HELPERS
 // ==============================
@@ -63,6 +58,23 @@ const normalizeUser = ({ backendUser = {}, email, accountType }) => {
   };
 };
 
+const mergeStoredAndServerUser = (storedUser, serverUser) => {
+  if (!storedUser) return serverUser;
+  if (!serverUser) return storedUser;
+
+  return {
+    ...storedUser,
+    ...serverUser,
+    accountStatus: {
+      ...(storedUser.accountStatus || {}),
+      ...(serverUser.accountStatus || {}),
+    },
+    verification:
+      serverUser.verification !== undefined
+        ? serverUser.verification
+        : storedUser.verification,
+  };
+};
 const getInitialAuthState = () => {
   const accountType = getAccountType();
 
@@ -235,21 +247,24 @@ export const verifyCurrentUser = createAsyncThunk(
 
       const backendUser = response.data || {};
 
-      const normalizedUser = normalizeUser({
-        backendUser,
-        email: backendUser.email,
-        accountType,
-      });
+     const normalizedUser = normalizeUser({
+  backendUser,
+  email: backendUser.email,
+  accountType,
+});
 
-      saveAccountType(accountType);
-      saveAuthUser(normalizedUser, accountType);
+const storedUser = getAuthUser(accountType);
+const mergedUser = mergeStoredAndServerUser(storedUser, normalizedUser);
 
-      return {
-        user: normalizedUser,
-        accountType,
-        role: accountType,
-        message: response.message || "Session verified",
-      };
+saveAccountType(accountType);
+saveAuthUser(mergedUser, accountType);
+
+return {
+  user: mergedUser,
+  accountType,
+  role: accountType,
+  message: response.message || "Session verified",
+};
     } catch (error) {
       const message =
         error?.response?.data?.message ||
